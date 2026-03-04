@@ -1,0 +1,105 @@
+{
+  "name": "workflow-vscode",
+  "displayName": "Workflow AI",
+  "description": "VS Code extension for AI agent workflow coordination via file-based kanban board",
+  "version": "0.0.1",
+  "publisher": "workflow-ai",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0",
+    "node": ">=18.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workflow-sidebar",
+          "title": "Workflow",
+          "icon": "$(tasklist)"
+        }
+      ]
+    },
+    "views": {
+      "workflow-sidebar": [
+        {
+          "id": "workflow-sidebar.tickets",
+          "name": "Tickets",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "workflow-sidebar.welcome",
+          "name": "Welcome",
+          "when": "!workflow.cliInstalled || !workflow.workflowFound",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "workflow-sidebar.welcome",
+        "contents": "Workflow CLI is not installed.\n[Install workflow-ai](command:workflow.installCli)\nWorkflow directory not found.\n[Initialize Workflow](command:workflow.init)",
+        "when": "!workflow.cliInstalled || !workflow.workflowFound"
+      }
+    ],
+    "commands": [
+      {
+        "command": "workflow.installCli",
+        "title": "Install workflow-ai CLI",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.init",
+        "title": "Initialize Workflow",
+        "category": "Workflow"
+      }
+    ],
+    "configuration": {
+      "title": "Workflow",
+      "properties": {
+        "workflow.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to the workflow CLI executable"
+        }
+      }
+    },
+    "menus": {
+      "view/title": []
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "node esbuild.config.mjs --production",
+    "lint": "eslint src/",
+    "pretest": "npm run test:compile",
+    "test": "node ./src/test/runTests.mjs",
+    "test:compile": "tsc -p tsconfig.test.json",
+    "test:unit": "mocha --require ts-node/register src/test/unit/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.35",
+    "@types/vscode": "^1.109.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.24.2",
+    "glob": "^10.5.0",
+    "eslint": "^9.39.3",
+    "mocha": "^10.8.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.1"
+  }
+}
