@@ -85,6 +85,7 @@
     "test:unit": "mocha --require ts-node/register src/test/unit/**/*.test.ts"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.19.35",
     "@types/vscode": "^1.109.0",
@@ -92,14 +93,15 @@
     "@typescript-eslint/parser": "^8.56.1",
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.24.2",
-    "glob": "^10.5.0",
     "eslint": "^9.39.3",
+    "glob": "^10.5.0",
     "mocha": "^10.8.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
   },
   "dependencies": {
+    "ajv": "^8.18.0",
     "js-yaml": "^4.1.1"
   }
 }
