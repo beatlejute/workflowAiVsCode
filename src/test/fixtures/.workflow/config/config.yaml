@@ -1,0 +1,39 @@
+version: "1.0"
+project:
+  name: "E2E Test Project"
+  description: "Test project for E2E testing"
+task_types:
+  - id: IMPL
+    label: Implementation
+  - id: FIX
+    label: Bug Fix
+  - id: DOCS
+    label: Documentation
+  - id: REVIEW
+    label: Review
+  - id: PLAN
+    label: Planning
+  - id: ADMIN
+    label: Administration
+statuses:
+  - id: backlog
+    label: Backlog
+  - id: ready
+    label: Ready
+  - id: in-progress
+    label: In Progress
+  - id: blocked
+    label: Blocked
+  - id: review
+    label: Review
+  - id: done
+    label: Done
+priorities:
+  - id: 1
+    label: Critical
+  - id: 2
+    label: High
+  - id: 3
+    label: Medium
+  - id: 4
+    label: Low

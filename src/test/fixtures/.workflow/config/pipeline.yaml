@@ -1,0 +1,11 @@
+version: "1.0"
+stages:
+  - name: lint
+    command: npm run lint
+    timeout: 60000
+  - name: test
+    command: npm run test
+    timeout: 120000
+  - name: build
+    command: npm run build
+    timeout: 60000

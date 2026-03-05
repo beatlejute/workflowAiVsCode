@@ -6,11 +6,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../');
-  const extensionTestsPath = path.resolve(__dirname, '../../dist/test/test/suite');
+  // Default to unit tests if no argument provided
+  const testType = process.argv[2] || 'unit';
+  
+  let extensionTestsPath;
+  let launchArgs = [];
+
+  if (testType === 'e2e') {
+    // E2E tests with fixtures workspace
+    extensionTestsPath = path.resolve(__dirname, '../../dist/test/e2e/suite');
+    launchArgs = [path.resolve(__dirname, '../fixtures')];
+  } else {
+    // Unit tests
+    extensionTestsPath = path.resolve(__dirname, '../../dist/test/suite');
+  }
 
   await runTests({
     extensionDevelopmentPath,
     extensionTestsPath,
+    launchArgs,
   });
 }
 

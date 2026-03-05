@@ -331,6 +331,13 @@ export class TicketService {
     }
   }
 
+  /**
+   * Get the workflow root directory
+   */
+  getWorkflowRoot(): string {
+    return this.workflowRoot;
+  }
+
   // ==================== Update Operation ====================
 
   /**

@@ -1,7 +1,7 @@
 {
   "name": "workflow-vscode",
-  "displayName": "Workflow AI",
-  "description": "VS Code extension for AI agent workflow coordination via file-based kanban board",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
   "version": "0.0.1",
   "publisher": "workflow-ai",
   "license": "MIT",
@@ -21,57 +21,483 @@
       "activitybar": [
         {
           "id": "workflow-sidebar",
-          "title": "Workflow",
+          "title": "%views.activitybar.workflow.title%",
           "icon": "$(tasklist)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "workflow-kanban",
+          "title": "%views.panel.kanban.title%",
+          "icon": "$(layout)"
         }
       ]
     },
     "views": {
       "workflow-sidebar": [
         {
+          "id": "workflow-sidebar.pipeline",
+          "name": "%views.sidebar.pipeline.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
           "id": "workflow-sidebar.tickets",
-          "name": "Tickets",
+          "name": "%views.sidebar.tickets.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "workflow-sidebar.plans",
+          "name": "%views.sidebar.plans.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "workflow-sidebar.reports",
+          "name": "%views.sidebar.reports.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
           "id": "workflow-sidebar.welcome",
-          "name": "Welcome",
+          "name": "%views.sidebar.welcome.name%",
           "when": "!workflow.cliInstalled || !workflow.workflowFound",
           "visibility": "visible"
+        }
+      ],
+      "workflow-kanban": [
+        {
+          "id": "wf-kanban-backlog",
+          "name": "%views.kanban.backlog.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-ready",
+          "name": "%views.kanban.ready.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-in-progress",
+          "name": "%views.kanban.inProgress.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-blocked",
+          "name": "%views.kanban.blocked.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-review",
+          "name": "%views.kanban.review.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-done",
+          "name": "%views.kanban.done.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "workflow-sidebar.welcome",
-        "contents": "Workflow CLI is not installed.\n[Install workflow-ai](command:workflow.installCli)\nWorkflow directory not found.\n[Initialize Workflow](command:workflow.init)",
+        "contents": "%views.welcome.content.install%\n[%views.welcome.action.install%](command:workflow.installCli)\n%views.welcome.content.directory%\n[%views.welcome.action.init%](command:workflow.init)",
         "when": "!workflow.cliInstalled || !workflow.workflowFound"
       }
     ],
     "commands": [
       {
         "command": "workflow.installCli",
-        "title": "Install workflow-ai CLI",
-        "category": "Workflow"
+        "title": "%command.installCli.title%",
+        "category": "%category.workflow%"
       },
       {
         "command": "workflow.init",
-        "title": "Initialize Workflow",
-        "category": "Workflow"
+        "title": "%command.init.title%",
+        "category": "%category.workflow%"
+      },
+      {
+        "command": "workflow.openTicket",
+        "title": "%command.openTicket.title%",
+        "category": "%category.workflow%",
+        "icon": "$(file)"
+      },
+      {
+        "command": "workflow.moveTicketFromMenu",
+        "title": "%command.moveTicketFromMenu.title%",
+        "category": "%category.workflow%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "workflow.editTicket",
+        "title": "%command.editTicket.title%",
+        "category": "%category.workflow%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workflow.moveTicketNext",
+        "title": "%command.moveTicketNext.title%",
+        "category": "%category.workflow%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "workflow.showTicketDependencies",
+        "title": "%command.showTicketDependencies.title%",
+        "category": "%category.workflow%",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "workflow.createTicket",
+        "title": "%command.createTicket.title%",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflow.refreshTickets",
+        "title": "%command.refreshTickets.title%",
+        "category": "%category.workflow%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workflow.sortKanbanByPriority",
+        "title": "%command.sortKanbanByPriority.title%",
+        "category": "%category.workflow%",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "workflow.sortKanbanById",
+        "title": "%command.sortKanbanById.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-enum)"
+      },
+      {
+        "command": "workflow.sortKanbanByTitle",
+        "title": "%command.sortKanbanByTitle.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-string)"
+      },
+      {
+        "command": "workflow.runPipeline",
+        "title": "%command.runPipeline.title%",
+        "category": "%category.workflow%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workflow.stopPipeline",
+        "title": "%command.stopPipeline.title%",
+        "category": "%category.workflow%",
+        "icon": "$(stop)"
+      },
+      {
+        "command": "workflow.showPipelineOutput",
+        "title": "%command.showPipelineOutput.title%",
+        "category": "%category.workflow%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "workflow.clearPipelineHistory",
+        "title": "%command.clearPipelineHistory.title%",
+        "category": "%category.workflow%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "workflow.init",
+        "title": "%command.init.title%",
+        "category": "%category.workflow%"
+      },
+      {
+        "command": "workflow.installCli",
+        "title": "%command.installCli.title%",
+        "category": "%category.workflow%"
+      },
+      {
+        "command": "workflow.newTicket",
+        "title": "%command.newTicket.title%",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflow.newPlan",
+        "title": "%command.newPlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflow.moveTicket",
+        "title": "%command.moveTicket.title%",
+        "category": "%category.workflow%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "workflow.showDependencies",
+        "title": "%command.showDependencies.title%",
+        "category": "%category.workflow%",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "workflow.showStatistics",
+        "title": "%command.showStatistics.title%",
+        "category": "%category.workflow%",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "workflow.openPipelineConfig",
+        "title": "%command.openPipelineConfig.title%",
+        "category": "%category.workflow%",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "workflow.openConfig",
+        "title": "%command.openConfig.title%",
+        "category": "%category.workflow%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "workflow.focusTicketsView",
+        "title": "%command.focusTicketsView.title%",
+        "category": "%category.workflow%",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "workflow.focusKanban",
+        "title": "%command.focusKanban.title%",
+        "category": "%category.workflow%",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "workflow.refreshAll",
+        "title": "%command.refreshAll.title%",
+        "category": "%category.workflow%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workflow.copyTicketId",
+        "title": "%command.copyTicketId.title%",
+        "category": "%category.workflow%",
+        "icon": "$(copy)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "workflow.runPipeline",
+        "key": "ctrl+shift+w r",
+        "when": "workflow.cliInstalled && workflow.workflowFound"
+      },
+      {
+        "command": "workflow.newTicket",
+        "key": "ctrl+shift+w n",
+        "when": "workflow.cliInstalled && workflow.workflowFound"
+      },
+      {
+        "command": "workflow.moveTicket",
+        "key": "ctrl+shift+w m",
+        "when": "workflow.cliInstalled && workflow.workflowFound"
       }
     ],
     "configuration": {
-      "title": "Workflow",
+      "title": "%config.title%",
       "properties": {
         "workflow.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to the workflow CLI executable"
+          "description": "%config.cliPath.description%"
         }
       }
     },
     "menus": {
-      "view/title": []
+      "view/title": [
+        {
+          "command": "workflow.newTicket",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.createTicket",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshTickets",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.newTicket",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.createTicket",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshTickets",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.sortKanbanByPriority",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.sortKanbanById",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.sortKanbanByTitle",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.runPipeline",
+          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.stopPipeline",
+          "when": "view == workflow-sidebar.pipeline && workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.showPipelineOutput",
+          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_pipeline"
+        },
+        {
+          "command": "workflow.clearPipelineHistory",
+          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_pipeline"
+        },
+        {
+          "command": "workflow.openPipelineConfig",
+          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_pipeline"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "workflow.openTicket",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "1_open"
+        },
+        {
+          "command": "workflow.moveTicketNext",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.editTicket",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.moveTicketFromMenu",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_move"
+        },
+        {
+          "command": "workflow.showTicketDependencies",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "3_deps"
+        },
+        {
+          "command": "workflow.copyTicketId",
+          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "4_copy"
+        },
+        {
+          "command": "workflow.openTicket",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "1_open"
+        },
+        {
+          "command": "workflow.moveTicketNext",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.editTicket",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.moveTicketFromMenu",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_move"
+        },
+        {
+          "command": "workflow.showTicketDependencies",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "3_deps"
+        },
+        {
+          "command": "workflow.copyTicketId",
+          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
+          "group": "4_copy"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "workflow.init",
+          "when": "!workflow.workflowFound"
+        },
+        {
+          "command": "workflow.installCli",
+          "when": "!workflow.cliInstalled"
+        },
+        {
+          "command": "workflow.newTicket",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.newPlan",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.moveTicket",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.showDependencies",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.showStatistics",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.openPipelineConfig",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.openConfig",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.focusTicketsView",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.focusKanban",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.copyTicketId",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "command": "workflow.runPipeline",
+          "when": "workflow.cliInstalled && workflow.workflowFound && !workflow.pipelineRunning"
+        },
+        {
+          "command": "workflow.stopPipeline",
+          "when": "workflow.cliInstalled && workflow.workflowFound && workflow.pipelineRunning"
+        }
+      ]
     }
   },
   "scripts": {
@@ -79,10 +505,12 @@
     "watch": "node esbuild.config.mjs --watch",
     "package": "node esbuild.config.mjs --production",
     "lint": "eslint src/",
+    "lint:i18n": "node scripts/check-i18n.js",
     "pretest": "npm run test:compile",
     "test": "node ./src/test/runTests.mjs",
     "test:compile": "tsc -p tsconfig.test.json",
-    "test:unit": "mocha --require ts-node/register src/test/unit/**/*.test.ts"
+    "test:unit": "mocha --require ts-node/register --ui tdd src/test/unit/**/*.test.ts",
+    "test:e2e": "node ./dist/test/e2e/runTests.js"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
