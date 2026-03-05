@@ -5,6 +5,7 @@
 [![Version](https://img.shields.io/visual-studio-marketplace/v/workflow-ai.workflow-vscode)](https://marketplace.visualstudio.com/items?itemName=workflow-ai.workflow-vscode)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/workflow-ai.workflow-vscode)](https://marketplace.visualstudio.com/items?itemName=workflow-ai.workflow-vscode)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/workflow-ai.workflow-vscode)](https://marketplace.visualstudio.com/items?itemName=workflow-ai.workflow-vscode)
+[![License](https://img.shields.io/github/license/workflow-ai/wf-vscode)](https://github.com/workflow-ai/wf-vscode/blob/main/LICENSE)
 
 ## Table of Contents
 
@@ -12,11 +13,38 @@
 - [Key Features](#key-features)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
-- [Requirements](#requirements)
+  - [From VS Code Marketplace](#from-vs-code-marketplace)
+  - [From .vsix File](#from-vsix-file)
+  - [Requirements](#requirements)
+  - [Installing the wf CLI](#installing-the-wf-cli)
 - [Configuration](#configuration)
+  - [Extension Settings](#extension-settings)
+  - [Workflow Configuration File](#workflow-configuration-file)
+  - [Pipeline Configuration](#pipeline-configuration)
+  - [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Customizing Keybindings](#customizing-keybindings)
+- [Usage](#usage)
+  - [Creating a Ticket](#creating-a-ticket)
+  - [Moving a Ticket Through Statuses](#moving-a-ticket-through-statuses)
+  - [Working with Kanban Board](#working-with-kanban-board)
+  - [Running the Pipeline](#running-the-pipeline)
+  - [Viewing Ticket Dependencies](#viewing-ticket-dependencies)
+  - [Using CodeLens](#using-codelens)
 - [Commands](#commands)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Ticket Commands](#ticket-commands)
+  - [Pipeline Commands](#pipeline-commands)
+  - [Navigation Commands](#navigation-commands)
+  - [Configuration Commands](#configuration-commands)
+  - [Sorting Commands (Kanban)](#sorting-commands-kanban)
 - [Troubleshooting](#troubleshooting)
+  - [Extension Not Activating](#extension-not-activating)
+  - [StatusBar Not Showing](#statusbar-not-showing)
+  - [Pipeline Won't Start](#pipeline-wont-start)
+  - [Diagnostics Not Working](#diagnostics-not-working)
+  - [Tree Views Empty](#tree-views-empty)
+  - [CLI Not Detected](#cli-not-detected)
+  - [Keyboard Shortcuts Not Working](#keyboard-shortcuts-not-working)
+  - [Getting Help](#getting-help)
 
 ## Description
 
@@ -50,7 +78,9 @@ The sidebar provides organized access to all workflow components:
 - **PLANS** — Project plans and documentation
 - **REPORTS** — Generated reports and summaries
 
-> *Screenshot: Sidebar showing the 4 main sections with expandable tree items*
+![Sidebar TreeView](docs/images/sidebar-treeview.png)
+
+> *Figure 1: Sidebar showing the 4 main sections with expandable tree items*
 
 ### Kanban Board
 
@@ -63,7 +93,9 @@ Six-column Kanban view for visual task management:
 - **REVIEW** — Tasks awaiting review/approval
 - **DONE** — Completed tasks
 
-> *Screenshot: Kanban board showing tickets distributed across 6 columns with priority indicators*
+![Kanban Board](docs/images/kanban-board.png)
+
+> *Figure 2: Kanban board showing tickets distributed across 6 columns with priority indicators*
 
 ### Pipeline Monitor
 
@@ -74,7 +106,9 @@ Real-time pipeline execution monitoring:
 - Start/Stop controls
 - Output viewer
 
-> *Screenshot: Pipeline monitor showing active execution with progress indicator*
+![Pipeline Monitor](docs/images/pipeline-monitor.png)
+
+> *Figure 3: Pipeline monitor showing active execution with progress indicator*
 
 ### StatusBar
 
@@ -84,7 +118,9 @@ Quick status access in the VS Code status bar:
 - Pipeline state (Idle/Running)
 - Quick actions
 
-> *Screenshot: StatusBar showing "WF: Idle" status indicator*
+![StatusBar](docs/images/statusbar.png)
+
+> *Figure 4: StatusBar showing "WF: Idle" status indicator*
 
 ### CodeLens in Ticket Files
 
@@ -94,7 +130,9 @@ Inline actions and information directly in markdown ticket files:
 - Dependency information
 - Quick navigation
 
-> *Screenshot: CodeLens actions visible above a ticket heading*
+![CodeLens](docs/images/codelens.png)
+
+> *Figure 5: CodeLens actions visible above a ticket heading*
 
 ### Hover Preview
 
@@ -104,7 +142,9 @@ Quick ticket information when hovering over ticket IDs:
 - Current status
 - Priority level
 
-> *Screenshot: Hover popup showing ticket details when hovering over a ticket reference*
+![Hover Preview](docs/images/hover-preview.png)
+
+> *Figure 6: Hover popup showing ticket details when hovering over a ticket reference*
 
 ### Diagnostics Panel
 
@@ -114,7 +154,9 @@ Real-time validation with inline error highlighting:
 - Missing required fields
 - Broken dependency references
 
-> *Screenshot: Problems panel showing validation errors in a ticket file*
+![Diagnostics Panel](docs/images/diagnostics-panel.png)
+
+> *Figure 7: Problems panel showing validation errors in a ticket file*
 
 ## Installation
 
@@ -151,13 +193,67 @@ After installation, the extension will automatically detect the CLI.
 
 ## Configuration
 
-### Settings
+### Extension Settings
 
 Configure the extension in VS Code settings (`settings.json`):
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `workflow.cliPath` | Custom path to the wf CLI executable (leave empty for auto-detection) | `""` |
+
+### Workflow Configuration File
+
+The extension uses `.workflow/config/config.yaml` for project-specific settings:
+
+```yaml
+# .workflow/config/config.yaml
+version: "1.0"
+
+project:
+  name: "My Project"
+  description: "Project description"
+
+# Task types and their prefixes
+task_types:
+  planning:
+    prefix: ARCH
+    description: "Planning and architecture tasks"
+  implementation:
+    prefix: IMPL
+    description: "Implementation tasks"
+  bugfix:
+    prefix: FIX
+    description: "Bug fixes"
+  documentation:
+    prefix: DOCS
+    description: "Documentation tasks"
+
+# Priority levels
+priorities:
+  1: critical  # Blocks all work
+  2: high      # Important for progress
+  3: medium    # Standard priority
+  4: low       # When time permits
+  5: someday   # Maybe someday
+```
+
+### Pipeline Configuration
+
+Pipeline execution is configured in `.workflow/config/pipeline.yaml`:
+
+```yaml
+# .workflow/config/pipeline.yaml
+stages:
+  - name: validate
+    commands:
+      - wf validate
+  - name: build
+    commands:
+      - wf build
+  - name: test
+    commands:
+      - wf test
+```
 
 ### Keyboard Shortcuts
 
@@ -177,6 +273,96 @@ To change keyboard shortcuts:
 2. Search for `workflow.`
 3. Click the pencil icon next to any command
 4. Press your desired key combination
+
+## Usage
+
+This section covers common workflows and how to use the extension's key features.
+
+### Creating a Ticket
+
+1. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run `Workflow: Create Ticket` or click the "+" icon in the Tickets view
+3. Follow the interactive prompts:
+   - **Title**: Enter a descriptive title
+   - **Type**: Select ticket type (IMPL, FIX, DOCS, etc.)
+   - **Priority**: Choose priority level (1-5)
+   - **Status**: Select initial status (usually "backlog")
+4. The ticket file is created in the appropriate status directory
+
+**Quick action**: Use the keyboard shortcut `Ctrl+Shift+W N` to create a ticket quickly.
+
+### Moving a Ticket Through Statuses
+
+Tickets progress through the workflow: `backlog` → `ready` → `in-progress` → `review` → `done`
+
+**Method 1: Quick Move (Next Status)**
+1. Find the ticket in the sidebar or Kanban board
+2. Click the → arrow icon next to the ticket
+3. The ticket moves to the next status automatically
+
+**Method 2: Menu Move**
+1. Right-click on the ticket in the sidebar
+2. Select "Move Ticket" from the context menu
+3. Choose the target status from the QuickPick list
+
+**Method 3: Command**
+1. Open Command Palette
+2. Run `Workflow: Move Ticket`
+3. Select the ticket and target status
+
+### Working with Kanban Board
+
+The Kanban board provides a visual overview of all tickets:
+
+1. **Open Kanban**: Click the Kanban icon in the Activity Bar
+2. **View Tickets**: See all tickets organized by status in 6 columns
+3. **Quick Actions**:
+   - Click a ticket to open it in the editor
+   - Click → to move to next status
+   - Use the sort buttons to organize by priority, ID, or title
+4. **Create Ticket**: Click the "+" icon in any column header
+
+**Tip**: Use `Ctrl+Shift+W F` to focus the Kanban view quickly.
+
+### Running the Pipeline
+
+The pipeline automates your workflow stages:
+
+1. **Start Pipeline**:
+   - Click the ▶️ icon in the Pipeline view
+   - Or use `Ctrl+Shift+W R`
+   - Or run `Workflow: Run Pipeline` from Command Palette
+
+2. **Monitor Progress**:
+   - Watch the current stage indicator
+   - View real-time output in the Pipeline Output panel
+
+3. **Stop Pipeline**:
+   - Click the ⏹️ icon when pipeline is running
+   - Or use `Workflow: Stop Pipeline` command
+
+4. **View History**:
+   - Click "Show Pipeline Output" to see past executions
+   - Clear history with "Clear Pipeline History" command
+
+### Viewing Ticket Dependencies
+
+Tickets can have dependencies on other tickets:
+
+1. Open a ticket file
+2. Look for the `dependencies:` section in the frontmatter
+3. In the sidebar, right-click a ticket and select "Show Dependencies"
+4. Dependencies are validated automatically (shown in Problems panel if broken)
+
+### Using CodeLens
+
+CodeLens provides inline actions in ticket files:
+
+- **Move actions**: Quick links to move the ticket to different statuses
+- **Dependency info**: See how many tickets depend on this one
+- **Quick navigation**: Jump to related tickets
+
+CodeLens appears automatically above the ticket title when editing a `.md` file.
 
 ## Commands
 
@@ -315,7 +501,14 @@ If you're still experiencing issues:
    - Steps to reproduce
    - Error messages from Developer Tools console
 
+## See Also
+
+- [CHANGELOG](CHANGELOG.md) — Version history and release notes
+- [GitHub Repository](https://github.com/workflow-ai/wf-vscode) — Source code and issue tracker
+- [wf CLI Documentation](https://github.com/workflow-ai/wf) — Command-line tool documentation
+
 ---
 
 **License**: MIT  
-**Repository**: [workflow-ai/wf-vscode](https://github.com/workflow-ai/wf-vscode)
+**Repository**: [workflow-ai/wf-vscode](https://github.com/workflow-ai/wf-vscode)  
+**Version**: 0.0.1

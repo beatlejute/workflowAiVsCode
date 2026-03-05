@@ -1,0 +1,6 @@
+{
+  "name": "workflow-test-workspace",
+  "version": "1.0.0",
+  "description": "Test workspace for E2E tests",
+  "private": true
+}

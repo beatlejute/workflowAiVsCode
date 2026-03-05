@@ -215,7 +215,7 @@ export class ValidationService {
     if (!ticket) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        'Ticket is undefined or could not be parsed',
+        vscode.l10n.t('Ticket is undefined or could not be parsed'),
         vscode.DiagnosticSeverity.Error,
         'ticket'
       ));
@@ -236,7 +236,7 @@ export class ValidationService {
     if (config && config.task_types && !(ticket.type in config.task_types)) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        `Unknown task type "${ticket.type}". Valid types: ${Object.keys(config.task_types).join(', ')}`,
+        vscode.l10n.t('Unknown task type "{0}". Valid types: {1}', ticket.type, Object.keys(config.task_types).join(', ')),
         vscode.DiagnosticSeverity.Warning,
         'type'
       ));
@@ -279,7 +279,7 @@ export class ValidationService {
       if (!depTicket) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Dependency "${depId}" does not exist`,
+          vscode.l10n.t('Dependency "{0}" does not exist', depId),
           vscode.DiagnosticSeverity.Error,
           'dependencies'
         ));
@@ -301,7 +301,7 @@ export class ValidationService {
         const cycleStr = cycle.cycle.join(' → ');
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Cyclic dependency detected: ${cycleStr}`,
+          vscode.l10n.t('Cyclic dependency detected: {0}', cycleStr),
           vscode.DiagnosticSeverity.Error,
           'dependencies'
         ));
@@ -353,7 +353,7 @@ export class ValidationService {
       if (!(entryPoint in pipeline.stages)) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Entry point "${entryPoint}" does not exist in stages`,
+          vscode.l10n.t('Entry point "{0}" does not exist in stages', entryPoint),
           vscode.DiagnosticSeverity.Error,
           'entry_point'
         ));
@@ -368,7 +368,7 @@ export class ValidationService {
             if (goto.stage && !(goto.stage in pipeline.stages)) {
               diagnostics.push(this.createDiagnostic(
                 uri,
-                `Stage "${stageName}" goto "${gotoName}" references non-existent stage "${goto.stage}"`,
+                vscode.l10n.t('Stage "{0}" goto "{1}" references non-existent stage "{2}"', stageName, gotoName, goto.stage),
                 vscode.DiagnosticSeverity.Error,
                 `stages.${stageName}.goto.${gotoName}`
               ));
@@ -380,7 +380,7 @@ export class ValidationService {
         if (stage.agent && pipeline.agents && !(stage.agent in pipeline.agents)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            `Stage "${stageName}" references non-existent agent "${stage.agent}"`,
+            vscode.l10n.t('Stage "{0}" references non-existent agent "{1}"', stageName, stage.agent),
             vscode.DiagnosticSeverity.Error,
             `stages.${stageName}.agent`
           ));
@@ -407,7 +407,7 @@ export class ValidationService {
     if (!config.version) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        'Missing required field "version"',
+        vscode.l10n.t('Missing required field "{0}"', 'version'),
         vscode.DiagnosticSeverity.Error,
         'version'
       ));
@@ -416,7 +416,7 @@ export class ValidationService {
     if (!config.paths) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        'Missing required field "paths"',
+        vscode.l10n.t('Missing required field "{0}"', 'paths'),
         vscode.DiagnosticSeverity.Error,
         'paths'
       ));
@@ -426,7 +426,7 @@ export class ValidationService {
         if (!(pathField in config.paths)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            `Missing required path "${pathField}"`,
+            vscode.l10n.t('Missing required path "{0}"', pathField),
             vscode.DiagnosticSeverity.Error,
             `paths.${pathField}`
           ));
@@ -528,21 +528,21 @@ export class ValidationService {
 
     switch (keyword) {
       case 'required':
-        return `Missing required field "${(params as any).missingProperty}"`;
+        return vscode.l10n.t('Missing required field "{0}"', (params as any).missingProperty);
       case 'type':
-        return `Field "${field}" must be of type ${(params as any).type}`;
+        return vscode.l10n.t('Field "{0}" must be of type {1}', field, (params as any).type);
       case 'pattern':
-        return `Field "${field}" does not match required pattern`;
+        return vscode.l10n.t('Field "{0}" does not match required pattern', field);
       case 'enum':
-        return `Field "${field}" must be one of: ${(params as any).allowedValues?.join(', ')}`;
+        return vscode.l10n.t('Field "{0}" must be one of: {1}', field, (params as any).allowedValues?.join(', '));
       case 'minimum':
-        return `Field "${field}" must be >= ${(params as any).limit}`;
+        return vscode.l10n.t('Field "{0}" must be >= {1}', field, (params as any).limit);
       case 'maximum':
-        return `Field "${field}" must be <= ${(params as any).limit}`;
+        return vscode.l10n.t('Field "{0}" must be <= {1}', field, (params as any).limit);
       case 'minLength':
-        return `Field "${field}" cannot be empty`;
+        return vscode.l10n.t('Field "{0}" cannot be empty', field);
       default:
-        return message || `Validation error: ${keyword}`;
+        return vscode.l10n.t('Validation error: {0}', keyword);
     }
   }
 

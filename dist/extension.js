@@ -6492,7 +6492,7 @@ __export(extension_exports, {
   updateContextKeys: () => updateContextKeys
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode16 = __toESM(require("vscode"));
+var vscode18 = __toESM(require("vscode"));
 var import_child_process3 = require("child_process");
 var import_util = require("util");
 var path11 = __toESM(require("path"));
@@ -11090,15 +11090,16 @@ var PipelineTreeProvider = class {
 };
 
 // src/ui/diagnostic-provider.ts
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 var path5 = __toESM(require("path"));
 var fs3 = __toESM(require("fs"));
 
 // src/services/validation-service.ts
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var import_ajv = __toESM(require_ajv());
 
 // src/services/dependency-service.ts
+var vscode4 = __toESM(require("vscode"));
 var DependencyService = class {
   store;
   /**
@@ -11313,13 +11314,13 @@ var DependencyService = class {
   canMoveToReady(id) {
     const ticket = this.store.getTicketById(id);
     if (!ticket) {
-      return { ok: false, blockers: [`Ticket ${id} not found`] };
+      return { ok: false, blockers: [vscode4.l10n.t("Ticket {0} not found in dependency check", id)] };
     }
     const blockers = [];
     for (const depId of ticket.dependencies) {
       const depTicket = this.store.getTicketById(depId);
       if (!depTicket) {
-        blockers.push(`${depId} (not found)`);
+        blockers.push(vscode4.l10n.t('Dependency "{0}" does not exist', depId));
       } else if (depTicket.status !== "done" /* Done */) {
         blockers.push(depId);
       }
@@ -11502,8 +11503,8 @@ var ValidationService = class {
     if (!ticket) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        "Ticket is undefined or could not be parsed",
-        vscode4.DiagnosticSeverity.Error,
+        vscode5.l10n.t("Ticket is undefined or could not be parsed"),
+        vscode5.DiagnosticSeverity.Error,
         "ticket"
       ));
       return diagnostics;
@@ -11519,8 +11520,8 @@ var ValidationService = class {
     if (config && config.task_types && !(ticket.type in config.task_types)) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        `Unknown task type "${ticket.type}". Valid types: ${Object.keys(config.task_types).join(", ")}`,
-        vscode4.DiagnosticSeverity.Warning,
+        vscode5.l10n.t('Unknown task type "{0}". Valid types: {1}', ticket.type, Object.keys(config.task_types).join(", ")),
+        vscode5.DiagnosticSeverity.Warning,
         "type"
       ));
     }
@@ -11551,8 +11552,8 @@ var ValidationService = class {
       if (!depTicket) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Dependency "${depId}" does not exist`,
-          vscode4.DiagnosticSeverity.Error,
+          vscode5.l10n.t('Dependency "{0}" does not exist', depId),
+          vscode5.DiagnosticSeverity.Error,
           "dependencies"
         ));
       }
@@ -11570,8 +11571,8 @@ var ValidationService = class {
         const cycleStr = cycle.cycle.join(" \u2192 ");
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Cyclic dependency detected: ${cycleStr}`,
-          vscode4.DiagnosticSeverity.Error,
+          vscode5.l10n.t("Cyclic dependency detected: {0}", cycleStr),
+          vscode5.DiagnosticSeverity.Error,
           "dependencies"
         ));
       }
@@ -11611,8 +11612,8 @@ var ValidationService = class {
       if (!(entryPoint in pipeline.stages)) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          `Entry point "${entryPoint}" does not exist in stages`,
-          vscode4.DiagnosticSeverity.Error,
+          vscode5.l10n.t('Entry point "{0}" does not exist in stages', entryPoint),
+          vscode5.DiagnosticSeverity.Error,
           "entry_point"
         ));
       }
@@ -11624,8 +11625,8 @@ var ValidationService = class {
             if (goto.stage && !(goto.stage in pipeline.stages)) {
               diagnostics.push(this.createDiagnostic(
                 uri,
-                `Stage "${stageName}" goto "${gotoName}" references non-existent stage "${goto.stage}"`,
-                vscode4.DiagnosticSeverity.Error,
+                vscode5.l10n.t('Stage "{0}" goto "{1}" references non-existent stage "{2}"', stageName, gotoName, goto.stage),
+                vscode5.DiagnosticSeverity.Error,
                 `stages.${stageName}.goto.${gotoName}`
               ));
             }
@@ -11634,8 +11635,8 @@ var ValidationService = class {
         if (stage.agent && pipeline.agents && !(stage.agent in pipeline.agents)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            `Stage "${stageName}" references non-existent agent "${stage.agent}"`,
-            vscode4.DiagnosticSeverity.Error,
+            vscode5.l10n.t('Stage "{0}" references non-existent agent "{1}"', stageName, stage.agent),
+            vscode5.DiagnosticSeverity.Error,
             `stages.${stageName}.agent`
           ));
         }
@@ -11656,16 +11657,16 @@ var ValidationService = class {
     if (!config.version) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        'Missing required field "version"',
-        vscode4.DiagnosticSeverity.Error,
+        vscode5.l10n.t('Missing required field "{0}"', "version"),
+        vscode5.DiagnosticSeverity.Error,
         "version"
       ));
     }
     if (!config.paths) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        'Missing required field "paths"',
-        vscode4.DiagnosticSeverity.Error,
+        vscode5.l10n.t('Missing required field "{0}"', "paths"),
+        vscode5.DiagnosticSeverity.Error,
         "paths"
       ));
     } else {
@@ -11674,8 +11675,8 @@ var ValidationService = class {
         if (!(pathField in config.paths)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            `Missing required path "${pathField}"`,
-            vscode4.DiagnosticSeverity.Error,
+            vscode5.l10n.t('Missing required path "{0}"', pathField),
+            vscode5.DiagnosticSeverity.Error,
             `paths.${pathField}`
           ));
         }
@@ -11697,7 +11698,7 @@ var ValidationService = class {
     }
     const tickets = this.store.getTickets();
     for (const ticket of tickets) {
-      const uri = vscode4.Uri.file(
+      const uri = vscode5.Uri.file(
         require("path").join(workflowRoot, ".workflow", "tickets", ticket.status, `${ticket.id}.md`)
       );
       const diagnostics = this.validateTicket(uri, ticket);
@@ -11709,7 +11710,7 @@ var ValidationService = class {
       const pipeline = this.store.getPipeline();
       if (pipeline) {
         const pipelinePath = require("path").join(workflowRoot, ".workflow", "config", "pipeline.yaml");
-        const uri = vscode4.Uri.file(pipelinePath);
+        const uri = vscode5.Uri.file(pipelinePath);
         const diagnostics = this.validatePipeline(uri, pipeline);
         if (diagnostics.length > 0) {
           result.set(uri.toString(), diagnostics);
@@ -11721,7 +11722,7 @@ var ValidationService = class {
       const config = this.store.getConfig();
       if (config) {
         const configPath = require("path").join(workflowRoot, ".workflow", "config", "config.yaml");
-        const uri = vscode4.Uri.file(configPath);
+        const uri = vscode5.Uri.file(configPath);
         const diagnostics = this.validateConfig(uri, config);
         if (diagnostics.length > 0) {
           result.set(uri.toString(), diagnostics);
@@ -11743,7 +11744,7 @@ var ValidationService = class {
       diagnostics.push(this.createDiagnostic(
         uri,
         message,
-        vscode4.DiagnosticSeverity.Error,
+        vscode5.DiagnosticSeverity.Error,
         field
       ));
     }
@@ -11757,29 +11758,29 @@ var ValidationService = class {
     const field = error.instancePath.slice(1) || "root";
     switch (keyword) {
       case "required":
-        return `Missing required field "${params.missingProperty}"`;
+        return vscode5.l10n.t('Missing required field "{0}"', params.missingProperty);
       case "type":
-        return `Field "${field}" must be of type ${params.type}`;
+        return vscode5.l10n.t('Field "{0}" must be of type {1}', field, params.type);
       case "pattern":
-        return `Field "${field}" does not match required pattern`;
+        return vscode5.l10n.t('Field "{0}" does not match required pattern', field);
       case "enum":
-        return `Field "${field}" must be one of: ${params.allowedValues?.join(", ")}`;
+        return vscode5.l10n.t('Field "{0}" must be one of: {1}', field, params.allowedValues?.join(", "));
       case "minimum":
-        return `Field "${field}" must be >= ${params.limit}`;
+        return vscode5.l10n.t('Field "{0}" must be >= {1}', field, params.limit);
       case "maximum":
-        return `Field "${field}" must be <= ${params.limit}`;
+        return vscode5.l10n.t('Field "{0}" must be <= {1}', field, params.limit);
       case "minLength":
-        return `Field "${field}" cannot be empty`;
+        return vscode5.l10n.t('Field "{0}" cannot be empty', field);
       default:
-        return message || `Validation error: ${keyword}`;
+        return vscode5.l10n.t("Validation error: {0}", keyword);
     }
   }
   /**
    * Create a vscode.Diagnostic with the given parameters
    */
   createDiagnostic(uri, message, severity, field) {
-    const range = new vscode4.Range(0, 0, 0, 0);
-    const diagnostic = new vscode4.Diagnostic(range, message, severity);
+    const range = new vscode5.Range(0, 0, 0, 0);
+    const diagnostic = new vscode5.Diagnostic(range, message, severity);
     diagnostic.source = "workflow-ai";
     if (field) {
       diagnostic.code = field;
@@ -11825,7 +11826,7 @@ var DiagnosticProvider = class {
     this.workflowRoot = store.getWorkflowRoot();
     this.validationService = new ValidationService(store);
     this.debounceMap = new DebounceMap();
-    this.diagnosticCollection = vscode5.languages.createDiagnosticCollection("workflow");
+    this.diagnosticCollection = vscode6.languages.createDiagnosticCollection("workflow");
     this.disposables.push(this.diagnosticCollection);
     this.registerFileWatchers();
     const storeDisposable = store.onDidChange((event) => {
@@ -11848,19 +11849,19 @@ var DiagnosticProvider = class {
     if (!this.workflowRoot) {
       return;
     }
-    const ticketPattern = new vscode5.RelativePattern(
+    const ticketPattern = new vscode6.RelativePattern(
       path5.join(this.workflowRoot, ".workflow", "tickets"),
       "**/*.md"
     );
-    const ticketWatcher = vscode5.workspace.createFileSystemWatcher(ticketPattern);
+    const ticketWatcher = vscode6.workspace.createFileSystemWatcher(ticketPattern);
     this.disposables.push(
       ticketWatcher.onDidChange((uri) => this.onFileChanged(uri)),
       ticketWatcher.onDidCreate((uri) => this.onFileChanged(uri)),
       ticketWatcher.onDidDelete((uri) => this.onFileDeleted(uri)),
       ticketWatcher
     );
-    const pipelineWatcher = vscode5.workspace.createFileSystemWatcher(
-      new vscode5.RelativePattern(this.workflowRoot, ".workflow/config/pipeline.yaml")
+    const pipelineWatcher = vscode6.workspace.createFileSystemWatcher(
+      new vscode6.RelativePattern(this.workflowRoot, ".workflow/config/pipeline.yaml")
     );
     this.disposables.push(
       pipelineWatcher.onDidChange((uri) => this.onFileChanged(uri)),
@@ -11868,8 +11869,8 @@ var DiagnosticProvider = class {
       pipelineWatcher.onDidDelete((uri) => this.onFileDeleted(uri)),
       pipelineWatcher
     );
-    const configWatcher = vscode5.workspace.createFileSystemWatcher(
-      new vscode5.RelativePattern(this.workflowRoot, ".workflow/config/config.yaml")
+    const configWatcher = vscode6.workspace.createFileSystemWatcher(
+      new vscode6.RelativePattern(this.workflowRoot, ".workflow/config/config.yaml")
     );
     this.disposables.push(
       configWatcher.onDidChange((uri) => this.onFileChanged(uri)),
@@ -11877,20 +11878,20 @@ var DiagnosticProvider = class {
       configWatcher.onDidDelete((uri) => this.onFileDeleted(uri)),
       configWatcher
     );
-    const textDocumentChangeListener = vscode5.workspace.onDidChangeTextDocument((event) => {
+    const textDocumentChangeListener = vscode6.workspace.onDidChangeTextDocument((event) => {
       const uri = event.document.uri;
       if (this.isWorkflowFile(uri)) {
         this.onDocumentChanged(event.document);
       }
     });
     this.disposables.push(textDocumentChangeListener);
-    const textDocumentOpenListener = vscode5.workspace.onDidOpenTextDocument((doc) => {
+    const textDocumentOpenListener = vscode6.workspace.onDidOpenTextDocument((doc) => {
       if (this.isWorkflowFile(doc.uri)) {
         this.validateDocument(doc);
       }
     });
     this.disposables.push(textDocumentOpenListener);
-    const textDocumentSaveListener = vscode5.workspace.onDidSaveTextDocument((doc) => {
+    const textDocumentSaveListener = vscode6.workspace.onDidSaveTextDocument((doc) => {
       if (this.isWorkflowFile(doc.uri)) {
         this.validateDocument(doc);
       }
@@ -11941,7 +11942,7 @@ var DiagnosticProvider = class {
    * Validate a file by URI
    */
   validateFile(uri) {
-    const document = vscode5.workspace.textDocuments.find(
+    const document = vscode6.workspace.textDocuments.find(
       (doc) => doc.uri.toString() === uri.toString()
     );
     if (document) {
@@ -11995,10 +11996,10 @@ var DiagnosticProvider = class {
       this.diagnosticCollection.set(uri, diagnostics);
     } catch (error) {
       const diagnostics = [
-        new vscode5.Diagnostic(
-          new vscode5.Range(0, 0, 0, 0),
-          vscode5.l10n.t("Failed to parse ticket frontmatter: {0}", error.message),
-          vscode5.DiagnosticSeverity.Error
+        new vscode6.Diagnostic(
+          new vscode6.Range(0, 0, 0, 0),
+          vscode6.l10n.t("Failed to parse ticket frontmatter: {0}", error.message),
+          vscode6.DiagnosticSeverity.Error
         )
       ];
       diagnostics[0].source = "workflow-ai";
@@ -12015,10 +12016,10 @@ var DiagnosticProvider = class {
       this.diagnosticCollection.set(uri, diagnostics);
     } catch (error) {
       const diagnostics = [
-        new vscode5.Diagnostic(
-          new vscode5.Range(0, 0, 0, 0),
-          vscode5.l10n.t("Failed to parse pipeline YAML: {0}", error.message),
-          vscode5.DiagnosticSeverity.Error
+        new vscode6.Diagnostic(
+          new vscode6.Range(0, 0, 0, 0),
+          vscode6.l10n.t("Failed to parse pipeline YAML: {0}", error.message),
+          vscode6.DiagnosticSeverity.Error
         )
       ];
       diagnostics[0].source = "workflow-ai";
@@ -12035,10 +12036,10 @@ var DiagnosticProvider = class {
       this.diagnosticCollection.set(uri, diagnostics);
     } catch (error) {
       const diagnostics = [
-        new vscode5.Diagnostic(
-          new vscode5.Range(0, 0, 0, 0),
-          vscode5.l10n.t("Failed to parse config YAML: {0}", error.message),
-          vscode5.DiagnosticSeverity.Error
+        new vscode6.Diagnostic(
+          new vscode6.Range(0, 0, 0, 0),
+          vscode6.l10n.t("Failed to parse config YAML: {0}", error.message),
+          vscode6.DiagnosticSeverity.Error
         )
       ];
       diagnostics[0].source = "workflow-ai";
@@ -12054,7 +12055,7 @@ var DiagnosticProvider = class {
     }
     const validationResults = this.validationService.validateAll();
     for (const [uriString, diagnostics] of validationResults.entries()) {
-      const uri = vscode5.Uri.parse(uriString);
+      const uri = vscode6.Uri.parse(uriString);
       this.diagnosticCollection.set(uri, diagnostics);
     }
   }
@@ -12077,7 +12078,7 @@ var DiagnosticProvider = class {
 };
 
 // src/ui/document-link-provider.ts
-var vscode6 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 var path6 = __toESM(require("path"));
 var fs4 = __toESM(require("fs"));
 var TicketDocumentLinkProvider = class {
@@ -12138,13 +12139,13 @@ var TicketDocumentLinkProvider = class {
           const charEnd = charStart + filePath.length;
           let targetUri;
           if (path6.isAbsolute(filePath)) {
-            targetUri = vscode6.Uri.file(filePath);
+            targetUri = vscode7.Uri.file(filePath);
           } else {
-            targetUri = vscode6.Uri.file(path6.join(this.workflowRoot, filePath));
+            targetUri = vscode7.Uri.file(path6.join(this.workflowRoot, filePath));
           }
           if (fs4.existsSync(targetUri.fsPath)) {
-            const range = new vscode6.Range(lineNum, charStart, lineNum, charEnd);
-            const link = new vscode6.DocumentLink(range, targetUri);
+            const range = new vscode7.Range(lineNum, charStart, lineNum, charEnd);
+            const link = new vscode7.DocumentLink(range, targetUri);
             link.tooltip = `Open file: ${filePath}`;
             links.push(link);
           }
@@ -12185,9 +12186,9 @@ var TicketDocumentLinkProvider = class {
               `${ticketId}.md`
             );
             if (fs4.existsSync(ticketPath)) {
-              const range = new vscode6.Range(lineNum, charStart, lineNum, charEnd);
-              const targetUri = vscode6.Uri.file(ticketPath);
-              const link = new vscode6.DocumentLink(range, targetUri);
+              const range = new vscode7.Range(lineNum, charStart, lineNum, charEnd);
+              const targetUri = vscode7.Uri.file(ticketPath);
+              const link = new vscode7.DocumentLink(range, targetUri);
               link.tooltip = `Open ticket: ${ticketId} - ${ticket.title}`;
               links.push(link);
             }
@@ -12260,9 +12261,9 @@ var PipelineDocumentLinkProvider = class {
       "SKILL.md"
     );
     if (fs4.existsSync(skillPath)) {
-      const range = new vscode6.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
-      const targetUri = vscode6.Uri.file(skillPath);
-      const link = new vscode6.DocumentLink(range, targetUri);
+      const range = new vscode7.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+      const targetUri = vscode7.Uri.file(skillPath);
+      const link = new vscode7.DocumentLink(range, targetUri);
       link.tooltip = `Open skill: ${skillId}`;
       links.push(link);
     }
@@ -12293,11 +12294,11 @@ var PipelineDocumentLinkProvider = class {
       }
       const actualStart = valueStart + valueMatch.index + valueMatch[0].indexOf(stageId);
       const actualEnd = actualStart + stageId.length;
-      const range = new vscode6.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+      const range = new vscode7.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
       const targetUri = document.uri.with({
         fragment: `L${targetLine + 1}`
       });
-      const link = new vscode6.DocumentLink(range, targetUri);
+      const link = new vscode7.DocumentLink(range, targetUri);
       link.tooltip = `Go to stage: ${stageId}`;
       links.push(link);
     }
@@ -12333,7 +12334,7 @@ var WorkflowDocumentLinkProvider = class {
 };
 
 // src/ui/codelens-provider.ts
-var vscode7 = __toESM(require("vscode"));
+var vscode8 = __toESM(require("vscode"));
 var STATUS_ICONS = {
   ["backlog" /* Backlog */]: "\u{1F4CB}",
   ["ready" /* Ready */]: "\u2705",
@@ -12406,17 +12407,17 @@ var TicketCodeLensProvider = class {
    * Format: {status_icon} {status} | Move: [ready] [review] [done] [blocked]
    */
   createStatusLens(document, ticket) {
-    const range = new vscode7.Range(0, 0, 0, 0);
+    const range = new vscode8.Range(0, 0, 0, 0);
     const statusIcon = STATUS_ICONS[ticket.status] || "\u{1F4C4}";
     const validTransitions = this.ticketService.getValidTransitions(ticket.status);
     const moveActions = validTransitions.map((status) => `[${status}]`).join(" ");
-    const title = `${statusIcon} ${ticket.status} | ${vscode7.l10n.t("Move")}: ${moveActions}`;
+    const title = `${statusIcon} ${ticket.status} | ${vscode8.l10n.t("Move")}: ${moveActions}`;
     const command = {
       title,
       command: "workflow.moveTicket",
       arguments: [ticket.id]
     };
-    return new vscode7.CodeLens(range, command);
+    return new vscode8.CodeLens(range, command);
   }
   /**
    * Create CodeLenses for dependencies and plan
@@ -12424,7 +12425,7 @@ var TicketCodeLensProvider = class {
    */
   createDependenciesLenses(document, ticket) {
     const lenses = [];
-    const range = new vscode7.Range(1, 0, 1, 0);
+    const range = new vscode8.Range(1, 0, 1, 0);
     const dependencies = this.dependencyService.getDependencies(ticket.id);
     const depsStr = dependencies.map((dep) => `${dep.id} ${DEP_STATUS_ICONS[dep.status] || "\u2B1C"}`).join(" ");
     const dependents = this.dependencyService.getDependents(ticket.id);
@@ -12432,13 +12433,13 @@ var TicketCodeLensProvider = class {
     const planId = ticket.parent_plan || "";
     const parts = [];
     if (dependencies.length > 0) {
-      parts.push(`${vscode7.l10n.t("Deps")}: ${depsStr}`);
+      parts.push(`${vscode8.l10n.t("Deps")}: ${depsStr}`);
     }
     if (dependents.length > 0) {
-      parts.push(`${vscode7.l10n.t("Blocks")}: ${blocksStr}`);
+      parts.push(`${vscode8.l10n.t("Blocks")}: ${blocksStr}`);
     }
     if (planId) {
-      parts.push(`${vscode7.l10n.t("Plan")}: ${planId}`);
+      parts.push(`${vscode8.l10n.t("Plan")}: ${planId}`);
     }
     if (parts.length === 0) {
       return lenses;
@@ -12449,7 +12450,7 @@ var TicketCodeLensProvider = class {
       command: "workflow.showDependencies",
       arguments: [ticket.id]
     };
-    lenses.push(new vscode7.CodeLens(range, command));
+    lenses.push(new vscode8.CodeLens(range, command));
     return lenses;
   }
   /**
@@ -12457,7 +12458,7 @@ var TicketCodeLensProvider = class {
    * Format: Review: ✅ passed (3/3) or Review: ❌ failed (1/3)
    */
   createReviewLens(document, frontmatterText) {
-    const range = new vscode7.Range(2, 0, 2, 0);
+    const range = new vscode8.Range(2, 0, 2, 0);
     const content = document.getText();
     const bodyReviewMatch = content.match(/## Review[\s\S]*?\|.*\|/);
     if (!bodyReviewMatch) {
@@ -12477,12 +12478,12 @@ var TicketCodeLensProvider = class {
     const status = statusMatch[2];
     const totalReviews = lastReviewMatch.length;
     const passedReviews = lastReviewMatch.filter((r) => r.includes("\u2705")).length;
-    const title = `${vscode7.l10n.t("Review")}: ${icon} ${status} (${passedReviews}/${totalReviews})`;
+    const title = `${vscode8.l10n.t("Review")}: ${icon} ${status} (${passedReviews}/${totalReviews})`;
     const command = {
       title,
       command: "workflow.gotoReviewSection"
     };
-    return new vscode7.CodeLens(range, command);
+    return new vscode8.CodeLens(range, command);
   }
 };
 var WorkflowCodeLensProvider = class {
@@ -12513,7 +12514,7 @@ var WorkflowCodeLensProvider = class {
 };
 
 // src/ui/completion-provider.ts
-var vscode8 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 var STATUS_ICONS2 = {
   ["backlog" /* Backlog */]: "\u{1F4CB}",
   ["ready" /* Ready */]: "\u2705",
@@ -12555,14 +12556,14 @@ var TicketCompletionProvider = class {
       if (ticket.id === currentTicketId) {
         continue;
       }
-      const item = new vscode8.CompletionItem(ticket.id, vscode8.CompletionItemKind.Reference);
+      const item = new vscode9.CompletionItem(ticket.id, vscode9.CompletionItemKind.Reference);
       item.detail = `${ticket.title} (${ticket.status})`;
-      item.documentation = new vscode8.MarkdownString(
+      item.documentation = new vscode9.MarkdownString(
         `**${ticket.title}**
 
-${vscode8.l10n.t("Status")}: ${STATUS_ICONS2[ticket.status]} ${ticket.status}
+${vscode9.l10n.t("Status")}: ${STATUS_ICONS2[ticket.status]} ${ticket.status}
 
-${vscode8.l10n.t("Priority")}: ${ticket.priority}`
+${vscode9.l10n.t("Priority")}: ${ticket.priority}`
       );
       item.sortText = ticket.id;
       items.push(item);
@@ -12629,8 +12630,8 @@ var PipelineCompletionProvider = class {
     if (stageMatch) {
       const stages = Object.entries(pipeline.pipeline.stages || {});
       for (const [stageId, stageConfig] of stages) {
-        const item = new vscode8.CompletionItem(stageId, vscode8.CompletionItemKind.Class);
-        item.detail = typeof stageConfig === "string" ? stageConfig : stageConfig.description || vscode8.l10n.t("Stage");
+        const item = new vscode9.CompletionItem(stageId, vscode9.CompletionItemKind.Class);
+        item.detail = typeof stageConfig === "string" ? stageConfig : stageConfig.description || vscode9.l10n.t("Stage");
         item.documentation = this.createStageDocumentation(stageId, stageConfig);
         item.sortText = `1_${stageId}`;
         items.push(item);
@@ -12638,7 +12639,7 @@ var PipelineCompletionProvider = class {
     } else if (agentMatch) {
       const agents = Object.entries(pipeline.pipeline.agents || {});
       for (const [agentId, agentConfig] of agents) {
-        const item = new vscode8.CompletionItem(agentId, vscode8.CompletionItemKind.Module);
+        const item = new vscode9.CompletionItem(agentId, vscode9.CompletionItemKind.Module);
         const command = typeof agentConfig === "string" ? agentConfig : agentConfig.command;
         item.detail = command;
         item.documentation = this.createAgentDocumentation(agentId, agentConfig);
@@ -12648,12 +12649,12 @@ var PipelineCompletionProvider = class {
     } else if (skillMatch) {
       const skills = this.extractSkillsFromPipeline(pipeline);
       for (const skillId of skills) {
-        const item = new vscode8.CompletionItem(skillId, vscode8.CompletionItemKind.Method);
-        item.detail = `${vscode8.l10n.t("Skill")}: ${skillId}`;
-        item.documentation = new vscode8.MarkdownString(
-          `**${vscode8.l10n.t("Skill")}: ${skillId}**
+        const item = new vscode9.CompletionItem(skillId, vscode9.CompletionItemKind.Method);
+        item.detail = `${vscode9.l10n.t("Skill")}: ${skillId}`;
+        item.documentation = new vscode9.MarkdownString(
+          `**${vscode9.l10n.t("Skill")}: ${skillId}**
 
-${vscode8.l10n.t("Located at")}: \`.workflow/src/skills/${skillId}/SKILL.md\``
+${vscode9.l10n.t("Located at")}: \`.workflow/src/skills/${skillId}/SKILL.md\``
         );
         item.sortText = `3_${skillId}`;
         items.push(item);
@@ -12669,8 +12670,9 @@ ${vscode8.l10n.t("Located at")}: \`.workflow/src/skills/${skillId}/SKILL.md\``
     const stages = pipeline.pipeline.stages || {};
     for (const [, stageConfig] of Object.entries(stages)) {
       if (typeof stageConfig === "object" && stageConfig !== null) {
-        if (stageConfig.skill) {
-          skills.add(stageConfig.skill);
+        const config = stageConfig;
+        if (config.skill) {
+          skills.add(config.skill);
         }
       }
     }
@@ -12680,30 +12682,30 @@ ${vscode8.l10n.t("Located at")}: \`.workflow/src/skills/${skillId}/SKILL.md\``
    * Create Markdown documentation for a stage
    */
   createStageDocumentation(stageId, stageConfig) {
-    const description = typeof stageConfig === "string" ? stageConfig : stageConfig.description || vscode8.l10n.t("No description");
-    const doc = new vscode8.MarkdownString(`**${vscode8.l10n.t("Stage")}: ${stageId}**
+    const description = typeof stageConfig === "string" ? stageConfig : stageConfig.description || vscode9.l10n.t("No description");
+    const doc = new vscode9.MarkdownString(`**${vscode9.l10n.t("Stage")}: ${stageId}**
 
 ${description}`);
     if (typeof stageConfig === "object" && stageConfig !== null) {
       if (stageConfig.agent) {
         doc.appendMarkdown(`
 
-**${vscode8.l10n.t("Agent")}:** \`${stageConfig.agent}\``);
+**${vscode9.l10n.t("Agent")}:** \`${stageConfig.agent}\``);
       }
       if (stageConfig.skill) {
         doc.appendMarkdown(`
 
-**${vscode8.l10n.t("Skill")}:** \`${stageConfig.skill}\``);
+**${vscode9.l10n.t("Skill")}:** \`${stageConfig.skill}\``);
       }
       if (stageConfig.type) {
         doc.appendMarkdown(`
 
-**${vscode8.l10n.t("Type")}:** \`${stageConfig.type}\``);
+**${vscode9.l10n.t("Type")}:** \`${stageConfig.type}\``);
       }
       if (stageConfig.goto) {
         doc.appendMarkdown(`
 
-**${vscode8.l10n.t("Transitions")}:**`);
+**${vscode9.l10n.t("Transitions")}:**`);
         for (const [trigger, target] of Object.entries(stageConfig.goto)) {
           const targetStage = typeof target === "string" ? target : target.stage;
           doc.appendMarkdown(`
@@ -12720,7 +12722,7 @@ ${description}`);
     const command = typeof agentConfig === "string" ? agentConfig : agentConfig.command;
     const args = typeof agentConfig === "object" && agentConfig !== null ? agentConfig.args || [] : [];
     const description = typeof agentConfig === "object" && agentConfig !== null ? agentConfig.description : void 0;
-    const doc = new vscode8.MarkdownString(`**${vscode8.l10n.t("Agent")}: ${agentId}**
+    const doc = new vscode9.MarkdownString(`**${vscode9.l10n.t("Agent")}: ${agentId}**
 
 \`\`\`bash
 ${command} ${args.join(" ")}
@@ -12733,7 +12735,7 @@ ${description}`);
     if (typeof agentConfig === "object" && agentConfig !== null && agentConfig.workdir) {
       doc.appendMarkdown(`
 
-**${vscode8.l10n.t("Working Directory")}:** \`${agentConfig.workdir}\``);
+**${vscode9.l10n.t("Working Directory")}:** \`${agentConfig.workdir}\``);
     }
     return doc;
   }
@@ -12768,7 +12770,7 @@ var WorkflowCompletionProvider = class {
 };
 
 // src/ui/hover-provider.ts
-var vscode9 = __toESM(require("vscode"));
+var vscode10 = __toESM(require("vscode"));
 var STATUS_ICONS3 = {
   ["backlog" /* Backlog */]: "\u{1F4CB}",
   ["ready" /* Ready */]: "\u2705",
@@ -12826,7 +12828,7 @@ var TicketHoverProvider = class {
       return void 0;
     }
     const hoverContent = this.buildHoverContent(ticket);
-    return new vscode9.Hover(hoverContent);
+    return new vscode10.Hover(hoverContent);
   }
   /**
    * Extract ticket ID at cursor position
@@ -12852,19 +12854,19 @@ var TicketHoverProvider = class {
     const priorityIcon = PRIORITY_ICONS[ticket.priority] || "\u{1F4CC}";
     const typeIcon = TYPE_ICONS[ticket.type?.toUpperCase()] || "\u{1F4DD}";
     const complexityIcon = COMPLEXITY_ICONS[ticket.complexity] || "\u{1F7E1}";
-    const markdown = new vscode9.MarkdownString();
+    const markdown = new vscode10.MarkdownString();
     markdown.isTrusted = true;
     markdown.supportHtml = true;
     markdown.appendMarkdown(`#### ${ticket.id}: ${ticket.title}
 
 `);
     markdown.appendMarkdown(
-      `**${vscode9.l10n.t("Status")}:** ${statusIcon} \`${ticket.status}\`  | **${vscode9.l10n.t("Priority")}:** ${priorityIcon} \`${ticket.priority}\`  | **${vscode9.l10n.t("Type")}:** ${typeIcon} \`${ticket.type}\`  | **${vscode9.l10n.t("Complexity")}:** ${complexityIcon} \`${ticket.complexity}\`
+      `**${vscode10.l10n.t("Status")}:** ${statusIcon} \`${ticket.status}\`  | **${vscode10.l10n.t("Priority")}:** ${priorityIcon} \`${ticket.priority}\`  | **${vscode10.l10n.t("Type")}:** ${typeIcon} \`${ticket.type}\`  | **${vscode10.l10n.t("Complexity")}:** ${complexityIcon} \`${ticket.complexity}\`
 
 `
     );
     if (ticket.parent_plan) {
-      markdown.appendMarkdown(`**${vscode9.l10n.t("Plan")}:** [${ticket.parent_plan}](command:workflow.openPlan?id=${ticket.parent_plan})  `);
+      markdown.appendMarkdown(`**${vscode10.l10n.t("Plan")}:** [${ticket.parent_plan}](command:workflow.openPlan?id=${ticket.parent_plan})  `);
     }
     if (ticket.dependencies && ticket.dependencies.length > 0) {
       const depsWithStatus = ticket.dependencies.map((depId) => {
@@ -12872,16 +12874,16 @@ var TicketHoverProvider = class {
         const depStatusIcon = depTicket ? STATUS_ICONS3[depTicket.status] : "\u2B1C";
         return `${depId} ${depStatusIcon}`;
       });
-      markdown.appendMarkdown(`**${vscode9.l10n.t("Deps")}:** ${depsWithStatus.join(", ")}
+      markdown.appendMarkdown(`**${vscode10.l10n.t("Deps")}:** ${depsWithStatus.join(", ")}
 
 `);
     } else {
-      markdown.appendMarkdown(`**${vscode9.l10n.t("Deps")}:** ${vscode9.l10n.t("No dependencies")}
+      markdown.appendMarkdown(`**${vscode10.l10n.t("Deps")}:** ${vscode10.l10n.t("No dependencies")}
 
 `);
     }
     if (ticket.tags && ticket.tags.length > 0) {
-      markdown.appendMarkdown(`**${vscode9.l10n.t("Tags")}:** ${ticket.tags.join(", ")}`);
+      markdown.appendMarkdown(`**${vscode10.l10n.t("Tags")}:** ${ticket.tags.join(", ")}`);
     }
     return markdown;
   }
@@ -12910,7 +12912,7 @@ var WorkflowHoverProvider = class {
 };
 
 // src/ui/status-bar.ts
-var vscode10 = __toESM(require("vscode"));
+var vscode11 = __toESM(require("vscode"));
 var StatusBar = class {
   statusBarItem;
   pipelineService;
@@ -12924,8 +12926,8 @@ var StatusBar = class {
   constructor(pipelineService, store) {
     this.pipelineService = pipelineService;
     this.store = store;
-    this.statusBarItem = vscode10.window.createStatusBarItem(
-      vscode10.StatusBarAlignment.Left,
+    this.statusBarItem = vscode11.window.createStatusBarItem(
+      vscode11.StatusBarAlignment.Left,
       100
       // High priority
     );
@@ -12959,7 +12961,7 @@ var StatusBar = class {
     const blockedCount = this.store.getTicketsByStatus("blocked" /* Blocked */).length;
     switch (pipelineState) {
       case "idle" /* Idle */:
-        this.statusBarItem.text = `$(wf) ${vscode10.l10n.t("WF: Idle")}`;
+        this.statusBarItem.text = `$(wf) ${vscode11.l10n.t("WF: Idle")}`;
         this.statusBarItem.tooltip = this.buildIdleTooltip(readyCount, blockedCount);
         this.statusBarItem.color = void 0;
         break;
@@ -12976,12 +12978,12 @@ var StatusBar = class {
         this.statusBarItem.color = void 0;
         break;
       case "error" /* Error */:
-        this.statusBarItem.text = `$(error) ${vscode10.l10n.t("WF: Error")}`;
+        this.statusBarItem.text = `$(error) ${vscode11.l10n.t("WF: Error")}`;
         this.statusBarItem.tooltip = this.buildErrorTooltip(readyCount, blockedCount);
-        this.statusBarItem.color = new vscode10.ThemeColor("statusBarItem.errorForeground");
+        this.statusBarItem.color = new vscode11.ThemeColor("statusBarItem.errorForeground");
         break;
       case "completed" /* Completed */:
-        this.statusBarItem.text = `$(check) ${vscode10.l10n.t("WF: Completed")}`;
+        this.statusBarItem.text = `$(check) ${vscode11.l10n.t("WF: Completed")}`;
         this.statusBarItem.tooltip = this.buildCompletedTooltip(readyCount, blockedCount);
         this.statusBarItem.color = void 0;
         break;
@@ -12992,115 +12994,115 @@ var StatusBar = class {
    * Build text for running state
    */
   buildRunningText(stage, ticket, retryCount) {
-    const stageText = stage || vscode10.l10n.t("unknown");
+    const stageText = stage || vscode11.l10n.t("unknown");
     const ticketText = ticket ? `| ${ticket}` : "";
     const retryText = retryCount > 0 ? ` (retry: ${retryCount})` : "";
-    return `$(loading~spin) ${vscode10.l10n.t("WF: Running")} | ${stageText}${ticketText}${retryText}`;
+    return `$(loading~spin) ${vscode11.l10n.t("WF: Running")} | ${stageText}${ticketText}${retryText}`;
   }
   /**
    * Build tooltip for idle state
    */
   buildIdleTooltip(readyCount, blockedCount) {
-    const tooltip = new vscode10.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Workflow AI - Idle")}**
+    const tooltip = new vscode11.MarkdownString();
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Workflow AI - Idle")}**
 
 `);
     tooltip.appendMarkdown("---\n\n");
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Ticket Counters")}**
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Ticket Counters")}**
 
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Ready")}: ${readyCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Ready")}: ${readyCount}
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Blocked")}: ${blockedCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Blocked")}: ${blockedCount}
 
 `);
-    tooltip.appendMarkdown(vscode10.l10n.t("Click to open command palette."));
+    tooltip.appendMarkdown(vscode11.l10n.t("Click to open command palette."));
     return tooltip;
   }
   /**
    * Build tooltip for running state
    */
   buildRunningTooltip(stage, agent, ticket, retryCount, readyCount, blockedCount) {
-    const tooltip = new vscode10.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Workflow AI - Running")}**
+    const tooltip = new vscode11.MarkdownString();
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Workflow AI - Running")}**
 
 `);
     tooltip.appendMarkdown("---\n\n");
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Current Execution")}**
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Current Execution")}**
 
 `);
     if (stage) {
-      tooltip.appendMarkdown(`- ${vscode10.l10n.t("Stage")}: \`${stage}\`
+      tooltip.appendMarkdown(`- ${vscode11.l10n.t("Stage")}: \`${stage}\`
 `);
     }
     if (agent) {
-      tooltip.appendMarkdown(`- ${vscode10.l10n.t("Agent")}: \`${agent}\`
+      tooltip.appendMarkdown(`- ${vscode11.l10n.t("Agent")}: \`${agent}\`
 `);
     }
     if (ticket) {
-      tooltip.appendMarkdown(`- ${vscode10.l10n.t("Ticket")}: \`${ticket}\`
+      tooltip.appendMarkdown(`- ${vscode11.l10n.t("Ticket")}: \`${ticket}\`
 `);
     }
     if (retryCount > 0) {
-      tooltip.appendMarkdown(`- ${vscode10.l10n.t("Retry")}: ${retryCount}
+      tooltip.appendMarkdown(`- ${vscode11.l10n.t("Retry")}: ${retryCount}
 `);
     }
     tooltip.appendMarkdown(`
-**${vscode10.l10n.t("Ticket Counters")}**
+**${vscode11.l10n.t("Ticket Counters")}**
 
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Ready")}: ${readyCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Ready")}: ${readyCount}
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Blocked")}: ${blockedCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Blocked")}: ${blockedCount}
 
 `);
-    tooltip.appendMarkdown(vscode10.l10n.t("Click to open command palette."));
+    tooltip.appendMarkdown(vscode11.l10n.t("Click to open command palette."));
     return tooltip;
   }
   /**
    * Build tooltip for error state
    */
   buildErrorTooltip(readyCount, blockedCount) {
-    const tooltip = new vscode10.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Workflow AI - Error")}**
+    const tooltip = new vscode11.MarkdownString();
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Workflow AI - Error")}**
 
 `);
-    tooltip.appendMarkdown(`$(error) ${vscode10.l10n.t("Pipeline execution failed")}
+    tooltip.appendMarkdown(`$(error) ${vscode11.l10n.t("Pipeline execution failed")}
 
 `);
     tooltip.appendMarkdown("---\n\n");
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Ticket Counters")}**
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Ticket Counters")}**
 
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Ready")}: ${readyCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Ready")}: ${readyCount}
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Blocked")}: ${blockedCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Blocked")}: ${blockedCount}
 
 `);
-    tooltip.appendMarkdown(vscode10.l10n.t("Click to open command palette."));
+    tooltip.appendMarkdown(vscode11.l10n.t("Click to open command palette."));
     return tooltip;
   }
   /**
    * Build tooltip for completed state
    */
   buildCompletedTooltip(readyCount, blockedCount) {
-    const tooltip = new vscode10.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Workflow AI - Completed")}**
+    const tooltip = new vscode11.MarkdownString();
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Workflow AI - Completed")}**
 
 `);
-    tooltip.appendMarkdown(`$(check) ${vscode10.l10n.t("Pipeline execution completed successfully")}
+    tooltip.appendMarkdown(`$(check) ${vscode11.l10n.t("Pipeline execution completed successfully")}
 
 `);
     tooltip.appendMarkdown("---\n\n");
-    tooltip.appendMarkdown(`**${vscode10.l10n.t("Ticket Counters")}**
+    tooltip.appendMarkdown(`**${vscode11.l10n.t("Ticket Counters")}**
 
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Ready")}: ${readyCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Ready")}: ${readyCount}
 `);
-    tooltip.appendMarkdown(`- ${vscode10.l10n.t("Blocked")}: ${blockedCount}
+    tooltip.appendMarkdown(`- ${vscode11.l10n.t("Blocked")}: ${blockedCount}
 
 `);
-    tooltip.appendMarkdown(vscode10.l10n.t("Click to open command palette."));
+    tooltip.appendMarkdown(vscode11.l10n.t("Click to open command palette."));
     return tooltip;
   }
   /**
@@ -13128,7 +13130,7 @@ var StatusBar = class {
 };
 
 // src/ui/notifications.ts
-var vscode11 = __toESM(require("vscode"));
+var vscode12 = __toESM(require("vscode"));
 var path7 = __toESM(require("path"));
 var NotificationsManager = class {
   store;
@@ -13218,8 +13220,8 @@ var NotificationsManager = class {
    * @param _ticket - Ticket data
    */
   showTicketCompletedNotification(ticketId, _ticket) {
-    const message = vscode11.l10n.t("Ticket {0} completed", ticketId);
-    vscode11.window.showInformationMessage(message, vscode11.l10n.t("Open")).then((selection) => {
+    const message = vscode12.l10n.t("Ticket {0} completed", ticketId);
+    vscode12.window.showInformationMessage(message, vscode12.l10n.t("Open")).then((selection) => {
       if (selection === "Open") {
         this.openTicketFile(ticketId, "done" /* Done */);
       }
@@ -13231,8 +13233,8 @@ var NotificationsManager = class {
    * @param _ticket - Ticket data
    */
   showTicketBlockedNotification(ticketId, _ticket) {
-    const message = vscode11.l10n.t("Ticket {0} is blocked", ticketId);
-    vscode11.window.showWarningMessage(message, vscode11.l10n.t("Details")).then((selection) => {
+    const message = vscode12.l10n.t("Ticket {0} is blocked", ticketId);
+    vscode12.window.showWarningMessage(message, vscode12.l10n.t("Details")).then((selection) => {
       if (selection === "Details") {
         this.openTicketFile(ticketId, "blocked" /* Blocked */);
       }
@@ -13242,8 +13244,8 @@ var NotificationsManager = class {
    * Show pipeline error notification
    */
   showPipelineErrorNotification() {
-    const message = vscode11.l10n.t("Pipeline error occurred");
-    vscode11.window.showErrorMessage(message, vscode11.l10n.t("View Log")).then((selection) => {
+    const message = vscode12.l10n.t("Pipeline error occurred");
+    vscode12.window.showErrorMessage(message, vscode12.l10n.t("View Log")).then((selection) => {
       if (selection === "View Log") {
         this.showPipelineOutput();
       }
@@ -13253,8 +13255,8 @@ var NotificationsManager = class {
    * Show pipeline completed notification
    */
   showPipelineCompletedNotification() {
-    const message = vscode11.l10n.t("Pipeline completed successfully");
-    vscode11.window.showInformationMessage(message, vscode11.l10n.t("Report")).then((selection) => {
+    const message = vscode12.l10n.t("Pipeline completed successfully");
+    vscode12.window.showInformationMessage(message, vscode12.l10n.t("Report")).then((selection) => {
       if (selection === "Report") {
         this.openLatestReport();
       }
@@ -13265,7 +13267,7 @@ var NotificationsManager = class {
    */
   async openTicketFile(ticketId, status) {
     if (!this.workflowRoot) {
-      vscode11.window.showErrorMessage(vscode11.l10n.t("Workflow root not available"));
+      vscode12.window.showErrorMessage(vscode12.l10n.t("Workflow root not available"));
       return;
     }
     const ticketPath = path7.join(
@@ -13276,29 +13278,29 @@ var NotificationsManager = class {
       `${ticketId}.md`
     );
     try {
-      await vscode11.commands.executeCommand("vscode.open", vscode11.Uri.file(ticketPath));
+      await vscode12.commands.executeCommand("vscode.open", vscode12.Uri.file(ticketPath));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode11.window.showErrorMessage(vscode11.l10n.t("Failed to open ticket: {0}", message));
+      vscode12.window.showErrorMessage(vscode12.l10n.t("Failed to open ticket: {0}", message));
     }
   }
   /**
    * Show pipeline output channel
    */
   showPipelineOutput() {
-    vscode11.commands.executeCommand("workflow.showPipelineOutput");
+    vscode12.commands.executeCommand("workflow.showPipelineOutput");
   }
   /**
    * Open latest report file
    */
   async openLatestReport() {
     if (!this.workflowRoot) {
-      vscode11.window.showErrorMessage(vscode11.l10n.t("Workflow root not available"));
+      vscode12.window.showErrorMessage(vscode12.l10n.t("Workflow root not available"));
       return;
     }
     const reports = this.store.getReports();
     if (reports.length === 0) {
-      vscode11.window.showInformationMessage(vscode11.l10n.t("No reports available"));
+      vscode12.window.showInformationMessage(vscode12.l10n.t("No reports available"));
       return;
     }
     const latestReport = reports.filter((r) => r.created_at).sort((a, b) => {
@@ -13307,7 +13309,7 @@ var NotificationsManager = class {
       return dateB - dateA;
     })[0];
     if (!latestReport) {
-      vscode11.window.showInformationMessage(vscode11.l10n.t("No reports with date available"));
+      vscode12.window.showInformationMessage(vscode12.l10n.t("No reports with date available"));
       return;
     }
     const reportPath = path7.join(
@@ -13317,10 +13319,10 @@ var NotificationsManager = class {
       `${latestReport.id}.md`
     );
     try {
-      await vscode11.commands.executeCommand("vscode.open", vscode11.Uri.file(reportPath));
+      await vscode12.commands.executeCommand("vscode.open", vscode12.Uri.file(reportPath));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode11.window.showErrorMessage(vscode11.l10n.t("Failed to open report: {0}", message));
+      vscode12.window.showErrorMessage(vscode12.l10n.t("Failed to open report: {0}", message));
     }
   }
   /**
@@ -13341,6 +13343,7 @@ var NotificationsManager = class {
 };
 
 // src/services/ticket-service.ts
+var vscode13 = __toESM(require("vscode"));
 var fs5 = __toESM(require("fs/promises"));
 var path8 = __toESM(require("path"));
 var import_child_process2 = require("child_process");
@@ -13428,7 +13431,8 @@ var TicketService = class {
     try {
       templateContent = await fs5.readFile(templatePath, "utf-8");
     } catch (error) {
-      throw new Error(`Failed to read ticket template: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode13.l10n.t("Failed to read ticket template: {0}", errorMessage));
     }
     const { frontmatter: templateFrontmatter, body } = parse(templateContent);
     const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -13513,11 +13517,11 @@ var TicketService = class {
   async move(id, targetStatus) {
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(`Ticket ${id} not found`);
+      throw new Error(vscode13.l10n.t("Ticket {0} not found", id));
     }
     if (!this.isValidTransition(ticket.status, targetStatus)) {
       throw new Error(
-        `Invalid transition from ${ticket.status} to ${targetStatus}. Valid transitions: ${this.getValidTransitions(ticket.status).join(", ")}`
+        vscode13.l10n.t("Invalid transition from {0} to {1}. Valid transitions: {2}", ticket.status, targetStatus, this.getValidTransitions(ticket.status).join(", "))
       );
     }
     await this.callWfMove(id, targetStatus);
@@ -13552,7 +13556,8 @@ var TicketService = class {
           this.isOwnWrite = false;
         }, 200);
         if (code !== 0) {
-          reject(new Error(`wf move failed with code ${code}: ${stderr}`));
+          const exitCode = code ?? 1;
+          reject(new Error(vscode13.l10n.t("wf move failed with code {0}: {1}", exitCode, stderr)));
         } else {
           resolve();
         }
@@ -13561,7 +13566,7 @@ var TicketService = class {
         setTimeout(() => {
           this.isOwnWrite = false;
         }, 200);
-        reject(new Error(`wf move failed: ${error.message}`));
+        reject(new Error(vscode13.l10n.t("wf move failed: {0}", error.message)));
       });
     });
   }
@@ -13596,7 +13601,7 @@ var TicketService = class {
   async update(id, fields) {
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(`Ticket ${id} not found`);
+      throw new Error(vscode13.l10n.t("Ticket {0} not found", id));
     }
     const filePath = path8.join(
       this.workflowRoot,
@@ -13609,7 +13614,8 @@ var TicketService = class {
     try {
       content = await fs5.readFile(filePath, "utf-8");
     } catch (error) {
-      throw new Error(`Failed to read ticket file: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode13.l10n.t("Failed to read ticket file: {0}", errorMessage));
     }
     const { frontmatter, body } = parse(content);
     const updatedFields = {
@@ -13631,33 +13637,33 @@ var TicketService = class {
 };
 
 // src/commands/new-ticket.ts
-var vscode12 = __toESM(require("vscode"));
+var vscode14 = __toESM(require("vscode"));
 var path9 = __toESM(require("path"));
 async function executeNewTicket(ticketService) {
-  const type2 = await vscode12.window.showQuickPick(
+  const type2 = await vscode14.window.showQuickPick(
     [
-      { label: "IMPL", description: vscode12.l10n.t("Implementation task") },
-      { label: "FIX", description: vscode12.l10n.t("Bug fix") },
-      { label: "DOCS", description: vscode12.l10n.t("Documentation") },
-      { label: "REVIEW", description: vscode12.l10n.t("Code review") },
-      { label: "PLAN", description: vscode12.l10n.t("Planning task") },
-      { label: "ADMIN", description: vscode12.l10n.t("Administrative task") }
+      { label: "IMPL", description: vscode14.l10n.t("Implementation task") },
+      { label: "FIX", description: vscode14.l10n.t("Bug fix") },
+      { label: "DOCS", description: vscode14.l10n.t("Documentation") },
+      { label: "REVIEW", description: vscode14.l10n.t("Code review") },
+      { label: "PLAN", description: vscode14.l10n.t("Planning task") },
+      { label: "ADMIN", description: vscode14.l10n.t("Administrative task") }
     ],
     {
-      placeHolder: vscode12.l10n.t("Select ticket type"),
-      title: vscode12.l10n.t("Create New Ticket")
+      placeHolder: vscode14.l10n.t("Select ticket type"),
+      title: vscode14.l10n.t("Create New Ticket")
     }
   );
   if (!type2) {
     return;
   }
-  const title = await vscode12.window.showInputBox({
-    prompt: vscode12.l10n.t("Enter ticket title"),
-    placeHolder: vscode12.l10n.t("e.g., Add feature X"),
-    title: vscode12.l10n.t("Create New Ticket"),
+  const title = await vscode14.window.showInputBox({
+    prompt: vscode14.l10n.t("Enter ticket title"),
+    placeHolder: vscode14.l10n.t("e.g., Add feature X"),
+    title: vscode14.l10n.t("Create New Ticket"),
     validateInput: (value) => {
       if (!value || value.trim().length === 0) {
-        return vscode12.l10n.t("Title is required");
+        return vscode14.l10n.t("Title is required");
       }
       return void 0;
     }
@@ -13667,25 +13673,25 @@ async function executeNewTicket(ticketService) {
   }
   try {
     const ticket = await ticketService.create(type2.label, title);
-    vscode12.window.showInformationMessage(vscode12.l10n.t("Created ticket {0}: {0}", ticket.id, ticket.title));
+    vscode14.window.showInformationMessage(vscode14.l10n.t("Created ticket {0}: {1}", ticket.id, ticket.title));
     const workflowRoot = ticketService.getWorkflowRoot();
     if (workflowRoot) {
-      const ticketPath = vscode12.Uri.file(
+      const ticketPath = vscode14.Uri.file(
         path9.join(workflowRoot, ".workflow", "tickets", "backlog", `${ticket.id}.md`)
       );
-      await vscode12.commands.executeCommand("vscode.open", ticketPath);
+      await vscode14.commands.executeCommand("vscode.open", ticketPath);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    vscode12.window.showErrorMessage(vscode12.l10n.t("Failed to create ticket: {0}", message));
+    vscode14.window.showErrorMessage(vscode14.l10n.t("Failed to create ticket: {0}", message));
   }
 }
 
 // src/commands/show-dependencies.ts
-var vscode13 = __toESM(require("vscode"));
+var vscode15 = __toESM(require("vscode"));
 async function executeShowDependencies(store, dependencyService, ticketId) {
   if (!ticketId) {
-    const editor = vscode13.window.activeTextEditor;
+    const editor = vscode15.window.activeTextEditor;
     if (editor) {
       const fileName = editor.document.fileName;
       const match = fileName.match(/\/([^\/]+)\.md$/);
@@ -13697,18 +13703,18 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
   if (!ticketId) {
     const tickets = store.getTickets();
     if (tickets.length === 0) {
-      vscode13.window.showInformationMessage(vscode13.l10n.t("No tickets available"));
+      vscode15.window.showInformationMessage(vscode15.l10n.t("No tickets available"));
       return;
     }
-    const selected2 = await vscode13.window.showQuickPick(
+    const selected2 = await vscode15.window.showQuickPick(
       tickets.map((t) => ({
         label: t.id,
         description: t.title,
-        detail: vscode13.l10n.t("Status: {0}", t.status)
+        detail: vscode15.l10n.t("Status: {0}", t.status)
       })),
       {
-        placeHolder: vscode13.l10n.t("Select ticket to show dependencies"),
-        title: vscode13.l10n.t("Show Dependencies")
+        placeHolder: vscode15.l10n.t("Select ticket to show dependencies"),
+        title: vscode15.l10n.t("Show Dependencies")
       }
     );
     if (!selected2) {
@@ -13718,20 +13724,20 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
   }
   const ticket = store.getTicketById(ticketId);
   if (!ticket) {
-    vscode13.window.showErrorMessage(vscode13.l10n.t("Ticket {0} not found", ticketId));
+    vscode15.window.showErrorMessage(vscode15.l10n.t("Ticket {0} not found", ticketId));
     return;
   }
   const dependencies = dependencyService.getDependencies(ticketId);
   const dependents = dependencyService.getDependents(ticketId);
   const chain = buildDependencyChain(ticketId, dependencyService);
-  const depList = dependencies.length > 0 ? dependencies.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode13.l10n.t("No dependencies");
-  const blocksList = dependents.length > 0 ? dependents.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode13.l10n.t("No tickets blocked by this one");
-  const chainList = chain.length > 0 ? chain.map((id, index) => `${"  ".repeat(index)}\u2514\u2500 ${id}`).join("\n") : vscode13.l10n.t("No dependency chain");
+  const depList = dependencies.length > 0 ? dependencies.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode15.l10n.t("No dependencies");
+  const blocksList = dependents.length > 0 ? dependents.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode15.l10n.t("No tickets blocked by this one");
+  const chainList = chain.length > 0 ? chain.map((id, index) => `${"  ".repeat(index)}\u2514\u2500 ${id}`).join("\n") : vscode15.l10n.t("No dependency chain");
   const items = [
     {
       label: `$(git-pull-request) ${ticketId}: ${ticket.title}`,
       description: "",
-      detail: `${vscode13.l10n.t("Status")}: ${ticket.status} | ${vscode13.l10n.t("Priority")}: ${ticket.priority} | ${vscode13.l10n.t("Type")}: ${ticket.type}`
+      detail: `${vscode15.l10n.t("Status")}: ${ticket.status} | ${vscode15.l10n.t("Priority")}: ${ticket.priority} | ${vscode15.l10n.t("Type")}: ${ticket.type}`
     },
     {
       label: "",
@@ -13749,19 +13755,19 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
       detail: chainList
     }
   ];
-  const selected = await vscode13.window.showQuickPick(items, {
-    placeHolder: vscode13.l10n.t("Dependencies for {0}", ticketId),
-    title: vscode13.l10n.t("Ticket Dependencies"),
+  const selected = await vscode15.window.showQuickPick(items, {
+    placeHolder: vscode15.l10n.t("Dependencies for {0}", ticketId),
+    title: vscode15.l10n.t("Ticket Dependencies"),
     matchOnDescription: false,
     matchOnDetail: false
   });
   if (selected && selected.label.startsWith("$(git-pull-request)")) {
-    const openAction = await vscode13.window.showInformationMessage(
-      vscode13.l10n.t("Open {0}?", ticketId),
-      vscode13.l10n.t("Open")
+    const openAction = await vscode15.window.showInformationMessage(
+      vscode15.l10n.t("Open {0}?", ticketId),
+      vscode15.l10n.t("Open")
     );
     if (openAction === "Open") {
-      await vscode13.commands.executeCommand("workflow.openTicket", ticketId);
+      await vscode15.commands.executeCommand("workflow.openTicket", ticketId);
     }
   }
 }
@@ -13785,11 +13791,11 @@ function buildDependencyChain(ticketId, dependencyService, visited = /* @__PURE_
 }
 
 // src/commands/show-statistics.ts
-var vscode14 = __toESM(require("vscode"));
+var vscode16 = __toESM(require("vscode"));
 async function executeShowStatistics(store) {
   const tickets = store.getTickets();
   if (tickets.length === 0) {
-    vscode14.window.showInformationMessage(vscode14.l10n.t("No tickets to analyze"));
+    vscode16.window.showInformationMessage(vscode16.l10n.t("No tickets to analyze"));
     return;
   }
   const byStatus = calculateByStatus(tickets);
@@ -13802,39 +13808,39 @@ async function executeShowStatistics(store) {
   const typeBars = buildAsciiBars(byType, maxType, 40);
   const priorityBars = buildAsciiBars(byPriority, maxPriority, 40);
   const summary = [
-    vscode14.l10n.t("\u{1F4CA} Workflow Statistics"),
+    vscode16.l10n.t("\u{1F4CA} Workflow Statistics"),
     ``,
-    vscode14.l10n.t("Total Tickets: {0}", tickets.length),
+    vscode16.l10n.t("Total Tickets: {0}", tickets.length),
     ``,
-    vscode14.l10n.t("\u2501\u2501\u2501 By Status \u2501\u2501\u2501"),
+    vscode16.l10n.t("\u2501\u2501\u2501 By Status \u2501\u2501\u2501"),
     ...statusBars,
     ``,
-    vscode14.l10n.t("\u2501\u2501\u2501 By Type \u2501\u2501\u2501"),
+    vscode16.l10n.t("\u2501\u2501\u2501 By Type \u2501\u2501\u2501"),
     ...typeBars,
     ``,
-    vscode14.l10n.t("\u2501\u2501\u2501 By Priority \u2501\u2501\u2501"),
+    vscode16.l10n.t("\u2501\u2501\u2501 By Priority \u2501\u2501\u2501"),
     ...priorityBars
   ].join("\n");
   const items = [
     {
-      label: `$(graph) ${vscode14.l10n.t("Statistics Summary")}`,
+      label: `$(graph) ${vscode16.l10n.t("Statistics Summary")}`,
       description: "",
       detail: summary
     }
   ];
-  await vscode14.window.showQuickPick(items, {
-    placeHolder: vscode14.l10n.t("Statistics"),
-    title: vscode14.l10n.t("Statistics"),
+  await vscode16.window.showQuickPick(items, {
+    placeHolder: vscode16.l10n.t("Statistics"),
+    title: vscode16.l10n.t("Statistics"),
     matchOnDescription: false,
     matchOnDetail: false
   });
-  const copyAction = await vscode14.window.showInformationMessage(
-    vscode14.l10n.t("Copy statistics to clipboard?"),
-    vscode14.l10n.t("Copy")
+  const copyAction = await vscode16.window.showInformationMessage(
+    vscode16.l10n.t("Copy statistics to clipboard?"),
+    vscode16.l10n.t("Copy")
   );
   if (copyAction === "Copy") {
-    await vscode14.env.clipboard.writeText(summary);
-    vscode14.window.showInformationMessage(vscode14.l10n.t("Statistics copied to clipboard"));
+    await vscode16.env.clipboard.writeText(summary);
+    vscode16.window.showInformationMessage(vscode16.l10n.t("Statistics copied to clipboard"));
   }
 }
 function calculateByStatus(tickets) {
@@ -13886,42 +13892,42 @@ function buildAsciiBars(data, maxValue, maxWidth) {
 }
 
 // src/commands/index.ts
-var vscode15 = __toESM(require("vscode"));
+var vscode17 = __toESM(require("vscode"));
 var path10 = __toESM(require("path"));
 async function executeOpenPipelineConfig(workflowRoot) {
   if (!workflowRoot) {
-    vscode15.window.showErrorMessage(vscode15.l10n.t("Workflow not found"));
+    vscode17.window.showErrorMessage(vscode17.l10n.t("Workflow not found"));
     return;
   }
   const configPath = path10.join(workflowRoot, "config", "pipeline.yaml");
-  const uri = vscode15.Uri.file(configPath);
+  const uri = vscode17.Uri.file(configPath);
   try {
-    await vscode15.commands.executeCommand("vscode.open", uri);
+    await vscode17.commands.executeCommand("vscode.open", uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    vscode15.window.showErrorMessage(vscode15.l10n.t("Failed to open pipeline config: {0}", message));
+    vscode17.window.showErrorMessage(vscode17.l10n.t("Failed to open pipeline config: {0}", message));
   }
 }
 async function executeOpenConfig(workflowRoot) {
   if (!workflowRoot) {
-    vscode15.window.showErrorMessage(vscode15.l10n.t("Workflow not found"));
+    vscode17.window.showErrorMessage(vscode17.l10n.t("Workflow not found"));
     return;
   }
   const configPath = path10.join(workflowRoot, "config", "config.yaml");
-  const uri = vscode15.Uri.file(configPath);
+  const uri = vscode17.Uri.file(configPath);
   try {
-    await vscode15.commands.executeCommand("vscode.open", uri);
+    await vscode17.commands.executeCommand("vscode.open", uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    vscode15.window.showErrorMessage(vscode15.l10n.t("Failed to open config: {0}", message));
+    vscode17.window.showErrorMessage(vscode17.l10n.t("Failed to open config: {0}", message));
   }
 }
 async function executeFocusTicketsView() {
-  await vscode15.commands.executeCommand("workbench.view.extension.workflow-sidebar");
-  await vscode15.commands.executeCommand("workbench.action.focusSideBar");
+  await vscode17.commands.executeCommand("workbench.view.extension.workflow-sidebar");
+  await vscode17.commands.executeCommand("workbench.action.focusSideBar");
 }
 async function executeFocusKanban() {
-  await vscode15.commands.executeCommand("workbench.panel.workflow-kanban.view.wf-kanban-backlog");
+  await vscode17.commands.executeCommand("workbench.panel.workflow-kanban.view.wf-kanban-backlog");
 }
 async function executeRefreshAll(workflowRoot, store, refreshCallbacks) {
   if (workflowRoot) {
@@ -13930,11 +13936,11 @@ async function executeRefreshAll(workflowRoot, store, refreshCallbacks) {
   for (const refresh of refreshCallbacks) {
     refresh();
   }
-  vscode15.window.showInformationMessage(vscode15.l10n.t("Workflow data refreshed"));
+  vscode17.window.showInformationMessage(vscode17.l10n.t("Workflow data refreshed"));
 }
 async function executeCopyTicketId(ticketId) {
   if (!ticketId) {
-    const editor = vscode15.window.activeTextEditor;
+    const editor = vscode17.window.activeTextEditor;
     if (editor) {
       const fileName = editor.document.fileName;
       const match = fileName.match(/\/([^\/]+)\.md$/);
@@ -13944,11 +13950,11 @@ async function executeCopyTicketId(ticketId) {
     }
   }
   if (!ticketId) {
-    vscode15.window.showErrorMessage(vscode15.l10n.t("No ticket ID provided or found"));
+    vscode17.window.showErrorMessage(vscode17.l10n.t("No ticket ID provided or found"));
     return;
   }
-  await vscode15.env.clipboard.writeText(ticketId);
-  vscode15.window.showInformationMessage(vscode15.l10n.t("Copied {0} to clipboard", ticketId));
+  await vscode17.env.clipboard.writeText(ticketId);
+  vscode17.window.showInformationMessage(vscode17.l10n.t("Copied {0} to clipboard", ticketId));
 }
 
 // src/extension.ts
@@ -13956,7 +13962,7 @@ var execAsync = (0, import_util.promisify)(import_child_process3.exec);
 async function checkCliInstalled() {
   try {
     const platform = process.platform;
-    const config = vscode16.workspace.getConfiguration("workflow");
+    const config = vscode18.workspace.getConfiguration("workflow");
     const customCliPath = config.get("cliPath", "");
     if (customCliPath) {
       try {
@@ -13976,7 +13982,7 @@ async function checkCliInstalled() {
   }
 }
 function checkWorkflowDir() {
-  const workspaceRoot = vscode16.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceRoot = vscode18.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceRoot) {
     return false;
   }
@@ -13993,7 +13999,7 @@ function checkWorkflowDir() {
   }
 }
 async function setContextKey(key, value) {
-  await vscode16.commands.executeCommand("setContext", key, value);
+  await vscode18.commands.executeCommand("setContext", key, value);
 }
 async function updateContextKeys(pipelineService) {
   const cliInstalled = await checkCliInstalled();
@@ -14004,9 +14010,9 @@ async function updateContextKeys(pipelineService) {
   await setContextKey("workflow.pipelineRunning", pipelineRunning);
 }
 async function installCli() {
-  await vscode16.window.withProgress(
+  await vscode18.window.withProgress(
     {
-      location: vscode16.ProgressLocation.Notification,
+      location: vscode18.ProgressLocation.Notification,
       title: "Installing workflow-ai CLI...",
       cancellable: false
     },
@@ -14016,35 +14022,35 @@ async function installCli() {
         await execAsync("npm install -g workflow-ai");
         progress.report({ increment: 100 });
         await updateContextKeys();
-        vscode16.window.showInformationMessage("workflow-ai CLI installed successfully!");
+        vscode18.window.showInformationMessage(vscode18.l10n.t("workflow-ai CLI installed successfully!"));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to install workflow-ai CLI: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to install workflow-ai CLI: {0}", message));
       }
     }
   );
 }
 async function initWorkflow() {
-  await vscode16.window.withProgress(
+  await vscode18.window.withProgress(
     {
-      location: vscode16.ProgressLocation.Notification,
-      title: "Initializing Workflow...",
+      location: vscode18.ProgressLocation.Notification,
+      title: vscode18.l10n.t("Initializing Workflow..."),
       cancellable: false
     },
     async (progress) => {
       progress.report({ increment: 0 });
       try {
-        const workspaceRoot = vscode16.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const workspaceRoot = vscode18.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) {
           throw new Error("No workspace folder open");
         }
         await execAsync("workflow init", { cwd: workspaceRoot });
         progress.report({ increment: 100 });
         await updateContextKeys();
-        vscode16.window.showInformationMessage("Workflow initialized successfully!");
+        vscode18.window.showInformationMessage(vscode18.l10n.t("Workflow initialized successfully!"));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to initialize workflow: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to initialize workflow: {0}", message));
       }
     }
   );
@@ -14052,12 +14058,21 @@ async function initWorkflow() {
 async function activate(context) {
   const startTime = Date.now();
   console.log("Workflow AI extension is activating...");
+  const registerCommandSafe = (command, callback) => {
+    try {
+      return vscode18.commands.registerCommand(command, callback);
+    } catch (err) {
+      console.warn(`Command ${command} already registered, skipping`);
+      return { dispose: () => {
+      } };
+    }
+  };
   await updateContextKeys();
   const store = new WorkflowStore();
   context.subscriptions.push({
     dispose: () => store.clear()
   });
-  const workspaceRoot = vscode16.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceRoot = vscode18.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let workflowRoot = null;
   if (workspaceRoot && checkWorkflowDir()) {
     workflowRoot = path11.join(workspaceRoot, ".workflow");
@@ -14094,26 +14109,45 @@ async function activate(context) {
     kanbanProviders.done.setWorkflowRoot(workflowRoot);
   }
   context.subscriptions.push(
-    vscode16.window.registerTreeDataProvider("workflow-sidebar.tickets", ticketsProvider),
-    vscode16.window.registerTreeDataProvider("workflow-sidebar.plans", plansProvider),
-    vscode16.window.registerTreeDataProvider("workflow-sidebar.reports", reportsProvider),
-    vscode16.window.registerTreeDataProvider("workflow-sidebar.pipeline", pipelineProvider),
-    // Kanban views in Panel
-    vscode16.window.registerTreeDataProvider("wf-kanban-backlog", kanbanProviders.backlog),
-    vscode16.window.registerTreeDataProvider("wf-kanban-ready", kanbanProviders.ready),
-    vscode16.window.registerTreeDataProvider("wf-kanban-in-progress", kanbanProviders.inProgress),
-    vscode16.window.registerTreeDataProvider("wf-kanban-blocked", kanbanProviders.blocked),
-    vscode16.window.registerTreeDataProvider("wf-kanban-review", kanbanProviders.review),
-    vscode16.window.registerTreeDataProvider("wf-kanban-done", kanbanProviders.done),
+    vscode18.window.registerTreeDataProvider("workflow-sidebar.tickets", ticketsProvider),
+    vscode18.window.registerTreeDataProvider("workflow-sidebar.plans", plansProvider),
+    vscode18.window.registerTreeDataProvider("workflow-sidebar.reports", reportsProvider),
+    vscode18.window.registerTreeDataProvider("workflow-sidebar.pipeline", pipelineProvider),
     statusBar
   );
+  const backlogTreeView = vscode18.window.createTreeView("wf-kanban-backlog", { treeDataProvider: kanbanProviders.backlog });
+  const readyTreeView = vscode18.window.createTreeView("wf-kanban-ready", { treeDataProvider: kanbanProviders.ready });
+  const inProgressTreeView = vscode18.window.createTreeView("wf-kanban-in-progress", { treeDataProvider: kanbanProviders.inProgress });
+  const blockedTreeView = vscode18.window.createTreeView("wf-kanban-blocked", { treeDataProvider: kanbanProviders.blocked });
+  const reviewTreeView = vscode18.window.createTreeView("wf-kanban-review", { treeDataProvider: kanbanProviders.review });
+  const doneTreeView = vscode18.window.createTreeView("wf-kanban-done", { treeDataProvider: kanbanProviders.done });
+  context.subscriptions.push(
+    backlogTreeView,
+    readyTreeView,
+    inProgressTreeView,
+    blockedTreeView,
+    reviewTreeView,
+    doneTreeView
+  );
+  const updateKanbanTitles = () => {
+    backlogTreeView.title = `BACKLOG (${kanbanProviders.backlog.getCount()})`;
+    readyTreeView.title = `READY (${kanbanProviders.ready.getCount()})`;
+    inProgressTreeView.title = `IN PROGRESS (${kanbanProviders.inProgress.getCount()})`;
+    blockedTreeView.title = `BLOCKED (${kanbanProviders.blocked.getCount()})`;
+    reviewTreeView.title = `REVIEW (${kanbanProviders.review.getCount()})`;
+    doneTreeView.title = `DONE (${kanbanProviders.done.getCount()})`;
+  };
+  updateKanbanTitles();
+  store.onDidChange(() => {
+    updateKanbanTitles();
+  });
   const diagnosticProvider = new DiagnosticProvider(store);
   context.subscriptions.push(diagnosticProvider);
   const documentLinkProvider = new WorkflowDocumentLinkProvider(store);
   if (workflowRoot) {
     documentLinkProvider.setWorkflowRoot(workflowRoot);
   }
-  const documentLinkDisposable = vscode16.languages.registerDocumentLinkProvider(
+  const documentLinkDisposable = vscode18.languages.registerDocumentLinkProvider(
     [
       { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
       { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" }
@@ -14130,7 +14164,7 @@ async function activate(context) {
       dependencyService2
     );
     codeLensProvider.setWorkflowRoot(workflowRoot);
-    const codeLensDisposable = vscode16.languages.registerCodeLensProvider(
+    const codeLensDisposable = vscode18.languages.registerCodeLensProvider(
       { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
       codeLensProvider
     );
@@ -14139,7 +14173,7 @@ async function activate(context) {
   if (workflowRoot) {
     const completionProvider = new WorkflowCompletionProvider(store);
     completionProvider.setWorkflowRoot(workflowRoot);
-    const completionDisposable = vscode16.languages.registerCompletionItemProvider(
+    const completionDisposable = vscode18.languages.registerCompletionItemProvider(
       [
         { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
         { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" }
@@ -14157,7 +14191,7 @@ async function activate(context) {
   if (workflowRoot) {
     const hoverProvider = new WorkflowHoverProvider(store);
     hoverProvider.setWorkflowRoot(workflowRoot);
-    const hoverDisposable = vscode16.languages.registerHoverProvider(
+    const hoverDisposable = vscode18.languages.registerHoverProvider(
       [
         { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
         { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" },
@@ -14174,24 +14208,24 @@ async function activate(context) {
     ticketService = new TicketService(store, workflowRoot);
     dependencyService = new DependencyService(store);
   }
-  const installCliCmd = vscode16.commands.registerCommand("workflow.installCli", installCli);
-  const initCmd = vscode16.commands.registerCommand("workflow.init", initWorkflow);
-  const openTicketCmd = vscode16.commands.registerCommand(
+  const installCliCmd = registerCommandSafe("workflow.installCli", installCli);
+  const initCmd = registerCommandSafe("workflow.init", initWorkflow);
+  const openTicketCmd = registerCommandSafe(
     "workflow.openTicket",
     async (ticketId) => {
       if (!ticketId) {
-        const editor = vscode16.window.activeTextEditor;
+        const editor = vscode18.window.activeTextEditor;
         if (editor) {
           ticketId = path11.basename(editor.document.fileName, ".md");
         }
       }
       if (!ticketId || !workflowRoot) {
-        vscode16.window.showErrorMessage("No ticket ID provided or workflow not available");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("No ticket ID provided or workflow not available"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode16.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket {0} not found", ticketId));
         return;
       }
       const ticketPath = path11.join(
@@ -14202,38 +14236,38 @@ async function activate(context) {
         `${ticketId}.md`
       );
       try {
-        await vscode16.commands.executeCommand("vscode.open", vscode16.Uri.file(ticketPath));
+        await vscode18.commands.executeCommand("vscode.open", vscode18.Uri.file(ticketPath));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to open ticket: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to open ticket: {0}", message));
       }
     }
   );
-  const moveTicketCmd = vscode16.commands.registerCommand(
+  const moveTicketCmd = registerCommandSafe(
     "workflow.moveTicket",
     async (ticketId) => {
       if (!ticketService || !ticketId) {
-        vscode16.window.showErrorMessage("Ticket service not available or no ticket ID provided");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket service not available or no ticket ID provided"));
         return;
       }
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode16.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket {0} not found", ticketId));
         return;
       }
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode16.window.showInformationMessage(`No valid transitions from ${ticket.status}`);
+        vscode18.window.showInformationMessage(vscode18.l10n.t("No valid transitions from {0}", ticket.status));
         return;
       }
-      const targetStatus = await vscode16.window.showQuickPick(
+      const targetStatus = await vscode18.window.showQuickPick(
         validTransitions.map((status) => ({
           label: status,
-          description: `Move to ${status}`
+          description: vscode18.l10n.t("Move to {0}", status)
         })),
         {
-          placeHolder: `Select target status for ${ticketId}`,
-          title: `Move ${ticketId}`
+          placeHolder: vscode18.l10n.t("Select target status for {0}", ticketId),
+          title: vscode18.l10n.t("Move {0}", ticketId)
         }
       );
       if (!targetStatus) {
@@ -14241,62 +14275,62 @@ async function activate(context) {
       }
       try {
         await ticketService.move(ticketId, targetStatus.label);
-        vscode16.window.showInformationMessage(`Moved ${ticketId} to ${targetStatus.label}`);
+        vscode18.window.showInformationMessage(vscode18.l10n.t("Moved {0} to {1}", ticketId, targetStatus.label));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to move ticket: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to move ticket: {0}", message));
       }
     }
   );
-  const moveTicketFromMenuCmd = vscode16.commands.registerCommand(
+  const moveTicketFromMenuCmd = registerCommandSafe(
     "workflow.moveTicketFromMenu",
     async (ticketId) => {
-      await vscode16.commands.executeCommand("workflow.moveTicket", ticketId);
+      await vscode18.commands.executeCommand("workflow.moveTicket", ticketId);
     }
   );
-  const moveTicketNextCmd = vscode16.commands.registerCommand(
+  const moveTicketNextCmd = registerCommandSafe(
     "workflow.moveTicketNext",
     async (ticketId) => {
       if (!ticketService || !ticketId) {
-        vscode16.window.showErrorMessage("Ticket service not available or no ticket ID provided");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket service not available or no ticket ID provided"));
         return;
       }
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode16.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket {0} not found", ticketId));
         return;
       }
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode16.window.showInformationMessage(`No valid transitions from ${ticket.status}`);
+        vscode18.window.showInformationMessage(vscode18.l10n.t("No valid transitions from {0}", ticket.status));
         return;
       }
       const nextStatus = validTransitions[0];
       try {
         await ticketService.move(ticketId, nextStatus);
-        vscode16.window.showInformationMessage(`Moved ${ticketId} to ${nextStatus}`);
+        vscode18.window.showInformationMessage(vscode18.l10n.t("Moved {0} to {1}", ticketId, nextStatus));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to move ticket: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to move ticket: {0}", message));
       }
     }
   );
-  const editTicketCmd = vscode16.commands.registerCommand(
+  const editTicketCmd = registerCommandSafe(
     "workflow.editTicket",
     async (ticketId) => {
       if (!ticketId) {
-        const editor = vscode16.window.activeTextEditor;
+        const editor = vscode18.window.activeTextEditor;
         if (editor) {
           ticketId = path11.basename(editor.document.fileName, ".md");
         }
       }
       if (!ticketId || !workflowRoot) {
-        vscode16.window.showErrorMessage("No ticket ID provided or workflow not available");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("No ticket ID provided or workflow not available"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode16.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket {0} not found", ticketId));
         return;
       }
       const ticketPath = path11.join(
@@ -14307,29 +14341,29 @@ async function activate(context) {
         `${ticketId}.md`
       );
       try {
-        await vscode16.commands.executeCommand("vscode.open", vscode16.Uri.file(ticketPath));
+        await vscode18.commands.executeCommand("vscode.open", vscode18.Uri.file(ticketPath));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to open ticket: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to open ticket: {0}", message));
       }
     }
   );
-  const showDependenciesCmd = vscode16.commands.registerCommand(
+  const showDependenciesCmd = registerCommandSafe(
     "workflow.showDependencies",
     async (ticketId) => {
       if (!dependencyService || !ticketId) {
-        vscode16.window.showErrorMessage("Dependency service not available or no ticket ID provided");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Dependency service not available or no ticket ID provided"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode16.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket {0} not found", ticketId));
         return;
       }
       const dependencies = dependencyService.getDependencies(ticketId);
       const dependents = dependencyService.getDependents(ticketId);
-      const depList = dependencies.length > 0 ? dependencies.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : "No dependencies";
-      const blocksList = dependents.length > 0 ? dependents.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : "No tickets blocked by this one";
+      const depList = dependencies.length > 0 ? dependencies.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode18.l10n.t("No dependencies");
+      const blocksList = dependents.length > 0 ? dependents.map((d) => `- ${d.id}: ${d.title} (${d.status})`).join("\n") : vscode18.l10n.t("No tickets blocked by this one");
       const info = `**${ticketId}: ${ticket.title}**
 
 **Dependencies (Deps):**
@@ -14337,46 +14371,46 @@ ${depList}
 
 **Blocks:**
 ${blocksList}`;
-      await vscode16.window.showInformationMessage(info, { modal: false });
+      await vscode18.window.showInformationMessage(info, { modal: false });
     }
   );
-  const showTicketDependenciesCmd = vscode16.commands.registerCommand(
+  const showTicketDependenciesCmd = registerCommandSafe(
     "workflow.showTicketDependencies",
     async (ticketId) => {
-      await vscode16.commands.executeCommand("workflow.showDependencies", ticketId);
+      await vscode18.commands.executeCommand("workflow.showDependencies", ticketId);
     }
   );
-  const createTicketCmd = vscode16.commands.registerCommand(
+  const createTicketCmd = registerCommandSafe(
     "workflow.createTicket",
     async () => {
       if (!ticketService) {
-        vscode16.window.showErrorMessage("Ticket service not available");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket service not available"));
         return;
       }
-      const type2 = await vscode16.window.showQuickPick(
+      const type2 = await vscode18.window.showQuickPick(
         [
-          { label: "IMPL", description: "Implementation task" },
-          { label: "FIX", description: "Bug fix" },
-          { label: "DOCS", description: "Documentation" },
-          { label: "REVIEW", description: "Code review" },
-          { label: "PLAN", description: "Planning task" },
-          { label: "ADMIN", description: "Administrative task" }
+          { label: "IMPL", description: vscode18.l10n.t("Implementation task") },
+          { label: "FIX", description: vscode18.l10n.t("Bug fix") },
+          { label: "DOCS", description: vscode18.l10n.t("Documentation") },
+          { label: "REVIEW", description: vscode18.l10n.t("Code review") },
+          { label: "PLAN", description: vscode18.l10n.t("Planning task") },
+          { label: "ADMIN", description: vscode18.l10n.t("Administrative task") }
         ],
         {
-          placeHolder: "Select ticket type",
-          title: "Create New Ticket"
+          placeHolder: vscode18.l10n.t("Select ticket type"),
+          title: vscode18.l10n.t("Create New Ticket")
         }
       );
       if (!type2) {
         return;
       }
-      const title = await vscode16.window.showInputBox({
-        prompt: "Enter ticket title",
-        placeHolder: "e.g., Add feature X",
-        title: "Create New Ticket",
+      const title = await vscode18.window.showInputBox({
+        prompt: vscode18.l10n.t("Enter ticket title"),
+        placeHolder: vscode18.l10n.t("e.g., Add feature X"),
+        title: vscode18.l10n.t("Create New Ticket"),
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
-            return "Title is required";
+            return vscode18.l10n.t("Title is required");
           }
           return void 0;
         }
@@ -14386,14 +14420,14 @@ ${blocksList}`;
       }
       try {
         const ticket = await ticketService.create(type2.label, title);
-        vscode16.window.showInformationMessage(`Created ticket ${ticket.id}: ${ticket.title}`);
+        vscode18.window.showInformationMessage(vscode18.l10n.t("Created ticket {0}: {1}", ticket.id, ticket.title));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        vscode16.window.showErrorMessage(`Failed to create ticket: ${message}`);
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Failed to create ticket: {0}", message));
       }
     }
   );
-  const refreshTicketsCmd = vscode16.commands.registerCommand(
+  const refreshTicketsCmd = registerCommandSafe(
     "workflow.refreshTickets",
     async () => {
       ticketsProvider.refresh();
@@ -14402,7 +14436,7 @@ ${blocksList}`;
       }
     }
   );
-  const sortKanbanByPriorityCmd = vscode16.commands.registerCommand(
+  const sortKanbanByPriorityCmd = registerCommandSafe(
     "workflow.sortKanbanByPriority",
     async () => {
       kanbanProviders.backlog.refresh();
@@ -14411,10 +14445,10 @@ ${blocksList}`;
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode16.window.showInformationMessage("Kanban boards sorted by priority");
+      vscode18.window.showInformationMessage(vscode18.l10n.t("Kanban boards sorted by priority"));
     }
   );
-  const sortKanbanByIdCmd = vscode16.commands.registerCommand(
+  const sortKanbanByIdCmd = registerCommandSafe(
     "workflow.sortKanbanById",
     async () => {
       kanbanProviders.backlog.refresh();
@@ -14423,10 +14457,10 @@ ${blocksList}`;
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode16.window.showInformationMessage("Kanban boards sorted by ID");
+      vscode18.window.showInformationMessage(vscode18.l10n.t("Kanban boards sorted by ID"));
     }
   );
-  const sortKanbanByTitleCmd = vscode16.commands.registerCommand(
+  const sortKanbanByTitleCmd = registerCommandSafe(
     "workflow.sortKanbanByTitle",
     async () => {
       kanbanProviders.backlog.refresh();
@@ -14435,116 +14469,116 @@ ${blocksList}`;
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode16.window.showInformationMessage("Kanban boards sorted by title");
+      vscode18.window.showInformationMessage(vscode18.l10n.t("Kanban boards sorted by title"));
     }
   );
-  const gotoReviewSectionCmd = vscode16.commands.registerCommand(
+  const gotoReviewSectionCmd = registerCommandSafe(
     "workflow.gotoReviewSection",
     async () => {
-      const editor = vscode16.window.activeTextEditor;
+      const editor = vscode18.window.activeTextEditor;
       if (!editor) {
-        vscode16.window.showErrorMessage("No active editor");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("No active editor"));
         return;
       }
       const document = editor.document;
       const content = document.getText();
       const reviewMatch = content.match(/^## Review/m);
       if (!reviewMatch || reviewMatch.index === void 0) {
-        vscode16.window.showInformationMessage("No Review section found in this document");
+        vscode18.window.showInformationMessage(vscode18.l10n.t("No Review section found in this document"));
         return;
       }
       const position = document.positionAt(reviewMatch.index);
-      await editor.revealRange(new vscode16.Range(position, position), vscode16.TextEditorRevealType.InCenter);
-      editor.selection = new vscode16.Selection(position, position);
+      await editor.revealRange(new vscode18.Range(position, position), vscode18.TextEditorRevealType.InCenter);
+      editor.selection = new vscode18.Selection(position, position);
     }
   );
-  const startPipelineCmd = vscode16.commands.registerCommand(
+  const startPipelineCmd = registerCommandSafe(
     "workflow.runPipeline",
     async () => {
       await pipelineProvider.startPipeline();
     }
   );
-  const stopPipelineCmd = vscode16.commands.registerCommand(
+  const stopPipelineCmd = registerCommandSafe(
     "workflow.stopPipeline",
     async () => {
       pipelineProvider.stopPipeline();
     }
   );
-  const showPipelineOutputCmd = vscode16.commands.registerCommand(
+  const showPipelineOutputCmd = registerCommandSafe(
     "workflow.showPipelineOutput",
     async () => {
       pipelineProvider.showOutput();
     }
   );
-  const clearPipelineHistoryCmd = vscode16.commands.registerCommand(
+  const clearPipelineHistoryCmd = registerCommandSafe(
     "workflow.clearPipelineHistory",
     async () => {
       pipelineProvider.clearHistory();
     }
   );
-  const statusBarClickCmd = vscode16.commands.registerCommand(
+  const statusBarClickCmd = registerCommandSafe(
     "workflow.statusBarClick",
     async () => {
-      await vscode16.commands.executeCommand("workbench.action.quickOpen", ">WF:");
+      await vscode18.commands.executeCommand("workbench.action.quickOpen", ">WF:");
     }
   );
-  const newTicketCmd = vscode16.commands.registerCommand(
+  const newTicketCmd = registerCommandSafe(
     "workflow.newTicket",
     async () => {
       if (!ticketService) {
-        vscode16.window.showErrorMessage("Ticket service not available");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Ticket service not available"));
         return;
       }
       await executeNewTicket(ticketService);
     }
   );
-  const newPlanCmd = vscode16.commands.registerCommand(
+  const newPlanCmd = registerCommandSafe(
     "workflow.newPlan",
     async () => {
-      vscode16.window.showInformationMessage("workflow.newPlan: Plan creation coming soon");
+      vscode18.window.showInformationMessage(vscode18.l10n.t("workflow.newPlan: Plan creation coming soon"));
     }
   );
-  const showDependenciesCmdNew = vscode16.commands.registerCommand(
+  const showDependenciesCmdNew = registerCommandSafe(
     "workflow.showDependencies",
     async (ticketId) => {
       if (!dependencyService) {
-        vscode16.window.showErrorMessage("Dependency service not available");
+        vscode18.window.showErrorMessage(vscode18.l10n.t("Dependency service not available"));
         return;
       }
       await executeShowDependencies(store, dependencyService, ticketId);
     }
   );
-  const showStatisticsCmd = vscode16.commands.registerCommand(
+  const showStatisticsCmd = registerCommandSafe(
     "workflow.showStatistics",
     async () => {
       await executeShowStatistics(store);
     }
   );
-  const openPipelineConfigCmd = vscode16.commands.registerCommand(
+  const openPipelineConfigCmd = registerCommandSafe(
     "workflow.openPipelineConfig",
     async () => {
       await executeOpenPipelineConfig(workflowRoot);
     }
   );
-  const openConfigCmd = vscode16.commands.registerCommand(
+  const openConfigCmd = registerCommandSafe(
     "workflow.openConfig",
     async () => {
       await executeOpenConfig(workflowRoot);
     }
   );
-  const focusTicketsViewCmd = vscode16.commands.registerCommand(
+  const focusTicketsViewCmd = registerCommandSafe(
     "workflow.focusTicketsView",
     async () => {
       await executeFocusTicketsView();
     }
   );
-  const focusKanbanCmd = vscode16.commands.registerCommand(
+  const focusKanbanCmd = registerCommandSafe(
     "workflow.focusKanban",
     async () => {
       await executeFocusKanban();
     }
   );
-  const refreshAllCmd = vscode16.commands.registerCommand(
+  const refreshAllCmd = registerCommandSafe(
     "workflow.refreshAll",
     async () => {
       const refreshCallbacks = [
@@ -14562,7 +14596,7 @@ ${blocksList}`;
       await executeRefreshAll(workflowRoot, store, refreshCallbacks);
     }
   );
-  const copyTicketIdCmd = vscode16.commands.registerCommand(
+  const copyTicketIdCmd = registerCommandSafe(
     "workflow.copyTicketId",
     async (ticketId) => {
       await executeCopyTicketId(ticketId);

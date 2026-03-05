@@ -132,10 +132,10 @@ async function installCli(): Promise<void> {
         await execAsync('npm install -g workflow-ai');
         progress.report({ increment: 100 });
         await updateContextKeys();
-        vscode.window.showInformationMessage('workflow-ai CLI installed successfully!');
+        vscode.window.showInformationMessage(vscode.l10n.t('workflow-ai CLI installed successfully!'));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to install workflow-ai CLI: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to install workflow-ai CLI: {0}', message));
       }
     }
   );
@@ -148,7 +148,7 @@ async function initWorkflow(): Promise<void> {
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Initializing Workflow...',
+      title: vscode.l10n.t('Initializing Workflow...'),
       cancellable: false,
     },
     async (progress) => {
@@ -162,10 +162,10 @@ async function initWorkflow(): Promise<void> {
         await execAsync('workflow init', { cwd: workspaceRoot });
         progress.report({ increment: 100 });
         await updateContextKeys();
-        vscode.window.showInformationMessage('Workflow initialized successfully!');
+        vscode.window.showInformationMessage(vscode.l10n.t('Workflow initialized successfully!'));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to initialize workflow: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to initialize workflow: {0}', message));
       }
     }
   );
@@ -174,6 +174,17 @@ async function initWorkflow(): Promise<void> {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const startTime = Date.now();
   console.log('Workflow AI extension is activating...');
+
+  // Helper function to safely register commands (handles duplicate registration during testing)
+  const registerCommandSafe = (command: string, callback: (...args: any[]) => any) => {
+    try {
+      return vscode.commands.registerCommand(command, callback);
+    } catch (err) {
+      // Command already registered, return a no-op disposable
+      console.warn(`Command ${command} already registered, skipping`);
+      return { dispose: () => {} };
+    }
+  };
 
   // Initialize context keys on activation
   await updateContextKeys();
@@ -359,13 +370,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   // Register commands
-  const installCliCmd = vscode.commands.registerCommand('workflow.installCli', installCli);
-  const initCmd = vscode.commands.registerCommand('workflow.init', initWorkflow);
+  const installCliCmd = registerCommandSafe('workflow.installCli', installCli);
+  const initCmd = registerCommandSafe('workflow.init', initWorkflow);
 
   /**
    * Open ticket command - opens ticket file in editor
    */
-  const openTicketCmd = vscode.commands.registerCommand(
+  const openTicketCmd = registerCommandSafe(
     'workflow.openTicket',
     async (ticketId: string) => {
       if (!ticketId) {
@@ -377,13 +388,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       if (!ticketId || !workflowRoot) {
-        vscode.window.showErrorMessage('No ticket ID provided or workflow not available');
+        vscode.window.showErrorMessage(vscode.l10n.t('No ticket ID provided or workflow not available'));
         return;
       }
 
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
         return;
       }
 
@@ -399,7 +410,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(ticketPath));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to open ticket: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to open ticket: {0}', message));
       }
     }
   );
@@ -407,24 +418,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Move ticket command - opens QuickPick to select target status
    */
-  const moveTicketCmd = vscode.commands.registerCommand(
+  const moveTicketCmd = registerCommandSafe(
     'workflow.moveTicket',
     async (ticketId: string) => {
       if (!ticketService || !ticketId) {
-        vscode.window.showErrorMessage('Ticket service not available or no ticket ID provided');
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available or no ticket ID provided'));
         return;
       }
 
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
         return;
       }
 
       // Get valid transitions
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode.window.showInformationMessage(`No valid transitions from ${ticket.status}`);
+        vscode.window.showInformationMessage(vscode.l10n.t('No valid transitions from {0}', ticket.status));
         return;
       }
 
@@ -432,11 +443,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const targetStatus = await vscode.window.showQuickPick(
         validTransitions.map(status => ({
           label: status,
-          description: `Move to ${status}`
+          description: vscode.l10n.t('Move to {0}', status)
         })),
         {
-          placeHolder: `Select target status for ${ticketId}`,
-          title: `Move ${ticketId}`
+          placeHolder: vscode.l10n.t('Select target status for {0}', ticketId),
+          title: vscode.l10n.t('Move {0}', ticketId)
         }
       );
 
@@ -446,10 +457,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       try {
         await ticketService.move(ticketId, targetStatus.label as TicketStatus);
-        vscode.window.showInformationMessage(`Moved ${ticketId} to ${targetStatus.label}`);
+        vscode.window.showInformationMessage(vscode.l10n.t('Moved {0} to {1}', ticketId, targetStatus.label));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to move ticket: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to move ticket: {0}', message));
       }
     }
   );
@@ -457,7 +468,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Move ticket from menu command - same as moveTicket but for context menu
    */
-  const moveTicketFromMenuCmd = vscode.commands.registerCommand(
+  const moveTicketFromMenuCmd = registerCommandSafe(
     'workflow.moveTicketFromMenu',
     async (ticketId: string) => {
       // Reuse the moveTicket command logic
@@ -469,24 +480,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
    * Move ticket next command - moves ticket to next valid status in workflow
    * Uses TicketService.getValidTransitions() to determine next status
    */
-  const moveTicketNextCmd = vscode.commands.registerCommand(
+  const moveTicketNextCmd = registerCommandSafe(
     'workflow.moveTicketNext',
     async (ticketId: string) => {
       if (!ticketService || !ticketId) {
-        vscode.window.showErrorMessage('Ticket service not available or no ticket ID provided');
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available or no ticket ID provided'));
         return;
       }
 
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
         return;
       }
 
       // Get valid transitions and pick the first one (primary next status)
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode.window.showInformationMessage(`No valid transitions from ${ticket.status}`);
+        vscode.window.showInformationMessage(vscode.l10n.t('No valid transitions from {0}', ticket.status));
         return;
       }
 
@@ -495,10 +506,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       try {
         await ticketService.move(ticketId, nextStatus);
-        vscode.window.showInformationMessage(`Moved ${ticketId} to ${nextStatus}`);
+        vscode.window.showInformationMessage(vscode.l10n.t('Moved {0} to {1}', ticketId, nextStatus));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to move ticket: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to move ticket: {0}', message));
       }
     }
   );
@@ -506,7 +517,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Edit ticket command - opens ticket file for editing
    */
-  const editTicketCmd = vscode.commands.registerCommand(
+  const editTicketCmd = registerCommandSafe(
     'workflow.editTicket',
     async (ticketId: string) => {
       if (!ticketId) {
@@ -518,13 +529,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       if (!ticketId || !workflowRoot) {
-        vscode.window.showErrorMessage('No ticket ID provided or workflow not available');
+        vscode.window.showErrorMessage(vscode.l10n.t('No ticket ID provided or workflow not available'));
         return;
       }
 
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
         return;
       }
 
@@ -540,7 +551,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(ticketPath));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to open ticket: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to open ticket: {0}', message));
       }
     }
   );
@@ -548,17 +559,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Show dependencies command - shows dependencies in a view
    */
-  const showDependenciesCmd = vscode.commands.registerCommand(
+  const showDependenciesCmd = registerCommandSafe(
     'workflow.showDependencies',
     async (ticketId: string) => {
       if (!dependencyService || !ticketId) {
-        vscode.window.showErrorMessage('Dependency service not available or no ticket ID provided');
+        vscode.window.showErrorMessage(vscode.l10n.t('Dependency service not available or no ticket ID provided'));
         return;
       }
 
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode.window.showErrorMessage(`Ticket ${ticketId} not found`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
         return;
       }
 
@@ -568,11 +579,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Build quick info message
       const depList = dependencies.length > 0
         ? dependencies.map(d => `- ${d.id}: ${d.title} (${d.status})`).join('\n')
-        : 'No dependencies';
+        : vscode.l10n.t('No dependencies');
 
       const blocksList = dependents.length > 0
         ? dependents.map(d => `- ${d.id}: ${d.title} (${d.status})`).join('\n')
-        : 'No tickets blocked by this one';
+        : vscode.l10n.t('No tickets blocked by this one');
 
       const info = `**${ticketId}: ${ticket.title}**\n\n**Dependencies (Deps):**\n${depList}\n\n**Blocks:**\n${blocksList}`;
 
@@ -583,7 +594,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Show ticket dependencies command - alias for context menu
    */
-  const showTicketDependenciesCmd = vscode.commands.registerCommand(
+  const showTicketDependenciesCmd = registerCommandSafe(
     'workflow.showTicketDependencies',
     async (ticketId: string) => {
       await vscode.commands.executeCommand('workflow.showDependencies', ticketId);
@@ -593,27 +604,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Create ticket command - opens input to create new ticket
    */
-  const createTicketCmd = vscode.commands.registerCommand(
+  const createTicketCmd = registerCommandSafe(
     'workflow.createTicket',
     async () => {
       if (!ticketService) {
-        vscode.window.showErrorMessage('Ticket service not available');
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available'));
         return;
       }
 
       // Get ticket type
       const type = await vscode.window.showQuickPick(
         [
-          { label: 'IMPL', description: 'Implementation task' },
-          { label: 'FIX', description: 'Bug fix' },
-          { label: 'DOCS', description: 'Documentation' },
-          { label: 'REVIEW', description: 'Code review' },
-          { label: 'PLAN', description: 'Planning task' },
-          { label: 'ADMIN', description: 'Administrative task' }
+          { label: 'IMPL', description: vscode.l10n.t('Implementation task') },
+          { label: 'FIX', description: vscode.l10n.t('Bug fix') },
+          { label: 'DOCS', description: vscode.l10n.t('Documentation') },
+          { label: 'REVIEW', description: vscode.l10n.t('Code review') },
+          { label: 'PLAN', description: vscode.l10n.t('Planning task') },
+          { label: 'ADMIN', description: vscode.l10n.t('Administrative task') }
         ],
         {
-          placeHolder: 'Select ticket type',
-          title: 'Create New Ticket'
+          placeHolder: vscode.l10n.t('Select ticket type'),
+          title: vscode.l10n.t('Create New Ticket')
         }
       );
 
@@ -623,12 +634,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       // Get title
       const title = await vscode.window.showInputBox({
-        prompt: 'Enter ticket title',
-        placeHolder: 'e.g., Add feature X',
-        title: 'Create New Ticket',
+        prompt: vscode.l10n.t('Enter ticket title'),
+        placeHolder: vscode.l10n.t('e.g., Add feature X'),
+        title: vscode.l10n.t('Create New Ticket'),
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
-            return 'Title is required';
+            return vscode.l10n.t('Title is required');
           }
           return undefined;
         }
@@ -640,10 +651,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       try {
         const ticket = await ticketService.create(type.label, title);
-        vscode.window.showInformationMessage(`Created ticket ${ticket.id}: ${ticket.title}`);
+        vscode.window.showInformationMessage(vscode.l10n.t('Created ticket {0}: {1}', ticket.id, ticket.title));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to create ticket: ${message}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to create ticket: {0}', message));
       }
     }
   );
@@ -651,7 +662,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Refresh tickets command - refreshes the tickets tree view
    */
-  const refreshTicketsCmd = vscode.commands.registerCommand(
+  const refreshTicketsCmd = registerCommandSafe(
     'workflow.refreshTickets',
     async () => {
       ticketsProvider.refresh();
@@ -665,7 +676,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Sort Kanban by priority command
    */
-  const sortKanbanByPriorityCmd = vscode.commands.registerCommand(
+  const sortKanbanByPriorityCmd = registerCommandSafe(
     'workflow.sortKanbanByPriority',
     async () => {
       // Refresh all kanban providers (they will re-sort by priority by default)
@@ -675,14 +686,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode.window.showInformationMessage('Kanban boards sorted by priority');
+      vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by priority'));
     }
   );
 
   /**
    * Sort Kanban by ID command
    */
-  const sortKanbanByIdCmd = vscode.commands.registerCommand(
+  const sortKanbanByIdCmd = registerCommandSafe(
     'workflow.sortKanbanById',
     async () => {
       // Note: This would require modifying the provider to support different sort modes
@@ -693,14 +704,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode.window.showInformationMessage('Kanban boards sorted by ID');
+      vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by ID'));
     }
   );
 
   /**
    * Sort Kanban by title command
    */
-  const sortKanbanByTitleCmd = vscode.commands.registerCommand(
+  const sortKanbanByTitleCmd = registerCommandSafe(
     'workflow.sortKanbanByTitle',
     async () => {
       // Note: This would require modifying the provider to support different sort modes
@@ -711,19 +722,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       kanbanProviders.blocked.refresh();
       kanbanProviders.review.refresh();
       kanbanProviders.done.refresh();
-      vscode.window.showInformationMessage('Kanban boards sorted by title');
+      vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by title'));
     }
   );
 
   /**
    * Go to review section command - navigates to review section in document
    */
-  const gotoReviewSectionCmd = vscode.commands.registerCommand(
+  const gotoReviewSectionCmd = registerCommandSafe(
     'workflow.gotoReviewSection',
     async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showErrorMessage('No active editor');
+        vscode.window.showErrorMessage(vscode.l10n.t('No active editor'));
         return;
       }
 
@@ -733,7 +744,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Find review section
       const reviewMatch = content.match(/^## Review/m);
       if (!reviewMatch || reviewMatch.index === undefined) {
-        vscode.window.showInformationMessage('No Review section found in this document');
+        vscode.window.showInformationMessage(vscode.l10n.t('No Review section found in this document'));
         return;
       }
 
@@ -746,7 +757,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Start pipeline command - opens QuickPick for mode selection
    */
-  const startPipelineCmd = vscode.commands.registerCommand(
+  const startPipelineCmd = registerCommandSafe(
     'workflow.runPipeline',
     async () => {
       await pipelineProvider.startPipeline();
@@ -756,7 +767,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Stop pipeline command
    */
-  const stopPipelineCmd = vscode.commands.registerCommand(
+  const stopPipelineCmd = registerCommandSafe(
     'workflow.stopPipeline',
     async () => {
       pipelineProvider.stopPipeline();
@@ -766,7 +777,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Show pipeline output command
    */
-  const showPipelineOutputCmd = vscode.commands.registerCommand(
+  const showPipelineOutputCmd = registerCommandSafe(
     'workflow.showPipelineOutput',
     async () => {
       pipelineProvider.showOutput();
@@ -776,7 +787,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Clear pipeline history command
    */
-  const clearPipelineHistoryCmd = vscode.commands.registerCommand(
+  const clearPipelineHistoryCmd = registerCommandSafe(
     'workflow.clearPipelineHistory',
     async () => {
       pipelineProvider.clearHistory();
@@ -786,7 +797,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * Status bar click command - opens Command Palette with WF: prefix
    */
-  const statusBarClickCmd = vscode.commands.registerCommand(
+  const statusBarClickCmd = registerCommandSafe(
     'workflow.statusBarClick',
     async () => {
       await vscode.commands.executeCommand('workbench.action.quickOpen', '>WF:');
@@ -796,11 +807,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.newTicket command - creates new ticket via QuickPick + InputBox
    */
-  const newTicketCmd = vscode.commands.registerCommand(
+  const newTicketCmd = registerCommandSafe(
     'workflow.newTicket',
     async () => {
       if (!ticketService) {
-        vscode.window.showErrorMessage('Ticket service not available');
+        vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available'));
         return;
       }
       await executeNewTicket(ticketService);
@@ -810,21 +821,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.newPlan command - creates new plan (placeholder)
    */
-  const newPlanCmd = vscode.commands.registerCommand(
+  const newPlanCmd = registerCommandSafe(
     'workflow.newPlan',
     async () => {
-      vscode.window.showInformationMessage('workflow.newPlan: Plan creation coming soon');
+      vscode.window.showInformationMessage(vscode.l10n.t('workflow.newPlan: Plan creation coming soon'));
     }
   );
 
   /**
    * workflow.showDependencies command - shows ticket dependencies
    */
-  const showDependenciesCmdNew = vscode.commands.registerCommand(
+  const showDependenciesCmdNew = registerCommandSafe(
     'workflow.showDependencies',
     async (ticketId?: string) => {
       if (!dependencyService) {
-        vscode.window.showErrorMessage('Dependency service not available');
+        vscode.window.showErrorMessage(vscode.l10n.t('Dependency service not available'));
         return;
       }
       await executeShowDependencies(store, dependencyService, ticketId);
@@ -834,7 +845,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.showStatistics command - shows workflow statistics
    */
-  const showStatisticsCmd = vscode.commands.registerCommand(
+  const showStatisticsCmd = registerCommandSafe(
     'workflow.showStatistics',
     async () => {
       await executeShowStatistics(store);
@@ -844,7 +855,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.openPipelineConfig command - opens pipeline.yaml
    */
-  const openPipelineConfigCmd = vscode.commands.registerCommand(
+  const openPipelineConfigCmd = registerCommandSafe(
     'workflow.openPipelineConfig',
     async () => {
       await executeOpenPipelineConfig(workflowRoot);
@@ -854,7 +865,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.openConfig command - opens config.yaml
    */
-  const openConfigCmd = vscode.commands.registerCommand(
+  const openConfigCmd = registerCommandSafe(
     'workflow.openConfig',
     async () => {
       await executeOpenConfig(workflowRoot);
@@ -864,7 +875,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.focusTicketsView command - focuses tickets sidebar
    */
-  const focusTicketsViewCmd = vscode.commands.registerCommand(
+  const focusTicketsViewCmd = registerCommandSafe(
     'workflow.focusTicketsView',
     async () => {
       await executeFocusTicketsView();
@@ -874,7 +885,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.focusKanban command - focuses kanban panel
    */
-  const focusKanbanCmd = vscode.commands.registerCommand(
+  const focusKanbanCmd = registerCommandSafe(
     'workflow.focusKanban',
     async () => {
       await executeFocusKanban();
@@ -884,7 +895,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.refreshAll command - refreshes all data
    */
-  const refreshAllCmd = vscode.commands.registerCommand(
+  const refreshAllCmd = registerCommandSafe(
     'workflow.refreshAll',
     async () => {
       const refreshCallbacks = [
@@ -906,7 +917,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /**
    * workflow.copyTicketId command - copies ticket ID to clipboard
    */
-  const copyTicketIdCmd = vscode.commands.registerCommand(
+  const copyTicketIdCmd = registerCommandSafe(
     'workflow.copyTicketId',
     async (ticketId?: string) => {
       await executeCopyTicketId(ticketId);

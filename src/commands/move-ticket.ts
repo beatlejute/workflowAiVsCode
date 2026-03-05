@@ -84,7 +84,7 @@ export async function executeMoveTicket(ticketService: TicketService, ticketId?:
 
   try {
     await ticketService.move(ticketId, targetStatus.label as TicketStatus);
-    vscode.window.showInformationMessage(vscode.l10n.t('Moved {0} to {0}', ticketId, targetStatus.label));
+    vscode.window.showInformationMessage(vscode.l10n.t('Moved {0} to {1}', ticketId, targetStatus.label));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     vscode.window.showErrorMessage(vscode.l10n.t('Failed to move ticket: {0}', message));

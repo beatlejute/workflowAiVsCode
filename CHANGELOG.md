@@ -8,10 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Full i18n support for 10 languages (en, ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br)
-- E2E tests using @vscode/test-electron
-- Additional pipeline execution controls
 - Enhanced dependency visualization
+- Additional pipeline execution controls
 
 ---
 
@@ -128,10 +126,16 @@ Initial release with comprehensive workflow management features for VS Code.
 - **workflow.cliPath** — Custom CLI executable path
 - **Context keys** — `workflow.cliInstalled`, `workflow.workflowFound`, `workflow.pipelineRunning`
 
-#### Internationalization Foundation (Phase 2)
-- **package.nls.json** — Base English strings for package.json
-- **Multi-language support** — Ready for 10 languages (ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br)
-- **Externalized strings** — All user-facing strings in resource files
+#### Internationalization (Phase 3)
+- **10 language packs** — Full i18n support for en, ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br
+- **package.nls.*.json** — Localized strings for all UI elements
+- **Locale detection** — Automatic language selection based on VS Code locale
+- **Externalized strings** — All user-facing messages in resource files
+
+#### Testing (Phase 3)
+- **E2E test framework** — Integration tests using @vscode/test-electron
+- **Test scaffolding** — Base structure for extension testing
+- **CI/CD ready** — Test execution pipeline configuration
 
 #### Developer Experience
 - **TypeScript** — Full type safety with strict mode
@@ -185,3 +189,10 @@ Initial release with comprehensive workflow management features for VS Code.
 ---
 
 *For more information, see the [README.md](README.md) and [documentation](.workflow/).*
+
+---
+
+## Links
+
+- [Unreleased]: https://github.com/your-org/workflow-ai-vscode/compare/v0.1.0...HEAD
+- [0.1.0]: https://github.com/your-org/workflow-ai-vscode/releases/tag/v0.1.0

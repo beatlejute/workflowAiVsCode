@@ -8,6 +8,7 @@
  * ADR-005: Event-driven architecture for reactive UI updates
  */
 
+import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
@@ -132,7 +133,8 @@ export class TicketService {
     try {
       templateContent = await fs.readFile(templatePath, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to read ticket template: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode.l10n.t('Failed to read ticket template: {0}', errorMessage));
     }
 
     // Parse template
@@ -241,14 +243,13 @@ export class TicketService {
     // Get current ticket
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(`Ticket ${id} not found`);
+      throw new Error(vscode.l10n.t('Ticket {0} not found', id));
     }
 
     // Validate transition
     if (!this.isValidTransition(ticket.status, targetStatus)) {
       throw new Error(
-        `Invalid transition from ${ticket.status} to ${targetStatus}. ` +
-        `Valid transitions: ${this.getValidTransitions(ticket.status).join(', ')}`
+        vscode.l10n.t('Invalid transition from {0} to {1}. Valid transitions: {2}', ticket.status, targetStatus, this.getValidTransitions(ticket.status).join(', '))
       );
     }
 
@@ -296,7 +297,8 @@ export class TicketService {
         }, 200);
 
         if (code !== 0) {
-          reject(new Error(`wf move failed with code ${code}: ${stderr}`));
+          const exitCode = code ?? 1;
+          reject(new Error(vscode.l10n.t('wf move failed with code {0}: {1}', exitCode, stderr)));
         } else {
           resolve();
         }
@@ -308,7 +310,7 @@ export class TicketService {
           this.isOwnWrite = false;
         }, 200);
 
-        reject(new Error(`wf move failed: ${error.message}`));
+        reject(new Error(vscode.l10n.t('wf move failed: {0}', error.message)));
       });
     });
   }
@@ -350,7 +352,7 @@ export class TicketService {
     // Get current ticket
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(`Ticket ${id} not found`);
+      throw new Error(vscode.l10n.t('Ticket {0} not found', id));
     }
 
     // Read file content
@@ -366,7 +368,8 @@ export class TicketService {
     try {
       content = await fs.readFile(filePath, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to read ticket file: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode.l10n.t('Failed to read ticket file: {0}', errorMessage));
     }
 
     // Parse frontmatter

@@ -51,7 +51,7 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
 
   try {
     const ticket = await ticketService.create(type.label, title);
-    vscode.window.showInformationMessage(vscode.l10n.t('Created ticket {0}: {0}', ticket.id, ticket.title));
+    vscode.window.showInformationMessage(vscode.l10n.t('Created ticket {0}: {1}', ticket.id, ticket.title));
 
     // Open the created ticket
     const workflowRoot = ticketService.getWorkflowRoot();

@@ -1,11 +1,116 @@
-version: "1.0"
-stages:
-  - name: lint
-    command: npm run lint
-    timeout: 60000
-  - name: test
-    command: npm run test
-    timeout: 120000
-  - name: build
-    command: npm run build
-    timeout: 60000
+# =============================================================================
+# Pipeline Configuration — формат конфигурации пайплайна
+# =============================================================================
+# Тестовый pipeline для E2E тестирования
+# =============================================================================
+
+pipeline:
+  name: "e2e-test"
+  version: "1.0"
+
+  # Агенты для тестирования
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: ["--model", "claude-sonnet-4-6", "--permission-mode", "acceptEdits", "-p"]
+      workdir: "."
+      description: "Claude Sonnet — быстрая модель для простых задач"
+
+    claude-opus:
+      command: "claude"
+      args: ["--model", "claude-opus-4-6", "--permission-mode", "acceptEdits", "-p"]
+      workdir: "."
+      description: "Claude Opus — мощная модель для сложных задач"
+
+    qwen-code:
+      command: "qwen"
+      args: ["-y", "-p"]
+      workdir: "."
+      description: "Qwen Code — альтернативный агент для независимой проверки"
+
+    script-move:
+      command: "node"
+      args: [".workflow/src/scripts/move-ticket.js"]
+      workdir: "."
+      description: "Скрипт для перемещения тикетов между директориями"
+
+    script-pick:
+      command: "node"
+      args: [".workflow/src/scripts/pick-next-task.js"]
+      workdir: "."
+      description: "Скрипт для выбора следующего тикета из ready/"
+
+  # Этапы пайплайна
+  stages:
+    pick-task:
+      description: "Выбрать задачу из ready"
+      agent: script-pick
+      goto:
+        found:
+          stage: execute-task
+          params:
+            ticket_id: "$result.ticket_id"
+        empty: end
+
+    execute-task:
+      description: "Выполнить задачу"
+      agent: qwen-code
+      skill: execute-task
+      goto:
+        default:
+          stage: move-to-review
+          params:
+            ticket_id: "$context.ticket_id"
+            target: review
+
+    move-to-review:
+      description: "Переместить в review"
+      agent: script-move
+      timeout: 120
+      goto:
+        default:
+          stage: review-result
+          params:
+            ticket_id: "$context.ticket_id"
+
+    review-result:
+      description: "Проверить результат"
+      agent: claude-sonnet
+      skill: review-result
+      goto:
+        passed:
+          stage: move-ticket
+          params:
+            ticket_id: "$context.ticket_id"
+            target: done
+        failed:
+          stage: move-ticket
+          params:
+            ticket_id: "$context.ticket_id"
+            target: ready
+
+    move-ticket:
+      description: "Переместить тикет"
+      agent: script-move
+      timeout: 120
+      goto:
+        default: pick-task
+
+  # Точка входа
+  entry: pick-task
+
+  # Контекст
+  context:
+    plan_id: "TEST-PLAN-001"
+
+  # Защита файлов
+  protected_files:
+    - ".workflow/plans/**"
+    - ".workflow/config/**"
+
+  # Настройки выполнения
+  execution:
+    max_steps: 50
+    delay_between_stages: 1
+    timeout_per_stage: 300
+    log_file: ".workflow/logs/pipeline.log"
