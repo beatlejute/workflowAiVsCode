@@ -13644,7 +13644,7 @@ var TicketService = class {
    *
    * @param id - Ticket ID to move
    * @param targetStatus - Target status
-   * @throws Error if transition is invalid or CLI fails
+   * @throws Error if transition is invalid or file operation fails
    */
   async move(id, targetStatus) {
     const ticket = this.getById(id);
@@ -13656,7 +13656,7 @@ var TicketService = class {
         vscode13.l10n.t("Invalid transition from {0} to {1}. Valid transitions: {2}", ticket.status, targetStatus, this.getValidTransitions(ticket.status).join(", "))
       );
     }
-    await this.callWfMove(id, targetStatus);
+    await this.moveTicketDirect(id, ticket.status, targetStatus);
     const updatedTicket = {
       ...ticket,
       status: targetStatus,
@@ -13666,40 +13666,42 @@ var TicketService = class {
     this.store.updateTicket(id, updatedTicket);
   }
   /**
-   * Call wf CLI to move a ticket
+   * Move a ticket directly via file system operations
+   *
+   * Reads the ticket file, updates frontmatter (status, updated_at),
+   * and moves it to the target status directory.
+   *
+   * @param id - Ticket ID
+   * @param currentStatus - Current ticket status
+   * @param targetStatus - Target ticket status
    */
-  async callWfMove(id, targetStatus) {
-    return new Promise((resolve, reject) => {
-      this.isOwnWrite = true;
-      const child = this.spawnFn("wf", ["move", id, targetStatus], {
-        cwd: this.workflowRoot,
-        stdio: ["pipe", "pipe", "pipe"]
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-      child.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-      child.on("close", (code) => {
-        setTimeout(() => {
-          this.isOwnWrite = false;
-        }, 200);
-        if (code !== 0) {
-          const exitCode = code ?? 1;
-          reject(new Error(vscode13.l10n.t("wf move failed with code {0}: {1}", exitCode, stderr)));
-        } else {
-          resolve();
-        }
-      });
-      child.on("error", (error) => {
-        setTimeout(() => {
-          this.isOwnWrite = false;
-        }, 200);
-        reject(new Error(vscode13.l10n.t("wf move failed: {0}", error.message)));
-      });
+  async moveTicketDirect(id, currentStatus, targetStatus) {
+    const sourcePath = path8.join(this.workflowRoot, "tickets", currentStatus, `${id}.md`);
+    const targetDir = path8.join(this.workflowRoot, "tickets", targetStatus);
+    const targetPath = path8.join(targetDir, `${id}.md`);
+    let content;
+    try {
+      content = await fs5.readFile(sourcePath, "utf-8");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode13.l10n.t("Failed to read ticket file: {0}", errorMessage));
+    }
+    const { frontmatter, body } = parse(content);
+    const updatedFrontmatter = {
+      ...frontmatter,
+      status: targetStatus,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (targetStatus === "done" /* Done */) {
+      updatedFrontmatter.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    const updatedContent = serialize(updatedFrontmatter, body);
+    await fs5.mkdir(targetDir, { recursive: true });
+    await this.withOwnWrite(async () => {
+      await fs5.writeFile(targetPath, updatedContent, "utf-8");
+    });
+    await this.withOwnWrite(async () => {
+      await fs5.unlink(sourcePath);
     });
   }
   // Flag to prevent file watcher from triggering on our own writes
