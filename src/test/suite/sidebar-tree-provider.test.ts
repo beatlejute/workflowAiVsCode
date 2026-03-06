@@ -110,7 +110,8 @@ suite('SidebarTreeProvider Suite', () => {
       updated_at: now,
       completed_at: completed ? now : '',
       previous_plan: '',
-      related_reports: []
+      related_reports: [],
+      folder: completed ? 'archive' : 'current'
     };
   }
 
@@ -500,7 +501,7 @@ suite('SidebarTreeProvider Suite', () => {
 
     test('should handle full workflow with tickets, plans, and reports', async () => {
       // Initialize store with test data
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       // Add tickets
       store.addTicket(createTestTicket('IMPL-001', 'Task 1', TicketStatus.Ready, 2));

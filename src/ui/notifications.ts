@@ -53,6 +53,13 @@ export class NotificationsManager {
   initialize(): void {
     // Subscribe to store changes for ticket transitions
     this.store.onDidChange((event) => {
+      if (event.type === 'ticket' && event.operation === 'add' && event.id) {
+        // Cache status for newly added tickets
+        const ticket = this.store.getTicketById(event.id);
+        if (ticket) {
+          this.ticketStatusCache.set(ticket.id, ticket.status);
+        }
+      }
       if (event.type === 'ticket' && event.operation === 'update') {
         this.handleTicketUpdate(event.id!);
       }

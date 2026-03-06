@@ -37,10 +37,6 @@ export interface ParsedLogEntry {
   skill?: string;
 }
 
-/**
- * Pipeline execution mode
- */
-export type PipelineMode = 'single-cycle' | 'continuous' | 'n-tasks';
 
 /**
  * Event emitter type for state changes
@@ -74,6 +70,7 @@ export class PipelineService extends EventEmitter {
   private currentTicket: string | undefined;
   private retryCount: number = 0;
   private spawnFn: SpawnFunction;
+  private workflowRoot: string | undefined;
 
   /**
    * Create PipelineService
@@ -85,25 +82,10 @@ export class PipelineService extends EventEmitter {
   }
 
   /**
-   * Spawn with fallback: try primary command, fallback to alternative on ENOENT
-   * @param primary - Primary command name
-   * @param fallback - Fallback command name
-   * @param args - Command arguments
-   * @param options - Spawn options
+   * Set the project root directory (used as cwd for spawned processes)
    */
-  private spawnWithFallback(
-    primary: string,
-    fallback: string,
-    args: readonly string[],
-    options?: any
-  ): ChildProcess {
-    const child = this.spawnFn(primary, args, options);
-    child.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ENOENT') {
-        return this.spawnFn(fallback, args, options);
-      }
-    });
-    return child;
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
   }
 
   /**
@@ -159,10 +141,8 @@ export class PipelineService extends EventEmitter {
 
   /**
    * Start pipeline execution
-   * @param mode - Execution mode: single-cycle, continuous, or n-tasks
-   * @param n - Number of tasks (only for n-tasks mode)
    */
-  async start(mode: PipelineMode, n?: number): Promise<void> {
+  async start(): Promise<void> {
     if (this.currentState === PipelineState.Running) {
       throw new Error('Pipeline is already running');
     }
@@ -176,8 +156,17 @@ export class PipelineService extends EventEmitter {
     const args = ['run'];
 
     try {
-      const child = this.spawnWithFallback('workflow', 'workflow-ai', args, {
-        stdio: ['ignore', 'pipe', 'pipe']
+      // Remove CLAUDECODE env var to allow nested claude CLI calls from pipeline
+      const env = { ...process.env };
+      delete env.CLAUDECODE;
+
+      this.emit('log', `[PIPELINE] Starting: workflow run (shell: ${process.platform === 'win32'})\n`);
+
+      const child = this.spawnFn('workflow', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env,
+        cwd: this.workflowRoot,
+        shell: process.platform === 'win32'
       });
 
       this.childProcess = child;
@@ -192,12 +181,13 @@ export class PipelineService extends EventEmitter {
       // Handle stderr
       child.stderr?.on('data', (data: Buffer) => {
         const output = data.toString();
-        this.emit('log', `[ERROR] ${output}`);
+        this.emit('log', `[STDERR] ${output}`);
       });
 
       // Handle process exit
       child.on('close', (code: number | null) => {
         this.childProcess = null;
+        this.emit('log', `[PIPELINE] Process exited with code: ${code}\n`);
         if (code === 0) {
           this.setState(PipelineState.Completed);
         } else {
@@ -205,11 +195,11 @@ export class PipelineService extends EventEmitter {
         }
       });
 
-      // Handle process errors
-      child.on('error', (err: Error) => {
+      // Handle process errors (e.g. ENOENT)
+      child.on('error', (err: NodeJS.ErrnoException) => {
+        this.emit('log', `[PIPELINE] Spawn error: ${err.message} (code: ${err.code})\n`);
         this.childProcess = null;
         this.setState(PipelineState.Error);
-        this.emit('log', `[FATAL] ${err.message}`);
       });
 
     } catch (error) {

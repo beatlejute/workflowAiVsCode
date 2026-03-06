@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { PipelineService, PipelineState, PipelineMode } from '../services/pipeline-service';
+import { PipelineService, PipelineState } from '../services/pipeline-service';
 
 /**
  * Tree item types for pipeline view
@@ -50,11 +50,9 @@ export class PipelineTreeItem extends vscode.TreeItem {
 export class PipelineRunTreeItem extends PipelineTreeItem {
   constructor(
     public readonly state: PipelineState,
-    public readonly mode: PipelineMode,
-    public readonly elapsed?: string,
-    public readonly tasksCount?: number
+    public readonly elapsed?: string
   ) {
-    const label = getPipelineRunLabel(state, mode, tasksCount);
+    const label = getPipelineRunLabel(state);
     super(
       label,
       vscode.TreeItemCollapsibleState.Expanded,
@@ -63,7 +61,7 @@ export class PipelineRunTreeItem extends PipelineTreeItem {
     );
 
     this.description = elapsed ? `Elapsed: ${elapsed}` : '';
-    this.tooltip = createPipelineRunTooltip(state, mode, elapsed, tasksCount);
+    this.tooltip = createPipelineRunTooltip(state, elapsed);
     this.iconPath = getPipelineStateIcon(state);
     this.contextValue = 'pipeline-run';
   }
@@ -199,24 +197,12 @@ export interface RunHistoryEntry {
   runNumber: number;
   date: string;
   result: 'success' | 'error' | 'stopped';
-  mode: PipelineMode;
-  tasksCompleted?: number;
 }
 
 /**
  * Get label for pipeline run based on state and mode
  */
-function getPipelineRunLabel(
-  state: PipelineState,
-  mode: PipelineMode,
-  tasksCount?: number
-): string {
-  const modeLabels: Record<PipelineMode, string> = {
-    'single-cycle': 'Single Cycle',
-    'continuous': 'Continuous',
-    'n-tasks': `${tasksCount || '?'} Tasks`
-  };
-
+function getPipelineRunLabel(state: PipelineState): string {
   const stateLabels: Record<PipelineState, string> = {
     [PipelineState.Idle]: 'Idle',
     [PipelineState.Running]: 'Running',
@@ -224,7 +210,7 @@ function getPipelineRunLabel(
     [PipelineState.Completed]: 'Completed'
   };
 
-  return `${stateLabels[state]} - ${modeLabels[mode]}`;
+  return stateLabels[state];
 }
 
 /**
@@ -250,9 +236,7 @@ function getPipelineStateIcon(state: PipelineState): vscode.ThemeIcon {
  */
 function createPipelineRunTooltip(
   state: PipelineState,
-  mode: PipelineMode,
-  elapsed?: string,
-  tasksCount?: number
+  elapsed?: string
 ): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
@@ -260,12 +244,8 @@ function createPipelineRunTooltip(
   markdown.appendMarkdown(`| ${vscode.l10n.t('Field')} | ${vscode.l10n.t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
   markdown.appendMarkdown(`| **${vscode.l10n.t('State')}** | ${state} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Mode')}** | ${mode} |\n`);
   if (elapsed) {
     markdown.appendMarkdown(`| **${vscode.l10n.t('Elapsed')}** | ${elapsed} |\n`);
-  }
-  if (tasksCount !== undefined) {
-    markdown.appendMarkdown(`| **${vscode.l10n.t('Tasks')}** | ${tasksCount} |\n`);
   }
   return markdown;
 }
@@ -355,11 +335,11 @@ function createHistoryTooltip(history: RunHistoryEntry[]): vscode.MarkdownString
   if (history.length === 0) {
     markdown.appendMarkdown(`_${vscode.l10n.t('No runs yet')}_`);
   } else {
-    markdown.appendMarkdown(`| # | ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Result')} | ${vscode.l10n.t('Mode')} |\n`);
-    markdown.appendMarkdown(`|---|------|--------|------|\n`);
+    markdown.appendMarkdown(`| # | ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Result')} |\n`);
+    markdown.appendMarkdown(`|---|------|--------|\n`);
     history.slice(0, 10).forEach(entry => {
       const icon = entry.result === 'success' ? '✅' : entry.result === 'error' ? '❌' : '⏹️';
-      markdown.appendMarkdown(`| ${entry.runNumber} | ${entry.date} | ${icon} | ${entry.mode} |\n`);
+      markdown.appendMarkdown(`| ${entry.runNumber} | ${entry.date} | ${icon} |\n`);
     });
   }
 
@@ -377,10 +357,6 @@ function createHistoryItemTooltip(entry: RunHistoryEntry): vscode.MarkdownString
   markdown.appendMarkdown(`|-------|-------|\n`);
   markdown.appendMarkdown(`| **${vscode.l10n.t('Date')}** | ${entry.date} |\n`);
   markdown.appendMarkdown(`| **${vscode.l10n.t('Result')}** | ${entry.result} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Mode')}** | ${entry.mode} |\n`);
-  if (entry.tasksCompleted !== undefined) {
-    markdown.appendMarkdown(`| **${vscode.l10n.t('Tasks Completed')}** | ${entry.tasksCompleted} |\n`);
-  }
   return markdown;
 }
 
@@ -394,9 +370,9 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private workflowRoot: string | null = null;
   private pipelineService: PipelineService | null = null;
   private outputChannel: vscode.OutputChannel | null = null;
+  private listenersSetup: boolean = false;
   private runHistory: RunHistoryEntry[] = [];
   private runCounter: number = 0;
-  private currentMode: PipelineMode | undefined;
 
   // Statistics
   private stagesStarted: number = 0;
@@ -438,13 +414,15 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     // Initialize PipelineService if not already done
     if (!this.pipelineService) {
       this.pipelineService = new PipelineService();
-      this.setupPipelineListeners();
     }
-    
+
     // Initialize OutputChannel
     if (!this.outputChannel) {
       this.outputChannel = vscode.window.createOutputChannel('WF: Pipeline');
     }
+
+    // Setup listeners (idempotent — only binds once via flag check in method)
+    this.setupPipelineListeners();
     
     this.refresh();
   }
@@ -453,7 +431,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
    * Setup listeners for pipeline service events
    */
   private setupPipelineListeners(): void {
-    if (!this.pipelineService) return;
+    if (!this.pipelineService || this.listenersSetup) return;
+    this.listenersSetup = true;
 
     this.pipelineService.onStateChange((state: PipelineState) => {
       this.currentState = state;
@@ -465,7 +444,6 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
           runNumber: this.runCounter,
           date: new Date().toLocaleString(),
           result: state === PipelineState.Completed ? 'success' : 'error',
-          mode: 'single-cycle' // Default mode, could be tracked more precisely
         });
         
         // Keep only last 50 runs in history
@@ -695,9 +673,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     // 1. Pipeline run status
     items.push(new PipelineRunTreeItem(
       this.currentState,
-      'single-cycle', // Could be tracked more precisely
-      this.elapsed,
-      this.stagesStarted
+      this.elapsed
     ));
 
     // 2. Current stage (if running)
@@ -732,7 +708,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   }
 
   /**
-   * Start pipeline execution with mode selection
+   * Start pipeline execution
    */
   async startPipeline(): Promise<void> {
     if (!this.pipelineService) {
@@ -740,58 +716,14 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       return;
     }
 
-    // Show QuickPick for mode selection
-    const mode = await vscode.window.showQuickPick(
-      [
-        { label: 'single-cycle', description: vscode.l10n.t('Run one cycle through all stages') },
-        { label: 'continuous', description: vscode.l10n.t('Run continuously until stopped') },
-        { label: 'n-tasks', description: vscode.l10n.t('Run for a specific number of tasks') }
-      ],
-      {
-        placeHolder: vscode.l10n.t('Select pipeline mode'),
-        title: vscode.l10n.t('Start Pipeline')
-      }
-    );
-
-    if (!mode) {
-      return; // User cancelled
-    }
-
-    let n: number | undefined;
-    if (mode.label === 'n-tasks') {
-      const input = await vscode.window.showInputBox({
-        prompt: vscode.l10n.t('Enter number of tasks'),
-        placeHolder: vscode.l10n.t('e.g., 5'),
-        title: vscode.l10n.t('Start Pipeline - N Tasks'),
-        validateInput: (value) => {
-          if (!value || !/^\d+$/.test(value)) {
-            return vscode.l10n.t('Please enter a valid number');
-          }
-          const num = parseInt(value, 10);
-          if (num <= 0) {
-            return vscode.l10n.t('Number must be greater than 0');
-          }
-          return undefined;
-        }
-      });
-
-      if (!input) {
-        return; // User cancelled
-      }
-
-      n = parseInt(input, 10);
-    }
-
     try {
-      this.currentMode = mode.label as PipelineMode;
-      await this.pipelineService.start(mode.label as PipelineMode, n);
+      await this.pipelineService.start();
 
-      // Show output channel
       if (this.outputChannel) {
         this.outputChannel.show(true);
       }
 
-      vscode.window.showInformationMessage(vscode.l10n.t('Pipeline started in {0} mode', mode.label));
+      vscode.window.showInformationMessage(vscode.l10n.t('Pipeline started'));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       vscode.window.showErrorMessage(vscode.l10n.t('Failed to start pipeline: {0}', message));

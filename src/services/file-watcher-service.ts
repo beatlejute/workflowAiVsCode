@@ -53,7 +53,7 @@ export class FileWatcherService implements vscode.Disposable {
   private createWatcher(): void {
     const pattern = new vscode.RelativePattern(
       this.workflowRoot,
-      '**/.workflow/**/*.{md,yaml,yml}'
+      '**/*.{md,yaml,yml}'
     );
 
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(

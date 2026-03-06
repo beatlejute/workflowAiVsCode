@@ -31,11 +31,11 @@ export type SpawnFunction = (
  */
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   [TicketStatus.Backlog]: [TicketStatus.Ready],
-  [TicketStatus.Ready]: [TicketStatus.InProgress, TicketStatus.Review],
-  [TicketStatus.InProgress]: [TicketStatus.Review, TicketStatus.Blocked, TicketStatus.Done],
-  [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress, TicketStatus.Ready, TicketStatus.Blocked],
-  [TicketStatus.Blocked]: [TicketStatus.Ready],
-  [TicketStatus.Done]: []
+  [TicketStatus.Ready]: [TicketStatus.InProgress, TicketStatus.Review, TicketStatus.Backlog],
+  [TicketStatus.InProgress]: [TicketStatus.Review, TicketStatus.Blocked, TicketStatus.Done, TicketStatus.Backlog],
+  [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress, TicketStatus.Ready, TicketStatus.Blocked, TicketStatus.Backlog],
+  [TicketStatus.Blocked]: [TicketStatus.Ready, TicketStatus.Backlog],
+  [TicketStatus.Done]: [TicketStatus.Backlog]
 };
 
 /**
@@ -119,7 +119,7 @@ export class TicketService {
   /**
    * Create a new ticket
    *
-   * @param type - Ticket type (e.g., 'IMPL', 'FIX', 'PLAN')
+   * @param type - Ticket type (e.g., 'IMPL', 'FIX', 'ARCH')
    * @param title - Ticket title
    * @param fields - Optional fields to override
    * @returns Created ticket

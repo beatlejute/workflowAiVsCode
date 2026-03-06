@@ -27,7 +27,7 @@ import {
   HistoryItemTreeItem,
   RunHistoryEntry
 } from '../../ui/pipeline-tree-provider';
-import { PipelineService, PipelineState, PipelineMode } from '../../services/pipeline-service';
+import { PipelineService, PipelineState } from '../../services/pipeline-service';
 
 suite('PipelineTreeProvider Tests', () => {
   let store: WorkflowStore;
@@ -101,80 +101,53 @@ statuses:
 
   suite('PipelineRunTreeItem Tests', () => {
     test('Idle state displays correct label and icon', () => {
-      const item = new PipelineRunTreeItem(
-        PipelineState.Idle,
-        'single-cycle',
-        '0:00',
-        0
-      );
+      const item = new PipelineRunTreeItem(PipelineState.Idle, '0:00');
 
-      assert.strictEqual(item.label, 'Idle - Single Cycle');
+      assert.strictEqual(item.label, 'Idle');
       assert.strictEqual(item.description, 'Elapsed: 0:00');
       assert.strictEqual(item.itemType, 'pipeline-run');
-      
+
       const icon = item.iconPath as vscode.ThemeIcon;
       assert.strictEqual(icon.id, 'circle-outline');
     });
 
     test('Running state displays loading icon', () => {
-      const item = new PipelineRunTreeItem(
-        PipelineState.Running,
-        'continuous',
-        '1:23',
-        5
-      );
+      const item = new PipelineRunTreeItem(PipelineState.Running, '1:23');
 
-      assert.strictEqual(item.label, 'Running - Continuous');
+      assert.strictEqual(item.label, 'Running');
       assert.strictEqual(item.description, 'Elapsed: 1:23');
-      
+
       const icon = item.iconPath as vscode.ThemeIcon;
       assert.strictEqual(icon.id, 'loading~spin');
     });
 
     test('Error state displays error icon', () => {
-      const item = new PipelineRunTreeItem(
-        PipelineState.Error,
-        'n-tasks',
-        '2:45',
-        10
-      );
+      const item = new PipelineRunTreeItem(PipelineState.Error, '2:45');
 
-      assert.strictEqual(item.label, 'Error - 10 Tasks');
-      
+      assert.strictEqual(item.label, 'Error');
+
       const icon = item.iconPath as vscode.ThemeIcon;
       assert.strictEqual(icon.id, 'error');
     });
 
     test('Completed state displays check icon', () => {
-      const item = new PipelineRunTreeItem(
-        PipelineState.Completed,
-        'single-cycle',
-        '5:00',
-        3
-      );
+      const item = new PipelineRunTreeItem(PipelineState.Completed, '5:00');
 
-      assert.strictEqual(item.label, 'Completed - Single Cycle');
-      
+      assert.strictEqual(item.label, 'Completed');
+
       const icon = item.iconPath as vscode.ThemeIcon;
       assert.strictEqual(icon.id, 'check');
     });
 
-    test('Tooltip contains state, mode, elapsed, and tasks', () => {
-      const item = new PipelineRunTreeItem(
-        PipelineState.Running,
-        'n-tasks',
-        '3:30',
-        7
-      );
+    test('Tooltip contains state and elapsed', () => {
+      const item = new PipelineRunTreeItem(PipelineState.Running, '3:30');
 
       const tooltip = item.tooltip as vscode.MarkdownString;
       const value = tooltip.value;
 
       assert.ok(value.includes('**Pipeline Run**'));
       assert.ok(value.includes('State'));
-      assert.ok(value.includes('Mode'));
       assert.ok(value.includes('Elapsed'));
-      assert.ok(value.includes('Tasks'));
     });
   });
 
@@ -297,8 +270,8 @@ statuses:
 
     test('History with entries displays count', () => {
       const history: RunHistoryEntry[] = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', mode: 'single-cycle' },
-        { runNumber: 2, date: '2026-03-05 11:00', result: 'error', mode: 'continuous' }
+        { runNumber: 1, date: '2026-03-05 10:00', result: 'success' },
+        { runNumber: 2, date: '2026-03-05 11:00', result: 'error' }
       ];
 
       const item = new HistoryTreeItem(history);
@@ -309,8 +282,7 @@ statuses:
       const history: RunHistoryEntry[] = Array.from({ length: 15 }, (_, i) => ({
         runNumber: i + 1,
         date: `2026-03-05 ${10 + i}:00`,
-        result: i % 2 === 0 ? 'success' : 'error',
-        mode: 'single-cycle'
+        result: (i % 2 === 0 ? 'success' : 'error') as 'success' | 'error'
       }));
 
       const item = new HistoryTreeItem(history);
@@ -318,7 +290,7 @@ statuses:
       const value = tooltip.value;
 
       assert.ok(value.includes('**Run History**'));
-      assert.ok(value.includes('| # | Date | Result | Mode |'));
+      assert.ok(value.includes('| # | Date | Result |'));
       // Should only show last 10 runs
       const runCount = (value.match(/\| \d+ \|/g) || []).length;
       assert.strictEqual(runCount, 10);
@@ -330,9 +302,7 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 1,
         date: '2026-03-05 10:00',
-        result: 'success',
-        mode: 'single-cycle',
-        tasksCompleted: 5
+        result: 'success'
       };
 
       const item = new HistoryItemTreeItem(entry);
@@ -345,8 +315,7 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 2,
         date: '2026-03-05 11:00',
-        result: 'error',
-        mode: 'continuous'
+        result: 'error'
       };
 
       const item = new HistoryItemTreeItem(entry);
@@ -357,9 +326,7 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 3,
         date: '2026-03-05 12:00',
-        result: 'success',
-        mode: 'n-tasks',
-        tasksCompleted: 10
+        result: 'success'
       };
 
       const item = new HistoryItemTreeItem(entry);
@@ -369,8 +336,6 @@ statuses:
       assert.ok(value.includes('**Run #3**'));
       assert.ok(value.includes('Date'));
       assert.ok(value.includes('Result'));
-      assert.ok(value.includes('Mode'));
-      assert.ok(value.includes('Tasks Completed'));
     });
   });
 

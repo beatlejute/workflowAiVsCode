@@ -55,7 +55,7 @@ suite('PipelineService Suite', () => {
   test('start() changes state to running', async () => {
     assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
     
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     assert.strictEqual(pipelineService.getState(), PipelineState.Running);
   });
@@ -64,10 +64,10 @@ suite('PipelineService Suite', () => {
    * Test: start() throws if already running
    */
   test('start() throws if already running', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     await assert.rejects(
-      async () => pipelineService.start('single-cycle'),
+      async () => pipelineService.start(),
       /Pipeline is already running/
     );
   });
@@ -76,7 +76,7 @@ suite('PipelineService Suite', () => {
    * Test: stop() performs graceful shutdown
    */
   test('stop() performs graceful shutdown', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     pipelineService.stop();
     
@@ -103,7 +103,7 @@ suite('PipelineService Suite', () => {
       stateChanges.push(state);
     });
     
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     assert.strictEqual(stateChanges.length, 1);
     assert.strictEqual(stateChanges[0], PipelineState.Running);
@@ -119,7 +119,7 @@ suite('PipelineService Suite', () => {
       logs.push(log);
     });
     
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Simulate stdout output
     mockChild.stdout.emit('data', Buffer.from('test log line'));
@@ -132,7 +132,7 @@ suite('PipelineService Suite', () => {
    * Test: process exit with code 0 sets state to completed
    */
   test('process exit with code 0 sets state to completed', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Simulate process exit
     mockChild.emit('close', 0);
@@ -144,7 +144,7 @@ suite('PipelineService Suite', () => {
    * Test: process exit with non-zero code sets state to error
    */
   test('process exit with non-zero code sets state to error', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Simulate process exit with error
     mockChild.emit('close', 1);
@@ -156,7 +156,7 @@ suite('PipelineService Suite', () => {
    * Test: process error sets state to error
    */
   test('process error sets state to error', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Simulate process error
     mockChild.emit('error', new Error('spawn failed'));
@@ -250,7 +250,7 @@ suite('PipelineService Suite', () => {
    * Test: parseStdout updates currentStage from [GOTO]
    */
   test('parseStdout updates currentStage from [GOTO]', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Access private method via any cast for testing
     const service = pipelineService as any;
@@ -263,7 +263,7 @@ suite('PipelineService Suite', () => {
    * Test: parseStdout updates currentAgent and currentTicket from [INFO]
    */
   test('parseStdout updates currentAgent and currentTicket from [INFO]', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     const service = pipelineService as any;
     service.parseStdout('[INFO] agent: qwen-code, ticket: IMPL-014');
@@ -276,7 +276,7 @@ suite('PipelineService Suite', () => {
    * Test: parseStdout updates retryCount from [INFO]
    */
   test('parseStdout updates retryCount from [INFO]', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     const service = pipelineService as any;
     service.parseStdout('[INFO] retry: 2/5');
@@ -287,7 +287,7 @@ suite('PipelineService Suite', () => {
   /**
    * Test: start with continuous mode passes only run arg
    */
-  test('start with continuous mode passes only run arg', async () => {
+  test('start passes run arg', async () => {
     let capturedArgs: readonly string[] | undefined;
 
     const mockSpawn: SpawnFunction = (command, args) => {
@@ -296,25 +296,7 @@ suite('PipelineService Suite', () => {
     };
 
     const service = new PipelineService(mockSpawn);
-    await service.start('continuous');
-
-    assert.deepStrictEqual(capturedArgs, ['run']);
-    service.dispose();
-  });
-
-  /**
-   * Test: start with n-tasks mode passes only run arg
-   */
-  test('start with n-tasks mode passes only run arg', async () => {
-    let capturedArgs: readonly string[] | undefined;
-
-    const mockSpawn: SpawnFunction = (command, args) => {
-      capturedArgs = args;
-      return mockChild as any;
-    };
-
-    const service = new PipelineService(mockSpawn);
-    await service.start('n-tasks', 5);
+    await service.start();
 
     assert.deepStrictEqual(capturedArgs, ['run']);
     service.dispose();
@@ -332,7 +314,7 @@ suite('PipelineService Suite', () => {
     };
 
     const service = new PipelineService(mockSpawn);
-    await service.start('single-cycle');
+    await service.start();
 
     assert.strictEqual(capturedCommand, 'workflow');
     service.dispose();
@@ -355,7 +337,7 @@ suite('PipelineService Suite', () => {
     };
 
     const service = new PipelineService(mockSpawn);
-    await service.start('single-cycle');
+    await service.start();
 
     // Wait for async fallback
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -376,7 +358,7 @@ suite('PipelineService Suite', () => {
       logs.push(log);
     });
     
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     // Simulate stderr output
     mockChild.stderr.emit('data', Buffer.from('error message'));
@@ -389,7 +371,7 @@ suite('PipelineService Suite', () => {
    * Test: dispose stops pipeline and removes listeners
    */
   test('dispose stops pipeline and removes listeners', async () => {
-    await pipelineService.start('single-cycle');
+    await pipelineService.start();
     
     pipelineService.dispose();
     

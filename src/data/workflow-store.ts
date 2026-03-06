@@ -15,6 +15,7 @@ import {
   Ticket,
   Plan,
   Report,
+  ReviewEntry,
   WorkflowConfig,
   PipelineConfig,
   TicketStatus
@@ -131,20 +132,24 @@ export class WorkflowStore {
    * Scan tickets for a specific status folder
    */
   private async scanTicketsForStatus(workflowRoot: string, status: TicketStatus): Promise<void> {
-    const statusDir = path.join(workflowRoot, '.workflow', 'tickets', status);
+    const statusDir = path.join(workflowRoot, 'tickets', status);
 
     try {
       const entries = await fs.readdir(statusDir, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith('.md')) {
+        if (entry.isFile() && entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
           const filePath = path.join(statusDir, entry.name);
           try {
             const content = await fs.readFile(filePath, 'utf-8');
-            const { frontmatter } = parseFrontmatter<Ticket>(content);
+            const { frontmatter, body } = parseFrontmatter<Ticket>(content);
+            if (!frontmatter.id) { continue; }
+
+            // Parse review entries from body
+            const reviews = WorkflowStore.parseReviews(body);
 
             // Ensure the ticket has the correct status from the folder
-            const ticket = { ...frontmatter, status };
+            const ticket: Ticket = { ...frontmatter, status, ...(reviews.length > 0 ? { reviews } : {}) };
             this.tickets.set(ticket.id, ticket);
           } catch (error) {
             console.error(`Failed to parse ticket ${filePath}:`, error);
@@ -160,25 +165,52 @@ export class WorkflowStore {
   }
 
   /**
+   * Parse review entries from ticket markdown body.
+   * Expects a table under ## Ревью or ## Review with rows like:
+   * | date | ✅ passed / ❌ failed | summary |
+   */
+  static parseReviews(body: string): ReviewEntry[] {
+    const sectionMatch = body.match(/## (?:Ревью|Review)([\s\S]*?)(?=\n## |\n---|\s*$)/);
+    if (!sectionMatch) { return []; }
+
+    const section = sectionMatch[1];
+    const reviews: ReviewEntry[] = [];
+    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(?:✅|❌)\s*(passed|failed)\s*\|\s*([^|]*)\|/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = rowRegex.exec(section)) !== null) {
+      reviews.push({
+        date: match[1],
+        status: match[2] as 'passed' | 'failed',
+        summary: match[3].trim()
+      });
+    }
+
+    return reviews;
+  }
+
+  /**
    * Scan plans from current and archive folders
    */
   private async scanPlans(workflowRoot: string): Promise<void> {
     const planDirs = [
-      path.join(workflowRoot, '.workflow', 'plans', 'current'),
-      path.join(workflowRoot, '.workflow', 'plans', 'archive')
+      path.join(workflowRoot, 'plans', 'current'),
+      path.join(workflowRoot, 'plans', 'archive')
     ];
 
     for (const planDir of planDirs) {
+      const folder = planDir.endsWith('current') ? 'current' as const : 'archive' as const;
       try {
         const entries = await fs.readdir(planDir, { withFileTypes: true });
 
         for (const entry of entries) {
-          if (entry.isFile() && entry.name.endsWith('.md')) {
+          if (entry.isFile() && entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
             const filePath = path.join(planDir, entry.name);
             try {
               const content = await fs.readFile(filePath, 'utf-8');
               const { frontmatter } = parseFrontmatter<Plan>(content);
-              this.plans.set(frontmatter.id, frontmatter);
+              if (!frontmatter.id) { continue; }
+              this.plans.set(frontmatter.id, { ...frontmatter, folder });
             } catch (error) {
               console.error(`Failed to parse plan ${filePath}:`, error);
             }
@@ -197,17 +229,18 @@ export class WorkflowStore {
    * Scan reports from reports folder
    */
   private async scanReports(workflowRoot: string): Promise<void> {
-    const reportsDir = path.join(workflowRoot, '.workflow', 'reports');
+    const reportsDir = path.join(workflowRoot, 'reports');
 
     try {
       const entries = await fs.readdir(reportsDir, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith('.md')) {
+        if (entry.isFile() && entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
           const filePath = path.join(reportsDir, entry.name);
           try {
             const content = await fs.readFile(filePath, 'utf-8');
             const { frontmatter } = parseFrontmatter<Report>(content);
+            if (!frontmatter.id) { continue; }
             this.reports.push(frontmatter);
           } catch (error) {
             console.error(`Failed to parse report ${filePath}:`, error);
@@ -421,16 +454,14 @@ export class WorkflowStore {
    * Get plans from current folder only
    */
   getCurrentPlans(): Plan[] {
-    // Plans in 'current' folder typically have no completed_at date
-    return Array.from(this.plans.values()).filter(p => !p.completed_at);
+    return Array.from(this.plans.values()).filter(p => p.folder === 'current');
   }
 
   /**
    * Get plans from archive folder only
    */
   getArchivedPlans(): Plan[] {
-    // Plans in 'archive' folder typically have a completed_at date
-    return Array.from(this.plans.values()).filter(p => !!p.completed_at);
+    return Array.from(this.plans.values()).filter(p => p.folder === 'archive');
   }
 
   /**

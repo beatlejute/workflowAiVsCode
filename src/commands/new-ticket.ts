@@ -19,7 +19,7 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
       { label: 'FIX', description: vscode.l10n.t('Bug fix') },
       { label: 'DOCS', description: vscode.l10n.t('Documentation') },
       { label: 'REVIEW', description: vscode.l10n.t('Code review') },
-      { label: 'PLAN', description: vscode.l10n.t('Planning task') },
+      { label: 'ARCH', description: vscode.l10n.t('Architecture task') },
       { label: 'ADMIN', description: vscode.l10n.t('Administrative task') }
     ],
     {
@@ -57,7 +57,7 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
     const workflowRoot = ticketService.getWorkflowRoot();
     if (workflowRoot) {
       const ticketPath = vscode.Uri.file(
-        path.join(workflowRoot, '.workflow', 'tickets', 'backlog', `${ticket.id}.md`)
+        path.join(workflowRoot, 'tickets', 'backlog', `${ticket.id}.md`)
       );
       await vscode.commands.executeCommand('vscode.open', ticketPath);
     }

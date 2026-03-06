@@ -30,7 +30,7 @@ suite('FrontmatterParser Suite', () => {
     });
     
     test('should parse a real plan from PLAN-004.md', () => {
-      const planPath = path.join(__dirname, '../../../../.workflow/plans/current/PLAN-004.md');
+      const planPath = path.join(__dirname, '../../../../.workflow/plans/archive/PLAN-004.md');
       const content = fs.readFileSync(planPath, 'utf-8');
       
       const result = parse<Plan>(content);
@@ -185,7 +185,7 @@ Body`;
     });
     
     test('roundtrip: parse → serialize → parse should produce identical result for plan', () => {
-      const planPath = path.join(__dirname, '../../../../.workflow/plans/current/PLAN-004.md');
+      const planPath = path.join(__dirname, '../../../../.workflow/plans/archive/PLAN-004.md');
       const originalContent = fs.readFileSync(planPath, 'utf-8');
       
       const first = parse<Plan>(originalContent);

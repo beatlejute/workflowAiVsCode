@@ -47,7 +47,7 @@ export class TicketTreeItem extends SidebarTreeItem {
     super(label, vscode.TreeItemCollapsibleState.None, 'ticket', ticket.id);
 
     this.description = description;
-    this.tooltip = `${ticket.id}: ${ticket.title}\n${vscode.l10n.t('Status')}: ${ticket.status}\n${vscode.l10n.t('Priority')}: ${ticket.priority}`;
+    this.tooltip = buildTicketTooltip(ticket);
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'ticket';
 
@@ -69,7 +69,7 @@ export class StatusGroupTreeItem extends SidebarTreeItem {
     public readonly count: number
   ) {
     const label = `${status} (${count})`;
-    super(label, vscode.TreeItemCollapsibleState.Collapsed, 'status-group', status);
+    super(label, vscode.TreeItemCollapsibleState.Expanded, 'status-group', status);
     
     this.contextValue = 'status-group';
   }
@@ -154,18 +154,53 @@ export class ReportTreeItem extends SidebarTreeItem {
 }
 
 /**
+ * Build a rich tooltip for a ticket tree item
+ */
+function buildTicketTooltip(ticket: Ticket): vscode.MarkdownString {
+  const md = new vscode.MarkdownString();
+  md.isTrusted = true;
+
+  md.appendMarkdown(`**${ticket.id}: ${ticket.title}**\n\n`);
+  md.appendMarkdown(`| ${vscode.l10n.t('Field')} | ${vscode.l10n.t('Value')} |\n|---|---|\n`);
+  md.appendMarkdown(`| **${vscode.l10n.t('Status')}** | ${ticket.status} |\n`);
+  md.appendMarkdown(`| **${vscode.l10n.t('Priority')}** | ${ticket.priority} |\n`);
+  md.appendMarkdown(`| **${vscode.l10n.t('Type')}** | ${ticket.type} |\n`);
+
+  if (ticket.dependencies?.length) {
+    md.appendMarkdown(`| **${vscode.l10n.t('Deps')}** | ${ticket.dependencies.join(', ')} |\n`);
+  }
+  if (ticket.parent_plan) {
+    md.appendMarkdown(`| **${vscode.l10n.t('Plan')}** | ${ticket.parent_plan} |\n`);
+  }
+  if (ticket.context?.notes) {
+    md.appendMarkdown(`\n**${vscode.l10n.t('Notes')}:** ${ticket.context.notes}\n`);
+  }
+
+  if (ticket.reviews?.length) {
+    md.appendMarkdown(`\n**${vscode.l10n.t('Review')}:**\n\n`);
+    md.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+    for (const r of ticket.reviews) {
+      const icon = r.status === 'passed' ? '✅' : '❌';
+      md.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
+    }
+  }
+
+  return md;
+}
+
+/**
  * Get theme icon based on ticket priority
  */
 function getTicketIcon(priority: number): vscode.ThemeIcon {
   // Priority 1 = Critical, 5 = Low
   if (priority <= 1) {
-    return new vscode.ThemeIcon('error', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
   } else if (priority === 2) {
-    return new vscode.ThemeIcon('warning', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
   } else if (priority === 3) {
-    return new vscode.ThemeIcon('info', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
   } else {
-    return new vscode.ThemeIcon('check', new vscode.ThemeColor('terminal.ansiGreen'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('terminal.ansiGreen'));
   }
 }
 
@@ -267,10 +302,10 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
     // Create status groups (only show groups with tickets)
     const groups: SidebarTreeItem[] = [];
     const statusOrder: TicketStatus[] = [
+      TicketStatus.Blocked,
       TicketStatus.Backlog,
       TicketStatus.Ready,
       TicketStatus.InProgress,
-      TicketStatus.Blocked,
       TicketStatus.Review,
       TicketStatus.Done
     ];
@@ -370,8 +405,8 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   private getPlanGroups(): Thenable<SidebarTreeItem[]> {
     const plans = this.store.getPlans();
     
-    const currentPlans = plans.filter(p => !p.completed_at);
-    const archivedPlans = plans.filter(p => !!p.completed_at);
+    const currentPlans = plans.filter(p => p.folder === 'current');
+    const archivedPlans = plans.filter(p => p.folder === 'archive');
 
     const groups: SidebarTreeItem[] = [];
     
@@ -392,9 +427,7 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   private getPlansForGroup(groupType: 'current' | 'archive'): Thenable<SidebarTreeItem[]> {
     const plans = this.store.getPlans();
     
-    const filteredPlans = groupType === 'current'
-      ? plans.filter(p => !p.completed_at)
-      : plans.filter(p => !!p.completed_at);
+    const filteredPlans = plans.filter(p => p.folder === groupType);
     
     // Sort by ID
     filteredPlans.sort((a, b) => a.id.localeCompare(b.id));
@@ -471,7 +504,7 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
     const reports = this.store.getReports();
     
     // Sort by created_at descending (newest first)
-    reports.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    reports.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
     
     const items = reports.map(
       report => new ReportTreeItem(report, this.workflowRoot!)

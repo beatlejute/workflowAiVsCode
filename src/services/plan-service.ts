@@ -90,7 +90,7 @@ export class PlanService {
     const nextId = await this.generateNextPlanId();
 
     // Read template
-    const templatePath = path.join(this.workflowRoot, '.workflow', 'templates', 'plan-template.md');
+    const templatePath = path.join(this.workflowRoot, 'templates', 'plan-template.md');
     let templateContent: string;
 
     try {
@@ -122,7 +122,7 @@ export class PlanService {
     const fileContent = this.generatePlanFileContent(newPlan, body);
 
     // Save to plans/current/
-    const plansDir = path.join(this.workflowRoot, '.workflow', 'plans', 'current');
+    const plansDir = path.join(this.workflowRoot, 'plans', 'current');
     const filePath = path.join(plansDir, nextId + '.md');
 
     // Ensure directory exists
@@ -345,12 +345,13 @@ export class PlanService {
       ...plan,
       status: 'archived',
       completed_at: now,
-      updated_at: now
+      updated_at: now,
+      folder: 'archive'
     };
 
     // File paths
-    const currentDir = path.join(this.workflowRoot, '.workflow', 'plans', 'current');
-    const archiveDir = path.join(this.workflowRoot, '.workflow', 'plans', 'archive');
+    const currentDir = path.join(this.workflowRoot, 'plans', 'current');
+    const archiveDir = path.join(this.workflowRoot, 'plans', 'archive');
     const currentPath = path.join(currentDir, id + '.md');
     const archivePath = path.join(archiveDir, id + '.md');
 

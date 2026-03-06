@@ -18,6 +18,8 @@ import * as path from 'path';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
 
+export type KanbanSortMode = 'priority' | 'id' | 'title';
+
 /**
  * Tree item representing a ticket in the Kanban board
  */
@@ -38,7 +40,6 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     // Command to open ticket file on click
     const ticketPath = path.join(
       workflowRoot,
-      '.workflow',
       'tickets',
       ticket.status,
       `${ticket.id}.md`
@@ -82,7 +83,16 @@ function createTicketTooltip(ticket: Ticket): vscode.MarkdownString {
   markdown.appendMarkdown(`| **${vscode.l10n.t('Parent Plan')}** | ${ticket.parent_plan} |\n`);
 
   if (ticket.context?.notes) {
-    markdown.appendMarkdown(`\n---\n\n**${vscode.l10n.t('Notes')}:**\n${ticket.context.notes}`);
+    markdown.appendMarkdown(`\n---\n\n**${vscode.l10n.t('Notes')}:**\n${ticket.context.notes}\n`);
+  }
+
+  if (ticket.reviews?.length) {
+    markdown.appendMarkdown(`\n**${vscode.l10n.t('Review')}:**\n\n`);
+    markdown.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+    for (const r of ticket.reviews) {
+      const icon = r.status === 'passed' ? '✅' : '❌';
+      markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
+    }
   }
 
   return markdown;
@@ -94,13 +104,13 @@ function createTicketTooltip(ticket: Ticket): vscode.MarkdownString {
 function getTicketIcon(priority: number): vscode.ThemeIcon {
   // Priority 1 = Critical, 5 = Low
   if (priority <= 1) {
-    return new vscode.ThemeIcon('error', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
   } else if (priority === 2) {
-    return new vscode.ThemeIcon('warning', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
   } else if (priority === 3) {
-    return new vscode.ThemeIcon('info', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
   } else {
-    return new vscode.ThemeIcon('check', new vscode.ThemeColor('terminal.ansiGreen'));
+    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('terminal.ansiGreen'));
   }
 }
 
@@ -113,6 +123,7 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   readonly onDidChangeTreeData: vscode.Event<KanbanTicketTreeItem | undefined> = this._onDidChangeTreeData.event;
 
   private workflowRoot: string | null = null;
+  private sortMode: KanbanSortMode = 'priority';
 
   constructor(
     private readonly store: WorkflowStore,
@@ -131,6 +142,14 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
    */
   setWorkflowRoot(root: string): void {
     this.workflowRoot = root;
+    this.refresh();
+  }
+
+  /**
+   * Set sort mode and refresh
+   */
+  setSortMode(mode: KanbanSortMode): void {
+    this.sortMode = mode;
     this.refresh();
   }
 
@@ -171,8 +190,18 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   private getTicketsForStatus(): Thenable<KanbanTicketTreeItem[]> {
     const tickets = this.store.getTicketsByStatus(this.status);
 
-    // Sort by priority (ascending, 1 = highest priority first)
-    tickets.sort((a, b) => a.priority - b.priority);
+    switch (this.sortMode) {
+      case 'id':
+        tickets.sort((a, b) => a.id.localeCompare(b.id));
+        break;
+      case 'title':
+        tickets.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'priority':
+      default:
+        tickets.sort((a, b) => a.priority - b.priority);
+        break;
+    }
 
     const items = tickets.map(
       ticket => new KanbanTicketTreeItem(ticket, this.workflowRoot!)

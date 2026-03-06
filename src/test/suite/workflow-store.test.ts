@@ -200,7 +200,7 @@ reporting:
       createTicketFile(path.join(ticketsDir, 'review'), 'REVIEW-001', 'review', 'Review Ticket');
       createTicketFile(path.join(ticketsDir, 'done'), 'DONE-001', 'done', 'Done Ticket');
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       assert.strictEqual(store.getTickets().length, 6, 'Should load 6 tickets');
       assert.ok(store.getTicketById('BACKLOG-001'), 'Should find backlog ticket');
@@ -218,7 +218,7 @@ reporting:
       // Create a ticket - status should be overridden by folder name
       createTicketFile(path.join(ticketsDir, 'ready'), 'TEST-001', 'backlog', 'Test Ticket');
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const ticket = store.getTicketById('TEST-001');
       assert.strictEqual(ticket?.status, TicketStatus.Ready, 'Status should match folder, not frontmatter');
@@ -231,7 +231,7 @@ reporting:
       createPlanFile(path.join(plansDir, 'current'), 'PLAN-001', 'Current Plan', false);
       createPlanFile(path.join(plansDir, 'archive'), 'PLAN-002', 'Archived Plan', true);
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       assert.strictEqual(store.getPlans().length, 2, 'Should load 2 plans');
       assert.ok(store.getPlanById('PLAN-001'), 'Should find current plan');
@@ -245,7 +245,7 @@ reporting:
       createReportFile(reportsDir, 'REPORT-001', 'Sprint Report 1');
       createReportFile(reportsDir, 'REPORT-002', 'Sprint Report 2');
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       assert.strictEqual(store.getReports().length, 2, 'Should load 2 reports');
       assert.ok(store.getReportById('REPORT-001'), 'Should find first report');
@@ -256,7 +256,7 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       assert.ok(store.getConfig(), 'Should load workflow config');
       assert.ok(store.getPipeline(), 'Should load pipeline config');
@@ -272,7 +272,7 @@ reporting:
 
       // Should not throw even though ticket folders don't exist
       await assert.doesNotReject(async () => {
-        await store.refresh(testDir);
+        await store.refresh(path.join(testDir, '.workflow'));
       });
 
       // Should have empty data
@@ -292,7 +292,7 @@ reporting:
 
       // Should not throw, should skip invalid file
       await assert.doesNotReject(async () => {
-        await store.refresh(testDir);
+        await store.refresh(path.join(testDir, '.workflow'));
       });
 
       // Should still load valid tickets
@@ -314,7 +314,7 @@ reporting:
         events.push(event);
       });
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       // Should emit refresh events for each type
       assert.ok(events.length >= 3, 'Should emit multiple refresh events');
@@ -337,7 +337,7 @@ reporting:
         events.push(event);
       });
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const configRefresh = events.find(e => e.type === 'config' && e.operation === 'refresh');
       assert.ok(configRefresh, 'Should emit config refresh event');
@@ -354,7 +354,7 @@ reporting:
         events.push(event);
       });
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const ticketRefresh = events.find(e => e.type === 'ticket' && e.operation === 'refresh');
       assert.strictEqual(ticketRefresh?.id, undefined, 'Refresh event should not have id');
@@ -756,30 +756,30 @@ reporting:
       assert.strictEqual(found?.title, 'Test Plan', 'Should return correct plan');
     });
 
-    test('getCurrentPlans should return only non-completed plans', async () => {
+    test('getCurrentPlans should return only current-folder plans', async () => {
       const plans: Plan[] = [
-        { id: 'P1', title: 'Current Plan', status: 'active', author: 'Author', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [] },
-        { id: 'P2', title: 'Archived Plan', status: 'archived', author: 'Author', created_at: '', updated_at: '', completed_at: '2026-03-04T12:00:00Z', previous_plan: '', related_reports: [] }
+        { id: 'P1', title: 'Current Plan', status: 'active', author: 'Author', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [], folder: 'current' },
+        { id: 'P2', title: 'Archived Plan', status: 'archived', author: 'Author', created_at: '', updated_at: '', completed_at: '2026-03-04T12:00:00Z', previous_plan: '', related_reports: [], folder: 'archive' }
       ];
 
       plans.forEach(p => store.addPlan(p));
 
       const current = store.getCurrentPlans();
       assert.strictEqual(current.length, 1, 'Should return 1 current plan');
-      assert.strictEqual(current[0].id, 'P1', 'Should return the non-completed plan');
+      assert.strictEqual(current[0].id, 'P1', 'Should return the current-folder plan');
     });
 
-    test('getArchivedPlans should return only completed plans', async () => {
+    test('getArchivedPlans should return only archive-folder plans', async () => {
       const plans: Plan[] = [
-        { id: 'P1', title: 'Current Plan', status: 'active', author: 'Author', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [] },
-        { id: 'P2', title: 'Archived Plan', status: 'archived', author: 'Author', created_at: '', updated_at: '', completed_at: '2026-03-04T12:00:00Z', previous_plan: '', related_reports: [] }
+        { id: 'P1', title: 'Current Plan', status: 'active', author: 'Author', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [], folder: 'current' },
+        { id: 'P2', title: 'Archived Plan', status: 'archived', author: 'Author', created_at: '', updated_at: '', completed_at: '2026-03-04T12:00:00Z', previous_plan: '', related_reports: [], folder: 'archive' }
       ];
 
       plans.forEach(p => store.addPlan(p));
 
       const archived = store.getArchivedPlans();
       assert.strictEqual(archived.length, 1, 'Should return 1 archived plan');
-      assert.strictEqual(archived[0].id, 'P2', 'Should return the completed plan');
+      assert.strictEqual(archived[0].id, 'P2', 'Should return the archive-folder plan');
     });
 
     test('getReports should return all reports', async () => {
@@ -814,7 +814,7 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const config = store.getConfig();
       assert.ok(config, 'Should return config');
@@ -825,7 +825,7 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const pipeline = store.getPipeline();
       assert.ok(pipeline, 'Should return pipeline');
@@ -893,7 +893,7 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
       const stats = store.getStats();
 
@@ -905,9 +905,104 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
-      assert.strictEqual(store.getWorkflowRoot(), testDir, 'Should return workflow root');
+      assert.strictEqual(store.getWorkflowRoot(), path.join(testDir, '.workflow'), 'Should return workflow root');
+    });
+  });
+
+  suite('parseReviews() - Review Parsing', () => {
+
+    test('should parse review entries from ## Ревью section', () => {
+      const body = `## Описание\nSome text\n\n## Ревью\n\n| Дата | Статус | Самари |\n|------|--------|--------|\n| 2026-03-06 | ❌ failed | Задача не выполнена |\n`;
+      const reviews = WorkflowStore.parseReviews(body);
+
+      assert.strictEqual(reviews.length, 1);
+      assert.strictEqual(reviews[0].date, '2026-03-06');
+      assert.strictEqual(reviews[0].status, 'failed');
+      assert.strictEqual(reviews[0].summary, 'Задача не выполнена');
+    });
+
+    test('should parse review entries from ## Review section', () => {
+      const body = `## Description\n\n## Review\n\n| Date | Status | Summary |\n|---|---|---|\n| 2026-03-05 | ✅ passed | All checks passed |\n`;
+      const reviews = WorkflowStore.parseReviews(body);
+
+      assert.strictEqual(reviews.length, 1);
+      assert.strictEqual(reviews[0].date, '2026-03-05');
+      assert.strictEqual(reviews[0].status, 'passed');
+      assert.strictEqual(reviews[0].summary, 'All checks passed');
+    });
+
+    test('should parse multiple review entries', () => {
+      const body = `## Ревью\n\n| Дата | Статус | Самари |\n|---|---|---|\n| 2026-03-05 | ❌ failed | First attempt |\n| 2026-03-06 | ✅ passed | Fixed |\n`;
+      const reviews = WorkflowStore.parseReviews(body);
+
+      assert.strictEqual(reviews.length, 2);
+      assert.strictEqual(reviews[0].status, 'failed');
+      assert.strictEqual(reviews[1].status, 'passed');
+    });
+
+    test('should return empty array when no review section', () => {
+      const body = `## Описание\nSome text\n`;
+      const reviews = WorkflowStore.parseReviews(body);
+
+      assert.strictEqual(reviews.length, 0);
+    });
+
+    test('should return empty array when review section has no table rows', () => {
+      const body = `## Ревью\n\n| Дата | Статус | Самари |\n|---|---|---|\n`;
+      const reviews = WorkflowStore.parseReviews(body);
+
+      assert.strictEqual(reviews.length, 0);
+    });
+
+    test('should load reviews into ticket on refresh', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const frontmatter = {
+        id: 'TEST-001',
+        title: 'Test Ticket',
+        status: 'blocked',
+        priority: 3,
+        type: 'DOCS',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: ''
+      };
+
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Описание\nTest\n\n## Ревью\n\n| Дата | Статус | Самари |\n|---|---|---|\n| 2026-03-06 | ❌ failed | Not done |\n`;
+      fs.writeFileSync(path.join(ticketsDir, 'blocked', 'TEST-001.md'), content, 'utf-8');
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const ticket = store.getTicketById('TEST-001');
+      assert.ok(ticket, 'Ticket should be loaded');
+      assert.ok(ticket?.reviews, 'Ticket should have reviews');
+      assert.strictEqual(ticket?.reviews?.length, 1);
+      assert.strictEqual(ticket?.reviews?.[0].status, 'failed');
+      assert.strictEqual(ticket?.reviews?.[0].summary, 'Not done');
+    });
+
+    test('should not set reviews when ticket has no review section', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      createTicketFile(path.join(ticketsDir, 'ready'), 'TEST-002', 'ready', 'No Review Ticket');
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const ticket = store.getTicketById('TEST-002');
+      assert.ok(ticket, 'Ticket should be loaded');
+      assert.strictEqual(ticket?.reviews, undefined, 'Should not have reviews');
     });
   });
 });

@@ -253,7 +253,7 @@ export class ConfigManager {
       return this.workflowConfig;
     }
 
-    const configPath = path.join(workflowRoot, '.workflow', 'config', 'config.yaml');
+    const configPath = path.join(workflowRoot, 'config', 'config.yaml');
     const data = await this.readYamlFile(configPath);
     
     // Validate against schema
@@ -277,7 +277,7 @@ export class ConfigManager {
       return this.pipelineConfig;
     }
 
-    const pipelinePath = path.join(workflowRoot, '.workflow', 'config', 'pipeline.yaml');
+    const pipelinePath = path.join(workflowRoot, 'config', 'pipeline.yaml');
     const data = await this.readYamlFile(pipelinePath);
     
     // Validate against schema

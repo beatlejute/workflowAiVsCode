@@ -35,6 +35,32 @@ suite('TicketService Transitions Suite', () => {
     fs.mkdirSync(path.join(workflowRoot, 'plans', 'current'), { recursive: true });
     fs.mkdirSync(path.join(workflowRoot, 'plans', 'archive'), { recursive: true });
     fs.mkdirSync(path.join(workflowRoot, 'reports'), { recursive: true });
+    fs.mkdirSync(path.join(workflowRoot, 'templates'), { recursive: true });
+
+    // Create minimal ticket template
+    fs.writeFileSync(path.join(workflowRoot, 'templates', 'ticket-template.md'), `---
+id: "{TYPE}-{NNN}"
+title: ""
+status: backlog
+priority: 3
+type: implementation
+dependencies: []
+conditions: []
+context:
+  files: []
+  references: []
+  notes: ""
+complexity: medium
+tags: []
+parent_plan: ""
+parent_task: ""
+created_at: ""
+updated_at: ""
+completed_at: ""
+---
+
+## Описание
+`, 'utf-8');
 
     // Create ticket service
     ticketService = new TicketService(store, workflowRoot);
@@ -61,44 +87,49 @@ suite('TicketService Transitions Suite', () => {
       assert.ok(transitions.includes(TicketStatus.Ready));
     });
 
-    test('should return [in-progress, review] for ready status', () => {
+    test('should return [in-progress, review, backlog] for ready status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Ready);
 
-      assert.strictEqual(transitions.length, 2);
+      assert.strictEqual(transitions.length, 3);
       assert.ok(transitions.includes(TicketStatus.InProgress));
       assert.ok(transitions.includes(TicketStatus.Review));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
-    test('should return [review, blocked, done] for in-progress status', () => {
+    test('should return [review, blocked, done, backlog] for in-progress status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.InProgress);
 
-      assert.strictEqual(transitions.length, 3);
+      assert.strictEqual(transitions.length, 4);
       assert.ok(transitions.includes(TicketStatus.Review));
       assert.ok(transitions.includes(TicketStatus.Blocked));
       assert.ok(transitions.includes(TicketStatus.Done));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
-    test('should return [done, in-progress, ready, blocked] for review status', () => {
+    test('should return [done, in-progress, ready, blocked, backlog] for review status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Review);
 
-      assert.strictEqual(transitions.length, 4);
+      assert.strictEqual(transitions.length, 5);
       assert.ok(transitions.includes(TicketStatus.Done));
       assert.ok(transitions.includes(TicketStatus.InProgress));
       assert.ok(transitions.includes(TicketStatus.Ready));
       assert.ok(transitions.includes(TicketStatus.Blocked));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
-    test('should return [ready] for blocked status', () => {
+    test('should return [ready, backlog] for blocked status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
 
-      assert.strictEqual(transitions.length, 1);
+      assert.strictEqual(transitions.length, 2);
       assert.ok(transitions.includes(TicketStatus.Ready));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
-    test('should return [] for done status (terminal state)', () => {
+    test('should return [backlog] for done status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Done);
 
-      assert.strictEqual(transitions.length, 0);
+      assert.strictEqual(transitions.length, 1);
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
     test('should return [] for unknown status', () => {
@@ -163,9 +194,14 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(isValid, true);
     });
 
-    test('should return false for invalid transition blocked -> backlog', () => {
+    test('should return true for valid transition blocked -> backlog', () => {
       const isValid = ticketService.isValidTransition(TicketStatus.Blocked, TicketStatus.Backlog);
-      assert.strictEqual(isValid, false);
+      assert.strictEqual(isValid, true);
+    });
+
+    test('should return true for valid transition done -> backlog', () => {
+      const isValid = ticketService.isValidTransition(TicketStatus.Done, TicketStatus.Backlog);
+      assert.strictEqual(isValid, true);
     });
 
     test('should return false for invalid transition backlog -> in-progress', () => {
@@ -173,12 +209,10 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(isValid, false);
     });
 
-    test('should return false for invalid transition done -> any', () => {
-      const isValidBacklog = ticketService.isValidTransition(TicketStatus.Done, TicketStatus.Backlog);
+    test('should return false for invalid transition done -> ready', () => {
       const isValidReady = ticketService.isValidTransition(TicketStatus.Done, TicketStatus.Ready);
       const isValidInProgress = ticketService.isValidTransition(TicketStatus.Done, TicketStatus.InProgress);
 
-      assert.strictEqual(isValidBacklog, false);
       assert.strictEqual(isValidReady, false);
       assert.strictEqual(isValidInProgress, false);
     });
@@ -198,13 +232,14 @@ suite('TicketService Transitions Suite', () => {
         description: `Move to ${s}`
       }));
 
-      assert.strictEqual(menuItems.length, 3);
+      assert.strictEqual(menuItems.length, 4);
       assert.ok(menuItems.some(item => item.label === TicketStatus.Review));
       assert.ok(menuItems.some(item => item.label === TicketStatus.Blocked));
       assert.ok(menuItems.some(item => item.label === TicketStatus.Done));
+      assert.ok(menuItems.some(item => item.label === TicketStatus.Backlog));
     });
 
-    test('context menu should be empty for done ticket', () => {
+    test('context menu should have backlog option for done ticket', () => {
       const status = TicketStatus.Done;
       const transitions = ticketService.getValidTransitions(status);
 
@@ -213,7 +248,8 @@ suite('TicketService Transitions Suite', () => {
         description: `Move to ${s}`
       }));
 
-      assert.strictEqual(menuItems.length, 0);
+      assert.strictEqual(menuItems.length, 1);
+      assert.ok(menuItems.some(item => item.label === TicketStatus.Backlog));
     });
 
     test('context menu items should match valid transitions for ready ticket', () => {
@@ -226,9 +262,10 @@ suite('TicketService Transitions Suite', () => {
         description: `Move to ${s}`
       }));
 
-      assert.strictEqual(menuItems.length, 2);
+      assert.strictEqual(menuItems.length, 3);
       assert.ok(menuItems.some(item => item.label === TicketStatus.InProgress));
       assert.ok(menuItems.some(item => item.label === TicketStatus.Review));
+      assert.ok(menuItems.some(item => item.label === TicketStatus.Backlog));
     });
 
     test('inline actions should use first valid transition for move next', () => {
@@ -277,9 +314,10 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(updatedTicket.status, TicketStatus.Ready);
 
       transitions = ticketService.getValidTransitions(updatedTicket.status);
-      assert.strictEqual(transitions.length, 2);
+      assert.strictEqual(transitions.length, 3);
       assert.ok(transitions.includes(TicketStatus.InProgress));
       assert.ok(transitions.includes(TicketStatus.Review));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
 
       // Move to in-progress
       await ticketService.move(ticket.id, TicketStatus.InProgress);
@@ -288,10 +326,11 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(inProgressTicket.status, TicketStatus.InProgress);
 
       transitions = ticketService.getValidTransitions(inProgressTicket.status);
-      assert.strictEqual(transitions.length, 3);
+      assert.strictEqual(transitions.length, 4);
       assert.ok(transitions.includes(TicketStatus.Review));
       assert.ok(transitions.includes(TicketStatus.Blocked));
       assert.ok(transitions.includes(TicketStatus.Done));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
 
       // Move to done
       await ticketService.move(ticket.id, TicketStatus.Done);
@@ -300,7 +339,8 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(doneTicket.status, TicketStatus.Done);
 
       transitions = ticketService.getValidTransitions(doneTicket.status);
-      assert.strictEqual(transitions.length, 0);
+      assert.strictEqual(transitions.length, 1);
+      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
     test('should handle blocked workflow: in-progress -> blocked -> ready -> in-progress', async () => {
@@ -315,10 +355,11 @@ suite('TicketService Transitions Suite', () => {
       assert.ok(blockedTicket);
       assert.strictEqual(blockedTicket.status, TicketStatus.Blocked);
 
-      // Verify transitions from blocked - only ready is allowed
+      // Verify transitions from blocked
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
-      assert.strictEqual(transitions.length, 1);
+      assert.strictEqual(transitions.length, 2);
       assert.ok(transitions.includes(TicketStatus.Ready));
+      assert.ok(transitions.includes(TicketStatus.Backlog));
 
       // Unblock to ready
       await ticketService.move(ticket.id, TicketStatus.Ready);

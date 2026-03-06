@@ -56,12 +56,38 @@ const hover_provider_1 = require("./ui/hover-provider");
 const status_bar_1 = require("./ui/status-bar");
 const notifications_1 = require("./ui/notifications");
 const ticket_service_1 = require("./services/ticket-service");
+const file_watcher_service_1 = require("./services/file-watcher-service");
 const dependency_service_1 = require("./services/dependency-service");
 const new_ticket_1 = require("./commands/new-ticket");
 const show_dependencies_1 = require("./commands/show-dependencies");
 const show_statistics_1 = require("./commands/show-statistics");
 const index_1 = require("./commands/index");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
+/**
+ * Extract ticket ID from a command argument.
+ * When invoked from tree view context menus, VS Code passes the tree item object.
+ * When invoked programmatically, a plain string is passed.
+ */
+function resolveTicketId(arg) {
+    if (typeof arg === 'string') {
+        return arg;
+    }
+    if (arg && typeof arg === 'object') {
+        // TicketTreeItem has .ticket.id, KanbanTicketTreeItem has .ticket.id
+        const item = arg;
+        if (item.ticket && typeof item.ticket === 'object') {
+            const ticket = item.ticket;
+            if (typeof ticket.id === 'string') {
+                return ticket.id;
+            }
+        }
+        // SidebarTreeItem has .id directly
+        if (typeof item.id === 'string') {
+            return item.id;
+        }
+    }
+    return undefined;
+}
 /**
  * Check if workflow CLI is installed on the system.
  * Uses platform-specific commands: 'which' on Unix, 'where' on Windows.
@@ -184,7 +210,12 @@ async function initWorkflow() {
         try {
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!workspaceRoot) {
-                throw new Error('No workspace folder open');
+                const open = vscode.l10n.t('Open Folder');
+                const result = await vscode.window.showWarningMessage(vscode.l10n.t('Please open a folder first to initialize Workflow.'), open);
+                if (result === open) {
+                    await vscode.commands.executeCommand('vscode.openFolder');
+                }
+                return;
             }
             // Try 'workflow init' first, fallback to 'workflow-ai init' if binary not found
             try {
@@ -237,7 +268,7 @@ async function activate(context) {
     if (workspaceRoot && checkWorkflowDir()) {
         workflowRoot = path.join(workspaceRoot, '.workflow');
         // Refresh store with workflow data
-        store.refresh(workflowRoot).catch(err => {
+        await store.refresh(workflowRoot).catch(err => {
             console.error('Failed to refresh workflow store:', err);
         });
     }
@@ -296,10 +327,25 @@ async function activate(context) {
     };
     // Initial title update
     updateKanbanTitles();
-    // Subscribe to store changes to update titles
+    // Subscribe to store changes to update titles and refresh all tree providers
     store.onDidChange(() => {
         updateKanbanTitles();
+        ticketsProvider.refresh();
+        plansProvider.refresh();
+        reportsProvider.refresh();
+        pipelineProvider.refresh();
+        kanbanProviders.backlog.refresh();
+        kanbanProviders.ready.refresh();
+        kanbanProviders.inProgress.refresh();
+        kanbanProviders.blocked.refresh();
+        kanbanProviders.review.refresh();
+        kanbanProviders.done.refresh();
     });
+    // Start file watcher for automatic refresh on external changes
+    if (workflowRoot) {
+        const fileWatcher = new file_watcher_service_1.FileWatcherService(store, workflowRoot);
+        context.subscriptions.push(fileWatcher);
+    }
     // Register diagnostic provider for real-time validation
     const diagnosticProvider = new diagnostic_provider_1.DiagnosticProvider(store);
     context.subscriptions.push(diagnosticProvider);
@@ -360,7 +406,8 @@ async function activate(context) {
     /**
      * Open ticket command - opens ticket file in editor
      */
-    const openTicketCmd = registerCommandSafe('workflow.openTicket', async (ticketId) => {
+    const openTicketCmd = registerCommandSafe('workflow.openTicket', async (arg) => {
+        let ticketId = resolveTicketId(arg);
         if (!ticketId) {
             // Try to get from active editor or selection
             const editor = vscode.window.activeTextEditor;
@@ -389,7 +436,8 @@ async function activate(context) {
     /**
      * Move ticket command - opens QuickPick to select target status
      */
-    const moveTicketCmd = registerCommandSafe('workflow.moveTicket', async (ticketId) => {
+    const moveTicketCmd = registerCommandSafe('workflow.moveTicket', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         if (!ticketService || !ticketId) {
             vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available or no ticket ID provided'));
             return;
@@ -428,7 +476,8 @@ async function activate(context) {
     /**
      * Move ticket from menu command - same as moveTicket but for context menu
      */
-    const moveTicketFromMenuCmd = registerCommandSafe('workflow.moveTicketFromMenu', async (ticketId) => {
+    const moveTicketFromMenuCmd = registerCommandSafe('workflow.moveTicketFromMenu', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         // Reuse the moveTicket command logic
         await vscode.commands.executeCommand('workflow.moveTicket', ticketId);
     });
@@ -436,7 +485,8 @@ async function activate(context) {
      * Move ticket next command - moves ticket to next valid status in workflow
      * Uses TicketService.getValidTransitions() to determine next status
      */
-    const moveTicketNextCmd = registerCommandSafe('workflow.moveTicketNext', async (ticketId) => {
+    const moveTicketNextCmd = registerCommandSafe('workflow.moveTicketNext', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         if (!ticketService || !ticketId) {
             vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available or no ticket ID provided'));
             return;
@@ -466,7 +516,8 @@ async function activate(context) {
     /**
      * Edit ticket command - opens ticket file for editing
      */
-    const editTicketCmd = registerCommandSafe('workflow.editTicket', async (ticketId) => {
+    const editTicketCmd = registerCommandSafe('workflow.editTicket', async (arg) => {
+        let ticketId = resolveTicketId(arg);
         if (!ticketId) {
             // Try to get from active editor or selection
             const editor = vscode.window.activeTextEditor;
@@ -495,7 +546,8 @@ async function activate(context) {
     /**
      * Show dependencies command - shows dependencies in a view
      */
-    const showDependenciesCmd = registerCommandSafe('workflow.showDependencies', async (ticketId) => {
+    const showDependenciesCmd = registerCommandSafe('workflow.showDependencies', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         if (!dependencyService || !ticketId) {
             vscode.window.showErrorMessage(vscode.l10n.t('Dependency service not available or no ticket ID provided'));
             return;
@@ -520,55 +572,9 @@ async function activate(context) {
     /**
      * Show ticket dependencies command - alias for context menu
      */
-    const showTicketDependenciesCmd = registerCommandSafe('workflow.showTicketDependencies', async (ticketId) => {
+    const showTicketDependenciesCmd = registerCommandSafe('workflow.showTicketDependencies', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         await vscode.commands.executeCommand('workflow.showDependencies', ticketId);
-    });
-    /**
-     * Create ticket command - opens input to create new ticket
-     */
-    const createTicketCmd = registerCommandSafe('workflow.createTicket', async () => {
-        if (!ticketService) {
-            vscode.window.showErrorMessage(vscode.l10n.t('Ticket service not available'));
-            return;
-        }
-        // Get ticket type
-        const type = await vscode.window.showQuickPick([
-            { label: 'IMPL', description: vscode.l10n.t('Implementation task') },
-            { label: 'FIX', description: vscode.l10n.t('Bug fix') },
-            { label: 'DOCS', description: vscode.l10n.t('Documentation') },
-            { label: 'REVIEW', description: vscode.l10n.t('Code review') },
-            { label: 'PLAN', description: vscode.l10n.t('Planning task') },
-            { label: 'ADMIN', description: vscode.l10n.t('Administrative task') }
-        ], {
-            placeHolder: vscode.l10n.t('Select ticket type'),
-            title: vscode.l10n.t('Create New Ticket')
-        });
-        if (!type) {
-            return; // User cancelled
-        }
-        // Get title
-        const title = await vscode.window.showInputBox({
-            prompt: vscode.l10n.t('Enter ticket title'),
-            placeHolder: vscode.l10n.t('e.g., Add feature X'),
-            title: vscode.l10n.t('Create New Ticket'),
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return vscode.l10n.t('Title is required');
-                }
-                return undefined;
-            }
-        });
-        if (!title) {
-            return; // User cancelled
-        }
-        try {
-            const ticket = await ticketService.create(type.label, title);
-            vscode.window.showInformationMessage(vscode.l10n.t('Created ticket {0}: {1}', ticket.id, ticket.title));
-        }
-        catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            vscode.window.showErrorMessage(vscode.l10n.t('Failed to create ticket: {0}', message));
-        }
     });
     /**
      * Refresh tickets command - refreshes the tickets tree view
@@ -583,42 +589,30 @@ async function activate(context) {
     /**
      * Sort Kanban by priority command
      */
+    const setAllKanbanSortMode = (mode) => {
+        kanbanProviders.backlog.setSortMode(mode);
+        kanbanProviders.ready.setSortMode(mode);
+        kanbanProviders.inProgress.setSortMode(mode);
+        kanbanProviders.blocked.setSortMode(mode);
+        kanbanProviders.review.setSortMode(mode);
+        kanbanProviders.done.setSortMode(mode);
+    };
     const sortKanbanByPriorityCmd = registerCommandSafe('workflow.sortKanbanByPriority', async () => {
-        // Refresh all kanban providers (they will re-sort by priority by default)
-        kanbanProviders.backlog.refresh();
-        kanbanProviders.ready.refresh();
-        kanbanProviders.inProgress.refresh();
-        kanbanProviders.blocked.refresh();
-        kanbanProviders.review.refresh();
-        kanbanProviders.done.refresh();
+        setAllKanbanSortMode('priority');
         vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by priority'));
     });
     /**
      * Sort Kanban by ID command
      */
     const sortKanbanByIdCmd = registerCommandSafe('workflow.sortKanbanById', async () => {
-        // Note: This would require modifying the provider to support different sort modes
-        // For now, just refresh to show the default sorting
-        kanbanProviders.backlog.refresh();
-        kanbanProviders.ready.refresh();
-        kanbanProviders.inProgress.refresh();
-        kanbanProviders.blocked.refresh();
-        kanbanProviders.review.refresh();
-        kanbanProviders.done.refresh();
+        setAllKanbanSortMode('id');
         vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by ID'));
     });
     /**
      * Sort Kanban by title command
      */
     const sortKanbanByTitleCmd = registerCommandSafe('workflow.sortKanbanByTitle', async () => {
-        // Note: This would require modifying the provider to support different sort modes
-        // For now, just refresh to show the default sorting
-        kanbanProviders.backlog.refresh();
-        kanbanProviders.ready.refresh();
-        kanbanProviders.inProgress.refresh();
-        kanbanProviders.blocked.refresh();
-        kanbanProviders.review.refresh();
-        kanbanProviders.done.refresh();
+        setAllKanbanSortMode('title');
         vscode.window.showInformationMessage(vscode.l10n.t('Kanban boards sorted by title'));
     });
     /**
@@ -691,7 +685,8 @@ async function activate(context) {
     /**
      * workflow.showDependencies command - shows ticket dependencies
      */
-    const showDependenciesCmdNew = registerCommandSafe('workflow.showDependencies', async (ticketId) => {
+    const showDependenciesCmdNew = registerCommandSafe('workflow.showDependencies', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         if (!dependencyService) {
             vscode.window.showErrorMessage(vscode.l10n.t('Dependency service not available'));
             return;
@@ -749,10 +744,11 @@ async function activate(context) {
     /**
      * workflow.copyTicketId command - copies ticket ID to clipboard
      */
-    const copyTicketIdCmd = registerCommandSafe('workflow.copyTicketId', async (ticketId) => {
+    const copyTicketIdCmd = registerCommandSafe('workflow.copyTicketId', async (arg) => {
+        const ticketId = resolveTicketId(arg);
         await (0, index_1.executeCopyTicketId)(ticketId);
     });
-    context.subscriptions.push(installCliCmd, initCmd, openTicketCmd, moveTicketCmd, moveTicketFromMenuCmd, moveTicketNextCmd, editTicketCmd, showDependenciesCmd, showTicketDependenciesCmd, createTicketCmd, refreshTicketsCmd, sortKanbanByPriorityCmd, sortKanbanByIdCmd, sortKanbanByTitleCmd, gotoReviewSectionCmd, startPipelineCmd, stopPipelineCmd, showPipelineOutputCmd, clearPipelineHistoryCmd, statusBarClickCmd, newTicketCmd, newPlanCmd, showDependenciesCmdNew, showStatisticsCmd, openPipelineConfigCmd, openConfigCmd, focusTicketsViewCmd, focusKanbanCmd, refreshAllCmd, copyTicketIdCmd, notificationsManager);
+    context.subscriptions.push(installCliCmd, initCmd, openTicketCmd, moveTicketCmd, moveTicketFromMenuCmd, moveTicketNextCmd, editTicketCmd, showDependenciesCmd, showTicketDependenciesCmd, refreshTicketsCmd, sortKanbanByPriorityCmd, sortKanbanByIdCmd, sortKanbanByTitleCmd, gotoReviewSectionCmd, startPipelineCmd, stopPipelineCmd, showPipelineOutputCmd, clearPipelineHistoryCmd, statusBarClickCmd, newTicketCmd, newPlanCmd, showDependenciesCmdNew, showStatisticsCmd, openPipelineConfigCmd, openConfigCmd, focusTicketsViewCmd, focusKanbanCmd, refreshAllCmd, copyTicketIdCmd, notificationsManager);
     const activationTime = Date.now() - startTime;
     console.log(`Workflow AI extension activated in ${activationTime}ms`);
 }

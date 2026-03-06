@@ -8,7 +8,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const projectRoot = path.join(__dirname, '../../../');
+const projectRoot = path.join(__dirname, '../../../../');
 
 /**
  * Load JSON file safely

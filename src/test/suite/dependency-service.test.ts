@@ -143,7 +143,7 @@ reporting:
    */
   async function loadTickets(dir: string) {
     createConfigFiles(path.join(testDir, '.workflow', 'config'));
-    await store.refresh(testDir);
+    await store.refresh(path.join(testDir, '.workflow'));
   }
 
   // ==================== Direct Dependencies ====================
@@ -566,7 +566,7 @@ reporting:
 
       const result = dependencyService.canMoveToReady('A-001');
       assert.strictEqual(result.ok, false, 'Should not be ready');
-      assert.ok(result.blockers.some(b => b.includes('not found')), 'Should indicate dependency not found');
+      assert.ok(result.blockers.some(b => b.includes('not exist')), 'Should indicate dependency does not exist');
     });
   });
 

@@ -119,7 +119,7 @@ reporting:
   setup(async () => {
     // Initialize store
     store = new WorkflowStore();
-    await store.refresh(tempWorkflowRoot);
+    await store.refresh(path.join(tempWorkflowRoot, '.workflow'));
 
     // Create diagnostic provider
     diagnosticProvider = new DiagnosticProvider(store);

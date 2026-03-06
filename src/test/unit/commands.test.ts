@@ -111,10 +111,10 @@ TODO
 
     // Initialize store
     store = new WorkflowStore();
-    await store.refresh(tempWorkflowRoot);
+    await store.refresh(path.join(tempWorkflowRoot, '.workflow'));
 
     // Initialize services
-    ticketService = new TicketService(store, tempWorkflowRoot);
+    ticketService = new TicketService(store, path.join(tempWorkflowRoot, '.workflow'));
     dependencyService = new DependencyService(store);
   });
 
@@ -233,7 +233,7 @@ TODO
     test('should refresh store data', async () => {
       const initialStats = store.getStats();
       
-      await store.refresh(tempWorkflowRoot);
+      await store.refresh(path.join(tempWorkflowRoot, '.workflow'));
       
       const finalStats = store.getStats();
       assert.ok(finalStats.ticketCount >= initialStats.ticketCount);

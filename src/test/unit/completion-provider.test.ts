@@ -133,7 +133,7 @@ reporting:
 
     // Initialize store
     store = new WorkflowStore();
-    await store.refresh(tempWorkflowRoot);
+    await store.refresh(path.join(tempWorkflowRoot, '.workflow'));
   });
 
   suiteTeardown(() => {

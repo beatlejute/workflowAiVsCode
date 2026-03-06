@@ -55,13 +55,13 @@
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
-          "id": "workflow-sidebar.tickets",
-          "name": "%views.sidebar.tickets.name%",
+          "id": "workflow-sidebar.plans",
+          "name": "%views.sidebar.plans.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
-          "id": "workflow-sidebar.plans",
-          "name": "%views.sidebar.plans.name%",
+          "id": "workflow-sidebar.tickets",
+          "name": "%views.sidebar.tickets.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
@@ -93,11 +93,6 @@
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
-          "id": "wf-kanban-blocked",
-          "name": "%views.kanban.blocked.name%",
-          "when": "workflow.cliInstalled && workflow.workflowFound"
-        },
-        {
           "id": "wf-kanban-review",
           "name": "%views.kanban.review.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
@@ -106,19 +101,29 @@
           "id": "wf-kanban-done",
           "name": "%views.kanban.done.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "wf-kanban-blocked",
+          "name": "%views.kanban.blocked.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "workflow-sidebar.welcome",
-        "contents": "%views.welcome.content.install%\n[%views.welcome.action.install%](command:workflow.installCli)",
+        "contents": "Workflow CLI is not installed.\n[Install workflow-ai](command:workflow.installCli)",
         "when": "!workflow.cliInstalled"
       },
       {
         "view": "workflow-sidebar.welcome",
-        "contents": "%views.welcome.content.directory%\n[%views.welcome.action.init%](command:workflow.init)",
-        "when": "workflow.cliInstalled && !workflow.workflowFound"
+        "contents": "Workflow directory not found.\n[Initialize Workflow](command:workflow.init)",
+        "when": "workflow.cliInstalled && !workflow.workflowFound && workspaceFolderCount != 0"
+      },
+      {
+        "view": "workflow-sidebar.welcome",
+        "contents": "Open a folder to get started.\n[Open Folder](command:vscode.openFolder)",
+        "when": "workspaceFolderCount == 0"
       }
     ],
     "commands": [
@@ -161,12 +166,6 @@
         "title": "%command.showTicketDependencies.title%",
         "category": "%category.workflow%",
         "icon": "$(git-pull-request)"
-      },
-      {
-        "command": "workflow.createTicket",
-        "title": "%command.createTicket.title%",
-        "category": "%category.workflow%",
-        "icon": "$(add)"
       },
       {
         "command": "workflow.refreshTickets",
@@ -328,22 +327,12 @@
           "group": "navigation"
         },
         {
-          "command": "workflow.createTicket",
-          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
-          "group": "navigation"
-        },
-        {
           "command": "workflow.refreshTickets",
           "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },
         {
           "command": "workflow.newTicket",
-          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
-          "group": "navigation"
-        },
-        {
-          "command": "workflow.createTicket",
           "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },
@@ -404,12 +393,7 @@
           "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "inline"
         },
-        {
-          "command": "workflow.editTicket",
-          "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
-          "group": "inline"
-        },
-        {
+{
           "command": "workflow.moveTicketFromMenu",
           "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_move"
@@ -434,12 +418,7 @@
           "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "inline"
         },
-        {
-          "command": "workflow.editTicket",
-          "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
-          "group": "inline"
-        },
-        {
+{
           "command": "workflow.moveTicketFromMenu",
           "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_move"
@@ -523,6 +502,7 @@
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "package": "node esbuild.config.mjs --production",
+    "package:vsix": "vsce package",
     "lint": "eslint src/",
     "lint:i18n": "node scripts/check-i18n.js",
     "i18n:lint": "ts-node scripts/i18n-lint.ts",

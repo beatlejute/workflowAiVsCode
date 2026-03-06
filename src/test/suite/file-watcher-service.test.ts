@@ -160,9 +160,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
 
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       assert.ok(watcher, 'FileWatcherService should be created');
     });
@@ -172,7 +172,7 @@ reporting:
 
     test('should classify ticket creation in ready folder', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const uri = vscode.Uri.file(path.join(testDir, '.workflow', 'tickets', 'ready', 'TEST-001.md'));
       
@@ -183,7 +183,7 @@ reporting:
 
     test('should classify plan file in current folder', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const uri = vscode.Uri.file(path.join(testDir, '.workflow', 'plans', 'current', 'PLAN-001.md'));
       
@@ -192,7 +192,7 @@ reporting:
 
     test('should classify report file', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const uri = vscode.Uri.file(path.join(testDir, '.workflow', 'reports', 'REPORT-001.md'));
       
@@ -201,7 +201,7 @@ reporting:
 
     test('should classify config file', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const uri = vscode.Uri.file(path.join(testDir, '.workflow', 'config', 'config.yaml'));
       
@@ -215,9 +215,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const { ticketsDir } = { ticketsDir: path.join(testDir, '.workflow', 'tickets', 'ready') };
 
@@ -238,9 +238,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const { ticketsDir } = { ticketsDir: path.join(testDir, '.workflow', 'tickets', 'ready') };
 
@@ -265,9 +265,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const initialTicketCount = store.getTickets().length;
 
@@ -289,9 +289,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
       
@@ -313,9 +313,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
       const initialCount = store.getTickets().length;
@@ -333,9 +333,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
       
@@ -360,9 +360,9 @@ reporting:
       createTestStructure(testDir);
       createConfigFiles(path.join(testDir, '.workflow', 'config'));
       
-      await store.refresh(testDir);
+      await store.refresh(path.join(testDir, '.workflow'));
       
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
       
@@ -387,7 +387,7 @@ reporting:
 
     test('should dispose file watcher and clear timers', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       // Dispose should not throw
       assert.doesNotThrow(() => {
@@ -405,7 +405,7 @@ reporting:
 
     test('should watch .md files in .workflow directory', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       // Verify watcher is created (indirectly tested)
       assert.ok(watcher, 'Watcher should be created for .md files');
@@ -413,14 +413,14 @@ reporting:
 
     test('should watch .yaml files in .workflow directory', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       assert.ok(watcher, 'Watcher should be created for .yaml files');
     });
 
     test('should watch .yml files in .workflow directory', () => {
       createTestStructure(testDir);
-      watcher = new FileWatcherService(store, testDir);
+      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
 
       assert.ok(watcher, 'Watcher should be created for .yml files');
     });

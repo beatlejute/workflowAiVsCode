@@ -24,7 +24,7 @@ suite('PlanService Suite', () => {
   setup(() => {
     store = new WorkflowStore();
     testDir = path.join(__dirname, '../../../../tmp/test-planservice-' + Date.now());
-    planService = new PlanService(store, testDir);
+    planService = new PlanService(store, path.join(testDir, '.workflow'));
   });
 
   teardown(async () => {
@@ -107,7 +107,8 @@ related_reports: []
       updated_at: '2026-03-04T00:00:00Z',
       completed_at: completed ? '2026-03-04T12:00:00Z' : '',
       previous_plan: '',
-      related_reports: []
+      related_reports: [],
+      folder: completed ? 'archive' : 'current'
     };
     store.addPlan(plan);
     return plan;

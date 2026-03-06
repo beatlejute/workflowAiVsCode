@@ -25,7 +25,7 @@ suite('TicketService Suite', () => {
     store = new WorkflowStore();
     testDir = path.join(__dirname, '../../../../tmp/test-ticketservice-' + Date.now());
     // spawn function is no longer used after replacing callWfMove with moveTicketDirect
-    ticketService = new TicketService(store, testDir);
+    ticketService = new TicketService(store, path.join(testDir, '.workflow'));
   });
 
   teardown(async () => {
@@ -67,7 +67,7 @@ suite('TicketService Suite', () => {
 # Шаблон тикета для универсальной системы координации агентов
 # Скопируйте этот файл и заполните поля
 
-id: "{TYPE}-{NNN}"              # IMPL-001, FIX-015, PLAN-003
+id: "{TYPE}-{NNN}"              # IMPL-001, FIX-015, ARCH-003
 title: "Название задачи"
 status: backlog                  # backlog | ready | in-progress | blocked | review | done
 priority: 3                      # 1-критический, 2-высокий, 3-средний, 4-низкий, 5-когда-нибудь
@@ -288,41 +288,46 @@ tags: []
     test('should return valid transitions from ready', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Ready);
 
-      assert.strictEqual(transitions.length, 2, 'Should have 2 valid transitions');
+      assert.strictEqual(transitions.length, 3, 'Should have 3 valid transitions');
       assert.ok(transitions.includes(TicketStatus.InProgress), 'Should allow transition to in-progress');
       assert.ok(transitions.includes(TicketStatus.Review), 'Should allow transition to review');
+      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
 
     test('should return valid transitions from in-progress', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.InProgress);
 
-      assert.strictEqual(transitions.length, 3, 'Should have 3 valid transitions');
+      assert.strictEqual(transitions.length, 4, 'Should have 4 valid transitions');
       assert.ok(transitions.includes(TicketStatus.Review), 'Should allow transition to review');
       assert.ok(transitions.includes(TicketStatus.Blocked), 'Should allow transition to blocked');
       assert.ok(transitions.includes(TicketStatus.Done), 'Should allow transition to done');
+      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
 
     test('should return valid transitions from review', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Review);
 
-      assert.strictEqual(transitions.length, 4, 'Should have 4 valid transitions');
+      assert.strictEqual(transitions.length, 5, 'Should have 5 valid transitions');
       assert.ok(transitions.includes(TicketStatus.Done), 'Should allow transition to done');
       assert.ok(transitions.includes(TicketStatus.InProgress), 'Should allow transition to in-progress');
       assert.ok(transitions.includes(TicketStatus.Ready), 'Should allow transition to ready');
       assert.ok(transitions.includes(TicketStatus.Blocked), 'Should allow transition to blocked');
+      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
 
     test('should return valid transitions from blocked', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
 
-      assert.strictEqual(transitions.length, 1, 'Should have 1 valid transition');
+      assert.strictEqual(transitions.length, 2, 'Should have 2 valid transitions');
       assert.ok(transitions.includes(TicketStatus.Ready), 'Should allow transition to ready');
+      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
 
-    test('should return no transitions from done', () => {
+    test('should return valid transitions from done', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Done);
 
-      assert.strictEqual(transitions.length, 0, 'Should have no valid transitions from done');
+      assert.strictEqual(transitions.length, 1, 'Should have 1 valid transition from done');
+      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
   });
 
@@ -343,7 +348,6 @@ tags: []
       assert.ok(!ticketService.isValidTransition(TicketStatus.Backlog, TicketStatus.Done), 'backlog → done should be invalid');
       assert.ok(!ticketService.isValidTransition(TicketStatus.Ready, TicketStatus.Done), 'ready → done should be invalid');
       assert.ok(!ticketService.isValidTransition(TicketStatus.Done, TicketStatus.Ready), 'done → ready should be invalid');
-      assert.ok(!ticketService.isValidTransition(TicketStatus.InProgress, TicketStatus.Backlog), 'in-progress → backlog should be invalid');
     });
   });
 
@@ -380,9 +384,9 @@ tags: []
 
       assert.strictEqual(fixTicket.id, 'FIX-002', 'Should generate FIX-002');
 
-      const planTicket = await ticketService.create('PLAN', 'New Plan Ticket');
+      const archTicket = await ticketService.create('ARCH', 'New Arch Ticket');
 
-      assert.strictEqual(planTicket.id, 'PLAN-001', 'Should generate PLAN-001');
+      assert.strictEqual(archTicket.id, 'ARCH-001', 'Should generate ARCH-001');
     });
 
     test('should create ticket file in backlog/', async () => {
@@ -630,11 +634,11 @@ tags: []
       // Create tickets of different types
       const implTicket = await ticketService.create('IMPL', 'Impl Ticket');
       const fixTicket = await ticketService.create('FIX', 'Fix Ticket');
-      const planTicket = await ticketService.create('PLAN', 'Plan Ticket');
+      const archTicket = await ticketService.create('ARCH', 'Arch Ticket');
 
       assert.strictEqual(implTicket.id, 'IMPL-001', 'First IMPL should be IMPL-001');
       assert.strictEqual(fixTicket.id, 'FIX-001', 'First FIX should be FIX-001');
-      assert.strictEqual(planTicket.id, 'PLAN-001', 'First PLAN should be PLAN-001');
+      assert.strictEqual(archTicket.id, 'ARCH-001', 'First ARCH should be ARCH-001');
 
       // Create more tickets to verify sequential IDs
       const implTicket2 = await ticketService.create('IMPL', 'Another Impl');
@@ -652,14 +656,19 @@ tags: []
         [TicketStatus.Backlog, TicketStatus.Ready],
         [TicketStatus.Ready, TicketStatus.InProgress],
         [TicketStatus.Ready, TicketStatus.Review],
+        [TicketStatus.Ready, TicketStatus.Backlog],
         [TicketStatus.InProgress, TicketStatus.Review],
         [TicketStatus.InProgress, TicketStatus.Blocked],
         [TicketStatus.InProgress, TicketStatus.Done],
+        [TicketStatus.InProgress, TicketStatus.Backlog],
         [TicketStatus.Review, TicketStatus.Done],
         [TicketStatus.Review, TicketStatus.InProgress],
         [TicketStatus.Review, TicketStatus.Ready],
         [TicketStatus.Review, TicketStatus.Blocked],
-        [TicketStatus.Blocked, TicketStatus.Ready]
+        [TicketStatus.Review, TicketStatus.Backlog],
+        [TicketStatus.Blocked, TicketStatus.Ready],
+        [TicketStatus.Blocked, TicketStatus.Backlog],
+        [TicketStatus.Done, TicketStatus.Backlog]
       ];
 
       for (const [from, to] of validTransitions) {
@@ -674,7 +683,6 @@ tags: []
         [TicketStatus.Backlog, TicketStatus.Done],
         [TicketStatus.Ready, TicketStatus.Done],
         [TicketStatus.Done, TicketStatus.Ready],
-        [TicketStatus.InProgress, TicketStatus.Backlog],
         [TicketStatus.Blocked, TicketStatus.Done]
       ];
 

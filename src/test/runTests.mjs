@@ -5,6 +5,9 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
+  // ELECTRON_RUN_AS_NODE makes Code.exe behave as plain Node.js, breaking VS Code test runner
+  delete process.env.ELECTRON_RUN_AS_NODE;
+
   const extensionDevelopmentPath = path.resolve(__dirname, '../../');
   // Default to unit tests if no argument provided
   const testType = process.argv[2] || 'unit';

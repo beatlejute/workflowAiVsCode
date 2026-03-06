@@ -153,7 +153,7 @@ reporting:
    */
   async function loadTickets(dir: string) {
     createConfigFiles(path.join(testDir, '.workflow', 'config'));
-    await store.refresh(testDir);
+    await store.refresh(path.join(testDir, '.workflow'));
   }
 
   /**

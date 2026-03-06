@@ -50,7 +50,6 @@ const TYPE_ICONS: Record<string, string> = {
   FIX: '🐛',
   DOCS: '📄',
   REVIEW: '🔍',
-  PLAN: '📋',
   ADMIN: '⚙️',
   ARCH: '🏗️'
 };
@@ -175,7 +174,17 @@ export class TicketHoverProvider implements vscode.HoverProvider {
 
     // Tags
     if (ticket.tags && ticket.tags.length > 0) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Tags')}:** ${ticket.tags.join(', ')}`);
+      markdown.appendMarkdown(`**${vscode.l10n.t('Tags')}:** ${ticket.tags.join(', ')}\n\n`);
+    }
+
+    // Review
+    if (ticket.reviews && ticket.reviews.length > 0) {
+      markdown.appendMarkdown(`**${vscode.l10n.t('Review')}:**\n\n`);
+      markdown.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+      for (const r of ticket.reviews) {
+        const icon = r.status === 'passed' ? '✅' : '❌';
+        markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
+      }
     }
 
     return markdown;

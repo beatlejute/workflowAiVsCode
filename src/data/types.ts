@@ -44,6 +44,15 @@ export interface TicketContext {
 }
 
 /**
+ * Review entry from the review table in ticket body
+ */
+export interface ReviewEntry {
+  date: string;
+  status: 'passed' | 'failed';
+  summary: string;
+}
+
+/**
  * Ticket interface representing a workflow task
  */
 export interface Ticket {
@@ -62,6 +71,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   completed_at: string;
+  reviews?: ReviewEntry[];
 }
 
 /**
@@ -77,6 +87,8 @@ export interface Plan {
   completed_at: string;
   previous_plan: string;
   related_reports: string[];
+  /** Which folder the plan was loaded from: 'current' or 'archive' */
+  folder?: 'current' | 'archive';
 }
 
 /**

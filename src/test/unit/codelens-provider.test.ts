@@ -652,11 +652,11 @@ Not a workflow ticket.
     test('valid transitions match state machine', () => {
       const validTransitions = {
         [TicketStatus.Backlog]: [TicketStatus.Ready],
-        [TicketStatus.Ready]: [TicketStatus.InProgress],
-        [TicketStatus.InProgress]: [TicketStatus.Review, TicketStatus.Blocked, TicketStatus.Done],
-        [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress],
+        [TicketStatus.Ready]: [TicketStatus.InProgress, TicketStatus.Review, TicketStatus.Backlog],
+        [TicketStatus.InProgress]: [TicketStatus.Review, TicketStatus.Blocked, TicketStatus.Done, TicketStatus.Backlog],
+        [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress, TicketStatus.Ready, TicketStatus.Blocked, TicketStatus.Backlog],
         [TicketStatus.Blocked]: [TicketStatus.Ready, TicketStatus.Backlog],
-        [TicketStatus.Done]: []
+        [TicketStatus.Done]: [TicketStatus.Backlog]
       };
 
       for (const [fromStatus, expectedToStatuses] of Object.entries(validTransitions)) {
