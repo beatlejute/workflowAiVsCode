@@ -211,7 +211,6 @@
   "Field \"{0}\" cannot be empty": "Field \"{0}\" cannot be empty",
   "Validation error: {0}": "Validation error: {0}",
   "Failed to read ticket ticket: {0}": "Failed to read ticket ticket: {0}",
-  "Ticket {0} not found": "Ticket {0} not found",
   "Invalid transition from {0} to {1}. Valid transitions: {2}": "Invalid transition from {0} to {1}. Valid transitions: {2}",
   "wf move failed with code {0}: {1}": "wf move failed with code {0}: {1}",
   "wf move failed: {0}": "wf move failed: {0}",

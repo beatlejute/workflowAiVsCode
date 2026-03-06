@@ -211,7 +211,6 @@
   "Field \"{0}\" cannot be empty": "字段\"{0}\"不能為空",
   "Validation error: {0}": "驗證錯誤：{0}",
   "Failed to read ticket ticket: {0}": "讀取工單失敗：{0}",
-  "Ticket {0} not found": "未找到工單 {0}",
   "Invalid transition from {0} to {1}. Valid transitions: {2}": "從 {0} 到 {1} 的轉換無效。有效轉換：{2}",
   "wf move failed with code {0}: {1}": "wf move 失敗，代碼 {0}：{1}",
   "wf move failed: {0}": "wf move 失敗：{0}",

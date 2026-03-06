@@ -2,11 +2,24 @@
   "name": "workflow-vscode",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "workflow-ai",
   "license": "MIT",
+  "icon": "assets/icon-128.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/workflow-ai/wf-vscode.git"
+  },
+  "keywords": [
+    "workflow",
+    "project-management",
+    "kanban",
+    "productivity",
+    "task-management",
+    "agile"
+  ],
   "engines": {
-    "vscode": "^1.96.0",
+    "vscode": "^1.109.0",
     "node": ">=18.0.0"
   },
   "categories": [
@@ -526,6 +539,7 @@
     "eslint": "^9.39.3",
     "glob": "^10.5.0",
     "mocha": "^10.8.2",
+    "pngjs": "^7.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"

@@ -211,7 +211,6 @@
   "Field \"{0}\" cannot be empty": "필드\"{0}\"은 (는) 비워둘 수 없습니다",
   "Validation error: {0}": "유효성 검사 오류：{0}",
   "Failed to read ticket ticket: {0}": "티켓 읽기 실패：{0}",
-  "Ticket {0} not found": "티켓 {0} 을 (를) 찾을 수 없습니다",
   "Invalid transition from {0} to {1}. Valid transitions: {2}": "{0} 에서 {1} 로의 전환이 잘못되었습니다. 유효한 전환：{2}",
   "wf move failed with code {0}: {1}": "wf move 가 코드 {0} 으로 실패했습니다：{1}",
   "wf move failed: {0}": "wf move 실패：{0}",

@@ -1,0 +1,55 @@
+# Workflow directories (dev only)
+.workflow/
+
+# Test files
+src/test/
+dist/test/
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.vsix
+
+# Source maps (optional, exclude for smaller package)
+src/**/*.map
+dist/**/*.map
+
+# TypeScript source files (only compiled JS needed)
+src/**/*.ts
+!src/extension.ts
+
+# Configuration files (not needed in runtime)
+esbuild.config.mjs
+eslint.config.mjs
+tsconfig.json
+tsconfig.test.json
+
+# IDE and editor files
+.vscode/
+.kilocode/
+.idea/
+
+# GitHub and CI
+.github/
+
+# Dev scripts (keep check-i18n.js for runtime validation)
+scripts/create-icon.js
+scripts/i18n-lint.ts
+scripts/*.d.ts
+
+# Plans and design docs (dev only)
+plans/
+
+# Documentation source (README and CHANGELOG are included)
+docs/
+
+# Logs
+*.log
+logs/
+
+# Misc
+.gitignore
+CHANGELOG.md
+QWEN.md
+CLAUDE.md

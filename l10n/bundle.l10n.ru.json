@@ -211,7 +211,6 @@
   "Field \"{0}\" cannot be empty": "Поле \"{0}\" не может быть пустым",
   "Validation error: {0}": "Ошибка валидации: {0}",
   "Failed to read ticket ticket: {0}": "Не удалось прочитать тикет: {0}",
-  "Ticket {0} not found": "Тикет {0} не найден",
   "Invalid transition from {0} to {1}. Valid transitions: {2}": "Недопустимый переход из {0} в {1}. Допустимые переходы: {2}",
   "wf move failed with code {0}: {1}": "wf move не удался с кодом {0}: {1}",
   "wf move failed: {0}": "wf move не удался: {0}",

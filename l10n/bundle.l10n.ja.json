@@ -211,7 +211,6 @@
   "Field \"{0}\" cannot be empty": "フィールド\"{0}\"は空にできません",
   "Validation error: {0}": "バリデーションエラー：{0}",
   "Failed to read ticket ticket: {0}": "チケットの読み込みに失敗しました：{0}",
-  "Ticket {0} not found": "チケット {0} が見つかりません",
   "Invalid transition from {0} to {1}. Valid transitions: {2}": "{0} から {1} への無効な遷移です。有効な遷移：{2}",
   "wf move failed with code {0}: {1}": "wf move がコード {0} で失敗しました：{1}",
   "wf move failed: {0}": "wf move が失敗しました：{0}",

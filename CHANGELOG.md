@@ -7,9 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Enhanced dependency visualization
-- Additional pipeline execution controls
+### Added
+
+#### Internationalization (Phase 3)
+- **10 language packs** — Full i18n support for en, ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br
+- **package.nls.*.json** — Localized strings for all UI elements (66 keys in base package.nls.json)
+- **l10n/bundle.l10n.json** — Extension bundle translations (179 keys)
+- **Locale detection** — Automatic language selection based on VS Code locale
+- **scripts/check-i18n.js** — Lint script for translation completeness validation
+
+#### Documentation (Phase 3)
+- **README.md** — Comprehensive extension documentation with installation, configuration, commands, and usage examples
+
+#### Testing (Phase 3)
+- **E2E test framework** — Integration tests using @vscode/test-electron
+- **17 test cases** — Comprehensive test suite covering core functionality
+- **Test fixtures** — Sample workflow files in `src/test/fixtures/.workflow/`
+- **CI/CD ready** — Test execution pipeline configuration
+
+### Fixed
+
+#### Kanban Board (FIX-002)
+- **Column header counters** — Fixed ticket counts in createTreeView implementation
+
+#### Ticket Metadata (FIX-003)
+- **IMPL-016, IMPL-021** — Fixed metadata validation for ticket frontmatter
+
+#### E2E Tests (FIX-004)
+- **Test path compilation** — Fixed relative paths in E2E test runner for Windows compatibility
+- **check-i18n test** — Fixed path handling in translation validation tests
+
+### Changed
+- None (initial release)
 
 ---
 
@@ -126,17 +155,6 @@ Initial release with comprehensive workflow management features for VS Code.
 - **workflow.cliPath** — Custom CLI executable path
 - **Context keys** — `workflow.cliInstalled`, `workflow.workflowFound`, `workflow.pipelineRunning`
 
-#### Internationalization (Phase 3)
-- **10 language packs** — Full i18n support for en, ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br
-- **package.nls.*.json** — Localized strings for all UI elements
-- **Locale detection** — Automatic language selection based on VS Code locale
-- **Externalized strings** — All user-facing messages in resource files
-
-#### Testing (Phase 3)
-- **E2E test framework** — Integration tests using @vscode/test-electron
-- **Test scaffolding** — Base structure for extension testing
-- **CI/CD ready** — Test execution pipeline configuration
-
 #### Developer Experience
 - **TypeScript** — Full type safety with strict mode
 - **ESLint** — Code quality enforcement
@@ -172,12 +190,12 @@ Initial release with comprehensive workflow management features for VS Code.
 
 ## Upcoming Releases
 
-### 0.2.0 (Planned)
-- Complete i18n for all 10 supported languages
-- E2E test suite with @vscode/test-electron
-- Enhanced pipeline visualization
-- Improved dependency graph view
-- Performance optimizations for large workflows
+### 0.2.0 (In Progress)
+- Internationalization (i18n) — 10 language packs
+- E2E test suite with @vscode/test-electron (17 test cases)
+- Translation lint script (scripts/check-i18n.js)
+- Test fixtures for workflow validation
+- Bug fixes: FIX-002 (Kanban counters), FIX-003 (ticket metadata), FIX-004 (E2E test paths)
 
 ### Future Considerations
 - Drag-and-drop ticket movement in Kanban
