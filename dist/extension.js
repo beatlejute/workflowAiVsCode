@@ -13972,9 +13972,19 @@ async function checkCliInstalled() {
       }
     }
     if (platform === "win32") {
-      await execAsync("where workflow");
+      try {
+        await execAsync("where workflow");
+        return true;
+      } catch {
+      }
+      await execAsync("where workflow-ai");
     } else {
-      await execAsync("which workflow");
+      try {
+        await execAsync("which workflow");
+        return true;
+      } catch {
+      }
+      await execAsync("which workflow-ai");
     }
     return true;
   } catch {
@@ -13987,8 +13997,8 @@ function checkWorkflowDir() {
     return false;
   }
   const workflowDir = path11.join(workspaceRoot, ".workflow");
-  const configPath = path11.join(workflowDir, "config.yaml");
-  const pipelinePath = path11.join(workflowDir, "pipeline.yaml");
+  const configPath = path11.join(workflowDir, "config", "config.yaml");
+  const pipelinePath = path11.join(workflowDir, "config", "pipeline.yaml");
   try {
     const dirExists = fs6.existsSync(workflowDir);
     const configExists = fs6.existsSync(configPath);

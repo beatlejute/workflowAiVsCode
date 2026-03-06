@@ -112,8 +112,13 @@
     "viewsWelcome": [
       {
         "view": "workflow-sidebar.welcome",
-        "contents": "%views.welcome.content.install%\n[%views.welcome.action.install%](command:workflow.installCli)\n%views.welcome.content.directory%\n[%views.welcome.action.init%](command:workflow.init)",
-        "when": "!workflow.cliInstalled || !workflow.workflowFound"
+        "contents": "%views.welcome.content.install%\n[%views.welcome.action.install%](command:workflow.installCli)",
+        "when": "!workflow.cliInstalled"
+      },
+      {
+        "view": "workflow-sidebar.welcome",
+        "contents": "%views.welcome.content.directory%\n[%views.welcome.action.init%](command:workflow.init)",
+        "when": "workflow.cliInstalled && !workflow.workflowFound"
       }
     ],
     "commands": [

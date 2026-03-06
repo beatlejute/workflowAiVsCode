@@ -59,11 +59,23 @@ export async function checkCliInstalled(): Promise<boolean> {
       }
     }
 
-    // Platform-specific detection
+    // Platform-specific detection with fallback to workflow-ai
     if (platform === 'win32') {
-      await execAsync('where workflow');
+      try {
+        await execAsync('where workflow');
+        return true;
+      } catch {
+        // fallthrough to workflow-ai
+      }
+      await execAsync('where workflow-ai');
     } else {
-      await execAsync('which workflow');
+      try {
+        await execAsync('which workflow');
+        return true;
+      } catch {
+        // fallthrough to workflow-ai
+      }
+      await execAsync('which workflow-ai');
     }
     return true;
   } catch {
@@ -82,8 +94,8 @@ export function checkWorkflowDir(): boolean {
   }
 
   const workflowDir = path.join(workspaceRoot, '.workflow');
-  const configPath = path.join(workflowDir, 'config.yaml');
-  const pipelinePath = path.join(workflowDir, 'pipeline.yaml');
+  const configPath = path.join(workflowDir, 'config', 'config.yaml');
+  const pipelinePath = path.join(workflowDir, 'config', 'pipeline.yaml');
 
   try {
     const dirExists = fs.existsSync(workflowDir);
