@@ -90,7 +90,7 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
     const lenses: vscode.CodeLens[] = [];
 
     // Parse frontmatter to get ticket data
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return [];
     }
@@ -289,7 +289,8 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
     const fileName = document.fileName;
 
     // Ticket .md files
-    if (fileName.includes('.workflow/tickets/') && fileName.endsWith('.md')) {
+    const normalizedPath = fileName.replace(/\\/g, '/');
+    if (normalizedPath.includes('.workflow/tickets/') && normalizedPath.endsWith('.md')) {
       return this.ticketProvider.provideCodeLenses(document);
     }
 

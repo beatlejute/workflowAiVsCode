@@ -80,13 +80,14 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
     public readonly attempt?: number,
     public readonly maxAttempts?: number
   ) {
-    const label = `$(gear) ${stage}`;
     super(
-      label,
+      stage,
       vscode.TreeItemCollapsibleState.None,
       'current-stage',
       'current-stage'
     );
+
+    this.iconPath = new vscode.ThemeIcon('gear~spin');
 
     const agentInfo = agent ? `${vscode.l10n.t('Agent')}: ${agent}` : '';
     const ticketInfo = ticket ? `${vscode.l10n.t('Ticket')}: ${ticket}` : '';
@@ -459,37 +460,52 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       // Add timestamp and write to output channel
       const timestamp = new Date().toLocaleTimeString();
       const logEntry = `[${timestamp}] ${log}`;
-      
+
       if (this.outputChannel) {
         this.outputChannel.appendLine(logEntry);
       }
-      
+
       // Parse log for stage transitions and update state
-      this.parseLogForState(log);
+      let changed = false;
+      const lines = log.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          if (this.parseLogLine(trimmed)) {
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        this.refresh();
+      }
     });
   }
 
   /**
-   * Parse log entries to update stage tracking
-   * 
+   * Parse a single log line to update stage tracking.
+   * Returns true if any state changed (caller should refresh).
+   *
    * Real CLI format:
    * [2024-01-01T12:00:00] [INFO] [stage-name] message
    * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
    * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
    * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
-  private parseLogForState(log: string): void {
-    // Pattern: [timestamp] [LEVEL] [stage] message
-    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-    const baseMatch = log.match(basePattern);
+  private parseLogLine(line: string): boolean {
+    // Strip ANSI escape codes (CLI outputs colored text)
+    const clean = line.replace(/\x1b\[[0-9;]*m/g, '');
+
+    // Pattern: [timestamp] [LEVEL] [stage] message (date separator: T or space)
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = clean.match(basePattern);
 
     if (!baseMatch) {
-      // Fallback to legacy parsing
-      this.parseLogForStateLegacy(log);
-      return;
+      return this.parseLogLineLegacy(line);
     }
 
-    const [, timestamp, level, stage, message] = baseMatch;
+    const [, _timestamp, level, _stage, message] = baseMatch;
 
     // Parse GOTO: [timestamp] [INFO] [stage] GOTO next-stage
     const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
@@ -498,7 +514,6 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       const gotoStage = gotoMatch[1];
       const elapsed = gotoMatch[2];
 
-      // Mark previous stage as completed if exists
       if (this.currentStage) {
         this.completedStages.set(this.currentStage, {
           elapsed: this.elapsed,
@@ -509,16 +524,16 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       this.currentStage = gotoStage;
       this.elapsed = elapsed;
       this.stagesStarted++;
-      return;
+      return true;
     }
 
     // Parse START: [timestamp] [INFO] [stage] START stage="X" agent="Y" skill="Z"
     const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
-    if (startMatch) {
+    if (startMatch && (startMatch[1] || startMatch[2] || startMatch[3])) {
       if (startMatch[1]) this.currentStage = startMatch[1];
       if (startMatch[2]) this.currentAgent = startMatch[2];
       if (startMatch[3]) this.currentSkill = startMatch[3];
-      return;
+      return true;
     }
 
     // Parse RETRY: [timestamp] [WARN] [stage] RETRY stage="X" attempt=N/M
@@ -528,38 +543,42 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       this.currentAttempt = parseInt(retryMatch[2], 10);
       this.currentMaxAttempts = parseInt(retryMatch[3], 10);
       this.retries++;
-      return;
+      return true;
     }
 
     // Generic info - extract agent/ticket from message if present
     if (level === 'INFO') {
+      let changed = false;
       const agentMatch = message.match(/agent:\s*([^,]+)/);
       const ticketMatch = message.match(/ticket:\s*([A-Z]+-\d+)/);
       const retryInfoMatch = message.match(/retry:\s*(\d+)\/(\d+)/);
 
-      if (agentMatch) this.currentAgent = agentMatch[1].trim();
-      if (ticketMatch) this.currentTicket = ticketMatch[1];
+      if (agentMatch) { this.currentAgent = agentMatch[1].trim(); changed = true; }
+      if (ticketMatch) { this.currentTicket = ticketMatch[1]; changed = true; }
       if (retryInfoMatch) {
         this.currentAttempt = parseInt(retryInfoMatch[1], 10);
         this.currentMaxAttempts = parseInt(retryInfoMatch[2], 10);
         this.retries++;
+        changed = true;
       }
+      return changed;
     }
+
+    return false;
   }
 
   /**
-   * Legacy parser for old format (fallback)
+   * Legacy parser for old format (fallback).
+   * Returns true if any state changed.
    */
-  private parseLogForStateLegacy(log: string): void {
-    // Track GOTO transitions
-    if (log.includes('[GOTO]')) {
-      this.gotos++;
-      const gotoMatch = log.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
-      if (gotoMatch) {
-        const stage = gotoMatch[1];
-        const elapsed = gotoMatch[2];
+  private parseLogLineLegacy(line: string): boolean {
+    let changed = false;
 
-        // Mark previous stage as completed if exists
+    // Track GOTO transitions
+    if (line.includes('[GOTO]')) {
+      this.gotos++;
+      const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+      if (gotoMatch) {
         if (this.currentStage) {
           this.completedStages.set(this.currentStage, {
             elapsed: this.elapsed,
@@ -567,45 +586,53 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
           });
         }
 
-        this.currentStage = stage;
-        this.elapsed = elapsed;
+        this.currentStage = gotoMatch[1];
+        this.elapsed = gotoMatch[2];
         this.stagesStarted++;
+        changed = true;
       }
     }
 
     // Track INFO with agent/ticket/retry
-    if (log.includes('[INFO]')) {
-      const infoMatch = log.match(/\[INFO\](?:\s+agent:\s*([^,]+))?(?:\s*,?\s*ticket:\s*([A-Z]+-\d+))?(?:\s*,?\s*retry:\s*(\d+)\/(\d+))?/);
+    if (line.includes('[INFO]')) {
+      const infoMatch = line.match(/\[INFO\](?:\s+agent:\s*([^,]+))?(?:\s*,?\s*ticket:\s*([A-Z]+-\d+))?(?:\s*,?\s*retry:\s*(\d+)\/(\d+))?/);
       if (infoMatch) {
-        if (infoMatch[1]) this.currentAgent = infoMatch[1].trim();
-        if (infoMatch[2]) this.currentTicket = infoMatch[2];
+        if (infoMatch[1]) { this.currentAgent = infoMatch[1].trim(); changed = true; }
+        if (infoMatch[2]) { this.currentTicket = infoMatch[2]; changed = true; }
         if (infoMatch[3]) {
           this.currentAttempt = parseInt(infoMatch[3], 10);
           this.currentMaxAttempts = parseInt(infoMatch[4], 10);
           this.retries++;
+          changed = true;
         }
       }
 
       // Retry only
-      const retryOnlyMatch = log.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
-      if (retryOnlyMatch) {
-        this.currentAttempt = parseInt(retryOnlyMatch[1], 10);
-        this.currentMaxAttempts = parseInt(retryOnlyMatch[2], 10);
-        this.retries++;
+      if (!changed) {
+        const retryOnlyMatch = line.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
+        if (retryOnlyMatch) {
+          this.currentAttempt = parseInt(retryOnlyMatch[1], 10);
+          this.currentMaxAttempts = parseInt(retryOnlyMatch[2], 10);
+          this.retries++;
+          changed = true;
+        }
       }
     }
 
     // Track CTX for skill info
-    if (log.includes('[CTX]')) {
-      const ctxMatch = log.match(/\[CTX\]\s+([^:]+):\s*(.+)/);
+    if (line.includes('[CTX]')) {
+      const ctxMatch = line.match(/\[CTX\]\s+([^:]+):\s*(.+)/);
       if (ctxMatch) {
         const key = ctxMatch[1].trim();
         const value = ctxMatch[2].trim();
         if (key.toLowerCase() === 'skill') {
           this.currentSkill = value;
+          changed = true;
         }
       }
     }
+
+    return changed;
   }
 
   /**
@@ -650,8 +677,25 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     }
 
     if (element.itemType === 'statistics') {
-      // Statistics has no children in this implementation
-      return Promise.resolve([]);
+      const stats = element as StatisticsTreeItem;
+      const items: PipelineTreeItem[] = [];
+
+      const addStat = (label: string, value: number, icon: string, id: string) => {
+        const item = new PipelineTreeItem(
+          `${label}: ${value}`,
+          vscode.TreeItemCollapsibleState.None,
+          'statistics',
+          id
+        );
+        item.iconPath = new vscode.ThemeIcon(icon);
+        items.push(item);
+      };
+
+      addStat(vscode.l10n.t('Stages Started'), stats.stagesStarted, 'play', 'stat-stages');
+      addStat(vscode.l10n.t('Retries'), stats.retries, 'refresh', 'stat-retries');
+      addStat(vscode.l10n.t('Goto Transitions'), stats.gotos, 'arrow-right', 'stat-gotos');
+
+      return Promise.resolve(items);
     }
 
     if (element.itemType === 'history') {

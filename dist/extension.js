@@ -10565,8 +10565,9 @@ var PipelineService = class extends import_events3.EventEmitter {
    * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   parseLine(line) {
-    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-    const baseMatch = line.match(basePattern);
+    const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = clean.match(basePattern);
     if (!baseMatch) {
       return this.parseLineLegacy(line);
     }
@@ -10711,9 +10712,8 @@ var PipelineRunTreeItem = class extends PipelineTreeItem {
 };
 var CurrentStageTreeItem = class extends PipelineTreeItem {
   constructor(stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts) {
-    const label = `$(gear) ${stage}`;
     super(
-      label,
+      stage,
       vscode3.TreeItemCollapsibleState.None,
       "current-stage",
       "current-stage"
@@ -10725,6 +10725,7 @@ var CurrentStageTreeItem = class extends PipelineTreeItem {
     this.ticket = ticket;
     this.attempt = attempt;
     this.maxAttempts = maxAttempts;
+    this.iconPath = new vscode3.ThemeIcon("gear~spin");
     const agentInfo = agent ? `${vscode3.l10n.t("Agent")}: ${agent}` : "";
     const ticketInfo = ticket ? `${vscode3.l10n.t("Ticket")}: ${ticket}` : "";
     const attemptInfo = attempt && maxAttempts ? `${vscode3.l10n.t("Attempt")}: ${attempt}/${maxAttempts}` : "";
@@ -11027,26 +11028,39 @@ var PipelineTreeProvider = class {
       if (this.outputChannel) {
         this.outputChannel.appendLine(logEntry);
       }
-      this.parseLogForState(log);
+      let changed = false;
+      const lines = log.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          if (this.parseLogLine(trimmed)) {
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        this.refresh();
+      }
     });
   }
   /**
-   * Parse log entries to update stage tracking
-   * 
+   * Parse a single log line to update stage tracking.
+   * Returns true if any state changed (caller should refresh).
+   *
    * Real CLI format:
    * [2024-01-01T12:00:00] [INFO] [stage-name] message
    * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
    * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
    * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
-  parseLogForState(log) {
-    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-    const baseMatch = log.match(basePattern);
+  parseLogLine(line) {
+    const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = clean.match(basePattern);
     if (!baseMatch) {
-      this.parseLogForStateLegacy(log);
-      return;
+      return this.parseLogLineLegacy(line);
     }
-    const [, timestamp2, level, stage, message] = baseMatch;
+    const [, _timestamp, level, _stage, message] = baseMatch;
     const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
     if (gotoMatch) {
       this.gotos++;
@@ -11061,14 +11075,14 @@ var PipelineTreeProvider = class {
       this.currentStage = gotoStage;
       this.elapsed = elapsed;
       this.stagesStarted++;
-      return;
+      return true;
     }
     const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
-    if (startMatch) {
+    if (startMatch && (startMatch[1] || startMatch[2] || startMatch[3])) {
       if (startMatch[1]) this.currentStage = startMatch[1];
       if (startMatch[2]) this.currentAgent = startMatch[2];
       if (startMatch[3]) this.currentSkill = startMatch[3];
-      return;
+      return true;
     }
     const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
     if (retryMatch) {
@@ -11076,70 +11090,93 @@ var PipelineTreeProvider = class {
       this.currentAttempt = parseInt(retryMatch[2], 10);
       this.currentMaxAttempts = parseInt(retryMatch[3], 10);
       this.retries++;
-      return;
+      return true;
     }
     if (level === "INFO") {
+      let changed = false;
       const agentMatch = message.match(/agent:\s*([^,]+)/);
       const ticketMatch = message.match(/ticket:\s*([A-Z]+-\d+)/);
       const retryInfoMatch = message.match(/retry:\s*(\d+)\/(\d+)/);
-      if (agentMatch) this.currentAgent = agentMatch[1].trim();
-      if (ticketMatch) this.currentTicket = ticketMatch[1];
+      if (agentMatch) {
+        this.currentAgent = agentMatch[1].trim();
+        changed = true;
+      }
+      if (ticketMatch) {
+        this.currentTicket = ticketMatch[1];
+        changed = true;
+      }
       if (retryInfoMatch) {
         this.currentAttempt = parseInt(retryInfoMatch[1], 10);
         this.currentMaxAttempts = parseInt(retryInfoMatch[2], 10);
         this.retries++;
+        changed = true;
       }
+      return changed;
     }
+    return false;
   }
   /**
-   * Legacy parser for old format (fallback)
+   * Legacy parser for old format (fallback).
+   * Returns true if any state changed.
    */
-  parseLogForStateLegacy(log) {
-    if (log.includes("[GOTO]")) {
+  parseLogLineLegacy(line) {
+    let changed = false;
+    if (line.includes("[GOTO]")) {
       this.gotos++;
-      const gotoMatch = log.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+      const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
       if (gotoMatch) {
-        const stage = gotoMatch[1];
-        const elapsed = gotoMatch[2];
         if (this.currentStage) {
           this.completedStages.set(this.currentStage, {
             elapsed: this.elapsed,
             success: true
           });
         }
-        this.currentStage = stage;
-        this.elapsed = elapsed;
+        this.currentStage = gotoMatch[1];
+        this.elapsed = gotoMatch[2];
         this.stagesStarted++;
+        changed = true;
       }
     }
-    if (log.includes("[INFO]")) {
-      const infoMatch = log.match(/\[INFO\](?:\s+agent:\s*([^,]+))?(?:\s*,?\s*ticket:\s*([A-Z]+-\d+))?(?:\s*,?\s*retry:\s*(\d+)\/(\d+))?/);
+    if (line.includes("[INFO]")) {
+      const infoMatch = line.match(/\[INFO\](?:\s+agent:\s*([^,]+))?(?:\s*,?\s*ticket:\s*([A-Z]+-\d+))?(?:\s*,?\s*retry:\s*(\d+)\/(\d+))?/);
       if (infoMatch) {
-        if (infoMatch[1]) this.currentAgent = infoMatch[1].trim();
-        if (infoMatch[2]) this.currentTicket = infoMatch[2];
+        if (infoMatch[1]) {
+          this.currentAgent = infoMatch[1].trim();
+          changed = true;
+        }
+        if (infoMatch[2]) {
+          this.currentTicket = infoMatch[2];
+          changed = true;
+        }
         if (infoMatch[3]) {
           this.currentAttempt = parseInt(infoMatch[3], 10);
           this.currentMaxAttempts = parseInt(infoMatch[4], 10);
           this.retries++;
+          changed = true;
         }
       }
-      const retryOnlyMatch = log.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
-      if (retryOnlyMatch) {
-        this.currentAttempt = parseInt(retryOnlyMatch[1], 10);
-        this.currentMaxAttempts = parseInt(retryOnlyMatch[2], 10);
-        this.retries++;
+      if (!changed) {
+        const retryOnlyMatch = line.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
+        if (retryOnlyMatch) {
+          this.currentAttempt = parseInt(retryOnlyMatch[1], 10);
+          this.currentMaxAttempts = parseInt(retryOnlyMatch[2], 10);
+          this.retries++;
+          changed = true;
+        }
       }
     }
-    if (log.includes("[CTX]")) {
-      const ctxMatch = log.match(/\[CTX\]\s+([^:]+):\s*(.+)/);
+    if (line.includes("[CTX]")) {
+      const ctxMatch = line.match(/\[CTX\]\s+([^:]+):\s*(.+)/);
       if (ctxMatch) {
         const key = ctxMatch[1].trim();
         const value = ctxMatch[2].trim();
         if (key.toLowerCase() === "skill") {
           this.currentSkill = value;
+          changed = true;
         }
       }
     }
+    return changed;
   }
   /**
    * Get pipeline service instance
@@ -11176,7 +11213,22 @@ var PipelineTreeProvider = class {
       return this.getRootItems();
     }
     if (element.itemType === "statistics") {
-      return Promise.resolve([]);
+      const stats = element;
+      const items = [];
+      const addStat = (label, value, icon, id) => {
+        const item = new PipelineTreeItem(
+          `${label}: ${value}`,
+          vscode3.TreeItemCollapsibleState.None,
+          "statistics",
+          id
+        );
+        item.iconPath = new vscode3.ThemeIcon(icon);
+        items.push(item);
+      };
+      addStat(vscode3.l10n.t("Stages Started"), stats.stagesStarted, "play", "stat-stages");
+      addStat(vscode3.l10n.t("Retries"), stats.retries, "refresh", "stat-retries");
+      addStat(vscode3.l10n.t("Goto Transitions"), stats.gotos, "arrow-right", "stat-gotos");
+      return Promise.resolve(items);
     }
     if (element.itemType === "history") {
       return Promise.resolve(
@@ -12292,7 +12344,7 @@ var TicketDocumentLinkProvider = class {
     }
     const content = document.getText();
     const links = [];
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return [];
     }
@@ -12452,7 +12504,7 @@ var PipelineDocumentLinkProvider = class {
       "SKILL.md"
     );
     if (fs4.existsSync(skillPath)) {
-      const range = new vscode7.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+      const range = new vscode7.Range(lineNum, actualStart, lineNum, actualEnd);
       const targetUri = vscode7.Uri.file(skillPath);
       const link = new vscode7.DocumentLink(range, targetUri);
       link.tooltip = `Open skill: ${skillId}`;
@@ -12460,32 +12512,26 @@ var PipelineDocumentLinkProvider = class {
     }
   }
   /**
-   * Extract goto.stage links from a line
+   * Extract stage reference links from a line
+   * Matches both `stage: <id>` (nested under goto) and shorthand `<status>: <stage-id>`
    */
   extractGotoStageLinks(line, lineNum, stages, document, links) {
-    const gotoMatch = line.match(/goto\.stage:\s*["']?([a-z0-9-_]+)["']?/i);
-    if (!gotoMatch) {
+    const stageMatch = line.match(/^\s+stage:\s*["']?([a-z0-9-_]+)["']?/i);
+    if (!stageMatch) {
       return;
     }
-    const stageId = gotoMatch[1];
+    const stageId = stageMatch[1];
     if (!stages[stageId]) {
       return;
     }
-    const stageDefPattern = new RegExp(`^\\s*${stageId}:\\s*`, "m");
-    const stageMatch = stageDefPattern.exec(document.getText());
-    if (stageMatch) {
-      const textBeforeMatch = document.getText().substring(0, stageMatch.index);
-      const linesBeforeMatch = textBeforeMatch.split("\n");
-      const targetLine = linesBeforeMatch.length - 1;
-      const gotoIndex = line.indexOf(`goto.stage:`);
-      const valueStart = gotoIndex + gotoMatch.index - gotoIndex + "goto.stage:".length;
-      const valueMatch = line.substring(valueStart).match(/\s*["']?([a-z0-9-_]+)["']?/);
-      if (!valueMatch) {
-        return;
-      }
-      const actualStart = valueStart + valueMatch.index + valueMatch[0].indexOf(stageId);
-      const actualEnd = actualStart + stageId.length;
-      const range = new vscode7.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+    const content = document.getText();
+    const stageDefPattern = new RegExp(`^    ${stageId}:`, "m");
+    const defMatch = stageDefPattern.exec(content);
+    if (defMatch) {
+      const textBeforeMatch = content.substring(0, defMatch.index);
+      const targetLine = textBeforeMatch.split("\n").length - 1;
+      const valueIndex = line.indexOf(stageId, line.indexOf("stage:"));
+      const range = new vscode7.Range(lineNum, valueIndex, lineNum, valueIndex + stageId.length);
       const targetUri = document.uri.with({
         fragment: `L${targetLine + 1}`
       });
@@ -12567,7 +12613,7 @@ var TicketCodeLensProvider = class {
     }
     const content = document.getText();
     const lenses = [];
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return [];
     }
@@ -12697,7 +12743,8 @@ var WorkflowCodeLensProvider = class {
    */
   provideCodeLenses(document) {
     const fileName = document.fileName;
-    if (fileName.includes(".workflow/tickets/") && fileName.endsWith(".md")) {
+    const normalizedPath = fileName.replace(/\\/g, "/");
+    if (normalizedPath.includes(".workflow/tickets/") && normalizedPath.endsWith(".md")) {
       return this.ticketProvider.provideCodeLenses(document);
     }
     return [];
@@ -12780,7 +12827,7 @@ ${vscode9.l10n.t("Priority")}: ${ticket.priority}`
    */
   getCurrentTicketId(document) {
     const content = document.getText();
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return null;
     }
@@ -12950,7 +12997,8 @@ var WorkflowCompletionProvider = class {
    */
   provideCompletionItems(document, position, token, context) {
     const fileName = document.fileName;
-    if (fileName.includes(".workflow/tickets/") && fileName.endsWith(".md")) {
+    const normalizedPath = fileName.replace(/\\/g, "/");
+    if (normalizedPath.includes(".workflow/tickets/") && normalizedPath.endsWith(".md")) {
       return this.ticketProvider.provideCompletionItems(document, position);
     }
     if (fileName.endsWith("pipeline.yaml") || fileName.endsWith("pipeline.yml")) {

@@ -125,7 +125,7 @@ export class TicketCompletionProvider implements vscode.CompletionItemProvider {
    */
   private getCurrentTicketId(document: vscode.TextDocument): string | null {
     const content = document.getText();
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return null;
     }
@@ -330,7 +330,8 @@ export class WorkflowCompletionProvider implements vscode.CompletionItemProvider
     const fileName = document.fileName;
 
     // Ticket .md files
-    if (fileName.includes('.workflow/tickets/') && fileName.endsWith('.md')) {
+    const normalizedPath = fileName.replace(/\\/g, '/');
+    if (normalizedPath.includes('.workflow/tickets/') && normalizedPath.endsWith('.md')) {
       return this.ticketProvider.provideCompletionItems(document, position);
     }
 

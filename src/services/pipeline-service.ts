@@ -260,9 +260,12 @@ export class PipelineService extends EventEmitter {
    * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   private parseLine(line: string): ParsedLogEntry {
-    // Pattern: [timestamp] [LEVEL] [stage] message
-    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-    const baseMatch = line.match(basePattern);
+    // Strip ANSI escape codes (CLI outputs colored text)
+    const clean = line.replace(/\x1b\[[0-9;]*m/g, '');
+
+    // Pattern: [timestamp] [LEVEL] [stage] message (date separator: T or space)
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = clean.match(basePattern);
     
     if (!baseMatch) {
       // Fallback to old format or raw

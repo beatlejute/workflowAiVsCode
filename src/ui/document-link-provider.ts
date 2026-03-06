@@ -52,7 +52,7 @@ export class TicketDocumentLinkProvider implements vscode.DocumentLinkProvider {
     const links: vscode.DocumentLink[] = [];
 
     // Parse frontmatter to get structured data
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!frontmatterMatch) {
       return [];
     }
@@ -288,7 +288,7 @@ export class PipelineDocumentLinkProvider implements vscode.DocumentLinkProvider
     );
 
     if (fs.existsSync(skillPath)) {
-      const range = new vscode.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+      const range = new vscode.Range(lineNum, actualStart, lineNum, actualEnd);
       const targetUri = vscode.Uri.file(skillPath);
       const link = new vscode.DocumentLink(range, targetUri);
       link.tooltip = `Open skill: ${skillId}`;
@@ -297,7 +297,8 @@ export class PipelineDocumentLinkProvider implements vscode.DocumentLinkProvider
   }
 
   /**
-   * Extract goto.stage links from a line
+   * Extract stage reference links from a line
+   * Matches both `stage: <id>` (nested under goto) and shorthand `<status>: <stage-id>`
    */
   private extractGotoStageLinks(
     line: string,
@@ -306,42 +307,30 @@ export class PipelineDocumentLinkProvider implements vscode.DocumentLinkProvider
     document: vscode.TextDocument,
     links: vscode.DocumentLink[]
   ): void {
-    // Match goto.stage: "stage-id" or goto.stage: stage-id
-    const gotoMatch = line.match(/goto\.stage:\s*["']?([a-z0-9-_]+)["']?/i);
-    if (!gotoMatch) {
+    // Match stage: stage-id (nested under goto block)
+    const stageMatch = line.match(/^\s+stage:\s*["']?([a-z0-9-_]+)["']?/i);
+    if (!stageMatch) {
       return;
     }
 
-    const stageId = gotoMatch[1];
+    const stageId = stageMatch[1];
 
-    // Check if stage exists in pipeline
+    // Check if stage exists in pipeline (skip non-stage values like "end")
     if (!stages[stageId]) {
       return;
     }
 
     // Find the line where this stage is defined
-    const stageDefPattern = new RegExp(`^\\s*${stageId}:\\s*`, 'm');
-    const stageMatch = stageDefPattern.exec(document.getText());
+    const content = document.getText();
+    const stageDefPattern = new RegExp(`^    ${stageId}:`, 'm');
+    const defMatch = stageDefPattern.exec(content);
 
-    if (stageMatch) {
-      // Calculate position of stage definition
-      const textBeforeMatch = document.getText().substring(0, stageMatch.index);
-      const linesBeforeMatch = textBeforeMatch.split('\n');
-      const targetLine = linesBeforeMatch.length - 1;
+    if (defMatch) {
+      const textBeforeMatch = content.substring(0, defMatch.index);
+      const targetLine = textBeforeMatch.split('\n').length - 1;
 
-      // Create link to stage definition in same file
-      const gotoIndex = line.indexOf(`goto.stage:`);
-      const valueStart = gotoIndex + gotoMatch.index! - gotoIndex + 'goto.stage:'.length;
-      const valueMatch = line.substring(valueStart).match(/\s*["']?([a-z0-9-_]+)["']?/);
-
-      if (!valueMatch) {
-        return;
-      }
-
-      const actualStart = valueStart + valueMatch.index! + valueMatch[0].indexOf(stageId);
-      const actualEnd = actualStart + stageId.length;
-
-      const range = new vscode.Range(lineNum + 1, actualStart, lineNum + 1, actualEnd);
+      const valueIndex = line.indexOf(stageId, line.indexOf('stage:'));
+      const range = new vscode.Range(lineNum, valueIndex, lineNum, valueIndex + stageId.length);
       const targetUri = document.uri.with({
         fragment: `L${targetLine + 1}`
       });

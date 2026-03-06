@@ -295,6 +295,7 @@ async function activate(context) {
     notificationsManager.initialize();
     // Set workflow root if available
     if (workflowRoot) {
+        pipelineService.setWorkflowRoot(workflowRoot);
         ticketsProvider.setWorkflowRoot(workflowRoot);
         plansProvider.setWorkflowRoot(workflowRoot);
         reportsProvider.setWorkflowRoot(workflowRoot);

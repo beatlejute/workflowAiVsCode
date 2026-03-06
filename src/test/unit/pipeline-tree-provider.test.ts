@@ -163,7 +163,7 @@ statuses:
         3
       );
 
-      assert.ok((item.label as string).includes('analyze-report'));
+      assert.strictEqual(item.label, 'analyze-report');
       assert.ok((item.description as string).includes('Agent: analyst-agent'));
       assert.ok((item.description as string).includes('Ticket: IMPL-001'));
       assert.ok((item.description as string).includes('Attempt: 1/3'));
@@ -194,7 +194,7 @@ statuses:
     test('Works with minimal information', () => {
       const item = new CurrentStageTreeItem('init');
 
-      assert.ok((item.label as string).includes('init'));
+      assert.strictEqual(item.label, 'init');
       assert.strictEqual((item.description as string).trim(), '');
     });
   });
@@ -431,7 +431,7 @@ statuses:
       const logEntry = '[GOTO] analyze-report (elapsed: 1.2s)';
       
       // Access private method via any cast for testing
-      (provider as any).parseLogForState(logEntry);
+      (provider as any).parseLogLine(logEntry);
 
       const stage = (provider as any).currentStage;
       const elapsed = (provider as any).elapsed;
@@ -449,7 +449,7 @@ statuses:
       provider.setWorkflowRoot(tempWorkflowRoot);
 
       const logEntry = '[INFO] agent: analyst-agent, ticket: IMPL-001';
-      (provider as any).parseLogForState(logEntry);
+      (provider as any).parseLogLine(logEntry);
 
       const agent = (provider as any).currentAgent;
       const ticket = (provider as any).currentTicket;
@@ -463,7 +463,7 @@ statuses:
       provider.setWorkflowRoot(tempWorkflowRoot);
 
       const logEntry = '[INFO] retry: 2/5';
-      (provider as any).parseLogForState(logEntry);
+      (provider as any).parseLogLine(logEntry);
 
       const attempt = (provider as any).currentAttempt;
       const maxAttempts = (provider as any).currentMaxAttempts;
@@ -479,7 +479,7 @@ statuses:
       provider.setWorkflowRoot(tempWorkflowRoot);
 
       const logEntry = '[CTX] skill: analyze-report-skill';
-      (provider as any).parseLogForState(logEntry);
+      (provider as any).parseLogLine(logEntry);
 
       const skill = (provider as any).currentSkill;
       assert.strictEqual(skill, 'analyze-report-skill');
@@ -493,7 +493,7 @@ statuses:
       
       // Should not throw
       assert.doesNotThrow(() => {
-        (provider as any).parseLogForState(logEntry);
+        (provider as any).parseLogLine(logEntry);
       });
     });
   });
