@@ -27,13 +27,14 @@ export type SpawnFunction = (
 
 /**
  * Valid state machine transitions for tickets
+ * Aligned with CLI move-ticket.js transitions
  */
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   [TicketStatus.Backlog]: [TicketStatus.Ready],
-  [TicketStatus.Ready]: [TicketStatus.InProgress],
+  [TicketStatus.Ready]: [TicketStatus.InProgress, TicketStatus.Review],
   [TicketStatus.InProgress]: [TicketStatus.Review, TicketStatus.Blocked, TicketStatus.Done],
-  [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress],
-  [TicketStatus.Blocked]: [TicketStatus.Ready, TicketStatus.Backlog],
+  [TicketStatus.Review]: [TicketStatus.Done, TicketStatus.InProgress, TicketStatus.Ready, TicketStatus.Blocked],
+  [TicketStatus.Blocked]: [TicketStatus.Ready],
   [TicketStatus.Done]: []
 };
 
@@ -128,7 +129,7 @@ export class TicketService {
     const id = await this.generateTicketId(type);
 
     // Read template
-    const templatePath = path.join(this.workflowRoot, '.workflow', 'templates', 'ticket-template.md');
+    const templatePath = path.join(this.workflowRoot, 'templates', 'ticket-template.md');
     let templateContent: string;
     try {
       templateContent = await fs.readFile(templatePath, 'utf-8');
@@ -171,7 +172,7 @@ export class TicketService {
     const content = serialize(frontmatter, body);
 
     // Write to backlog folder
-    const backlogDir = path.join(this.workflowRoot, '.workflow', 'tickets', 'backlog');
+    const backlogDir = path.join(this.workflowRoot, 'tickets', 'backlog');
     const filePath = path.join(backlogDir, `${id}.md`);
 
     // Ensure backlog directory exists
@@ -237,7 +238,7 @@ export class TicketService {
    *
    * @param id - Ticket ID to move
    * @param targetStatus - Target status
-   * @throws Error if transition is invalid or CLI fails
+   * @throws Error if transition is invalid or file operation fails
    */
   async move(id: string, targetStatus: TicketStatus): Promise<void> {
     // Get current ticket
@@ -253,8 +254,8 @@ export class TicketService {
       );
     }
 
-    // Call wf CLI via child_process.spawn
-    await this.callWfMove(id, targetStatus);
+    // Move ticket via direct file system operations
+    await this.moveTicketDirect(id, ticket.status, targetStatus);
 
     // Update ticket in store (file watcher will also update, but this ensures immediate consistency)
     const updatedTicket: Ticket = {
@@ -267,51 +268,59 @@ export class TicketService {
   }
 
   /**
-   * Call wf CLI to move a ticket
+   * Move a ticket directly via file system operations
+   *
+   * Reads the ticket file, updates frontmatter (status, updated_at),
+   * and moves it to the target status directory.
+   *
+   * @param id - Ticket ID
+   * @param currentStatus - Current ticket status
+   * @param targetStatus - Target ticket status
    */
-  private async callWfMove(id: string, targetStatus: TicketStatus): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Set own-write flag to prevent file watcher trigger
-      this.isOwnWrite = true;
+  private async moveTicketDirect(id: string, currentStatus: TicketStatus, targetStatus: TicketStatus): Promise<void> {
+    // Build file paths
+    const sourcePath = path.join(this.workflowRoot, 'tickets', currentStatus, `${id}.md`);
+    const targetDir = path.join(this.workflowRoot, 'tickets', targetStatus);
+    const targetPath = path.join(targetDir, `${id}.md`);
 
-      const child = this.spawnFn('wf', ['move', id, targetStatus], {
-        cwd: this.workflowRoot,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+    // Read ticket file
+    let content: string;
+    try {
+      content = await fs.readFile(sourcePath, 'utf-8');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(vscode.l10n.t('Failed to read ticket file: {0}', errorMessage));
+    }
 
-      let stdout = '';
-      let stderr = '';
+    // Parse frontmatter
+    const { frontmatter, body } = parseFrontmatter<Record<string, unknown>>(content);
 
-      child.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
+    // Update frontmatter fields
+    const updatedFrontmatter: Record<string, unknown> = {
+      ...frontmatter,
+      status: targetStatus,
+      updated_at: new Date().toISOString()
+    };
 
-      child.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
+    // Set completed_at if moving to Done
+    if (targetStatus === TicketStatus.Done) {
+      updatedFrontmatter.completed_at = new Date().toISOString();
+    }
 
-      child.on('close', (code: number | null) => {
-        // Reset own-write flag after delay
-        setTimeout(() => {
-          this.isOwnWrite = false;
-        }, 200);
+    // Serialize back to markdown
+    const updatedContent = serialize(updatedFrontmatter, body);
 
-        if (code !== 0) {
-          const exitCode = code ?? 1;
-          reject(new Error(vscode.l10n.t('wf move failed with code {0}: {1}', exitCode, stderr)));
-        } else {
-          resolve();
-        }
-      });
+    // Ensure target directory exists
+    await fs.mkdir(targetDir, { recursive: true });
 
-      child.on('error', (error: Error) => {
-        // Reset own-write flag
-        setTimeout(() => {
-          this.isOwnWrite = false;
-        }, 200);
+    // Write to target location with own-write flag
+    await this.withOwnWrite(async () => {
+      await fs.writeFile(targetPath, updatedContent, 'utf-8');
+    });
 
-        reject(new Error(vscode.l10n.t('wf move failed: {0}', error.message)));
-      });
+    // Remove source file
+    await this.withOwnWrite(async () => {
+      await fs.unlink(sourcePath);
     });
   }
 
@@ -358,7 +367,6 @@ export class TicketService {
     // Read file content
     const filePath = path.join(
       this.workflowRoot,
-      '.workflow',
       'tickets',
       ticket.status,
       `${id}.md`

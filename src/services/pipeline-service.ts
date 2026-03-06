@@ -34,6 +34,7 @@ export interface ParsedLogEntry {
   retry?: number;
   maxAttempts?: number;
   timestamp?: string;
+  skill?: string;
 }
 
 /**
@@ -81,6 +82,28 @@ export class PipelineService extends EventEmitter {
   constructor(spawnFn?: SpawnFunction) {
     super();
     this.spawnFn = spawnFn || spawn;
+  }
+
+  /**
+   * Spawn with fallback: try primary command, fallback to alternative on ENOENT
+   * @param primary - Primary command name
+   * @param fallback - Fallback command name
+   * @param args - Command arguments
+   * @param options - Spawn options
+   */
+  private spawnWithFallback(
+    primary: string,
+    fallback: string,
+    args: readonly string[],
+    options?: any
+  ): ChildProcess {
+    const child = this.spawnFn(primary, args, options);
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') {
+        return this.spawnFn(fallback, args, options);
+      }
+    });
+    return child;
   }
 
   /**
@@ -151,16 +174,9 @@ export class PipelineService extends EventEmitter {
     this.currentTicket = undefined;
 
     const args = ['run'];
-    if (mode === 'single-cycle') {
-      args.push('--mode', 'single-cycle');
-    } else if (mode === 'continuous') {
-      args.push('--mode', 'continuous');
-    } else if (mode === 'n-tasks' && n !== undefined) {
-      args.push('--mode', 'n-tasks', '--count', n.toString());
-    }
 
     try {
-      const child = this.spawnFn('workflow', args, {
+      const child = this.spawnWithFallback('workflow', 'workflow-ai', args, {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
@@ -246,8 +262,86 @@ export class PipelineService extends EventEmitter {
 
   /**
    * Parse a single line of stdout
+   * 
+   * Real CLI format:
+   * [2024-01-01T12:00:00] [INFO] [stage-name] message
+   * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
+   * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
+   * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   private parseLine(line: string): ParsedLogEntry {
+    // Pattern: [timestamp] [LEVEL] [stage] message
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = line.match(basePattern);
+    
+    if (!baseMatch) {
+      // Fallback to old format or raw
+      return this.parseLineLegacy(line);
+    }
+
+    const [, timestamp, level, stage, message] = baseMatch;
+
+    // Parse GOTO: [timestamp] [INFO] [stage] GOTO next-stage
+    const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (gotoMatch) {
+      return {
+        type: 'goto',
+        raw: line,
+        timestamp,
+        stage: gotoMatch[1],
+        elapsed: gotoMatch[2]
+      };
+    }
+
+    // Parse START: [timestamp] [INFO] [stage] START stage="X" agent="Y" skill="Z"
+    const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
+    if (startMatch) {
+      return {
+        type: 'info',
+        raw: line,
+        timestamp,
+        stage: startMatch[1],
+        agent: startMatch[2],
+        skill: startMatch[3]
+      };
+    }
+
+    // Parse RETRY: [timestamp] [WARN] [stage] RETRY stage="X" attempt=N/M
+    const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
+    if (retryMatch) {
+      return {
+        type: 'info',
+        raw: line,
+        timestamp,
+        stage: retryMatch[1],
+        retry: parseInt(retryMatch[2], 10),
+        maxAttempts: parseInt(retryMatch[3], 10)
+      };
+    }
+
+    // Generic info message
+    if (level === 'INFO') {
+      return {
+        type: 'info',
+        raw: line,
+        timestamp,
+        stage
+      };
+    }
+
+    // Warn/Error level
+    return {
+      type: level.toLowerCase() as 'info' | 'raw',
+      raw: line,
+      timestamp,
+      stage
+    };
+  }
+
+  /**
+   * Legacy parser for old format (fallback)
+   */
+  private parseLineLegacy(line: string): ParsedLogEntry {
     // Try [GOTO] pattern: [GOTO] stage-name (elapsed: 1.2s)
     const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
     if (gotoMatch) {

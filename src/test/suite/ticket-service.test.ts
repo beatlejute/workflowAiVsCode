@@ -11,63 +11,21 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
-import { EventEmitter } from 'events';
-import { ChildProcess } from 'child_process';
 import { WorkflowStore } from '../../data/workflow-store';
-import { TicketService, SpawnFunction } from '../../services/ticket-service';
+import { TicketService } from '../../services/ticket-service';
 import { Ticket, TicketStatus } from '../../data/types';
-
-/**
- * Mock ChildProcess for testing spawn
- */
-class MockChildProcess extends EventEmitter {
-  stdout = new EventEmitter();
-  stderr = new EventEmitter();
-  stdin = { write: () => {}, end: () => {} };
-  killed = false;
-  pid = 12345;
-  connected = true;
-  
-  kill(signal?: string) {
-    this.killed = true;
-    return true;
-  }
-}
 
 suite('TicketService Suite', () => {
 
   let store: WorkflowStore;
   let ticketService: TicketService;
   let testDir: string;
-  let mockSpawnCalls: Array<{ command: string; args: readonly string[] }>;
-
-  /**
-   * Create mock spawn function for testing
-   */
-  function createMockSpawn(): SpawnFunction {
-    return (command: string, args: readonly string[]) => {
-      // Record the call for verification
-      mockSpawnCalls.push({ command, args });
-      
-      const mock = new MockChildProcess();
-      
-      // Simulate successful execution
-      setImmediate(() => {
-        mock.stdout.emit('data', Buffer.from(''));
-        mock.stderr.emit('data', Buffer.from(''));
-        mock.emit('close', 0);
-      });
-      
-      return mock as any as ChildProcess;
-    };
-  }
 
   setup(() => {
     store = new WorkflowStore();
     testDir = path.join(__dirname, '../../../../tmp/test-ticketservice-' + Date.now());
-    mockSpawnCalls = [];
-    const mockSpawn = createMockSpawn();
-    ticketService = new TicketService(store, testDir, mockSpawn);
+    // spawn function is no longer used after replacing callWfMove with moveTicketDirect
+    ticketService = new TicketService(store, testDir);
   });
 
   teardown(async () => {
@@ -330,8 +288,9 @@ tags: []
     test('should return valid transitions from ready', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Ready);
 
-      assert.strictEqual(transitions.length, 1, 'Should have 1 valid transition');
+      assert.strictEqual(transitions.length, 2, 'Should have 2 valid transitions');
       assert.ok(transitions.includes(TicketStatus.InProgress), 'Should allow transition to in-progress');
+      assert.ok(transitions.includes(TicketStatus.Review), 'Should allow transition to review');
     });
 
     test('should return valid transitions from in-progress', () => {
@@ -346,17 +305,18 @@ tags: []
     test('should return valid transitions from review', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Review);
 
-      assert.strictEqual(transitions.length, 2, 'Should have 2 valid transitions');
+      assert.strictEqual(transitions.length, 4, 'Should have 4 valid transitions');
       assert.ok(transitions.includes(TicketStatus.Done), 'Should allow transition to done');
       assert.ok(transitions.includes(TicketStatus.InProgress), 'Should allow transition to in-progress');
+      assert.ok(transitions.includes(TicketStatus.Ready), 'Should allow transition to ready');
+      assert.ok(transitions.includes(TicketStatus.Blocked), 'Should allow transition to blocked');
     });
 
     test('should return valid transitions from blocked', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
 
-      assert.strictEqual(transitions.length, 2, 'Should have 2 valid transitions');
+      assert.strictEqual(transitions.length, 1, 'Should have 1 valid transition');
       assert.ok(transitions.includes(TicketStatus.Ready), 'Should allow transition to ready');
-      assert.ok(transitions.includes(TicketStatus.Backlog), 'Should allow transition to backlog');
     });
 
     test('should return no transitions from done', () => {
@@ -371,9 +331,12 @@ tags: []
     test('should return true for valid transitions', () => {
       assert.ok(ticketService.isValidTransition(TicketStatus.Backlog, TicketStatus.Ready), 'backlog → ready should be valid');
       assert.ok(ticketService.isValidTransition(TicketStatus.Ready, TicketStatus.InProgress), 'ready → in-progress should be valid');
+      assert.ok(ticketService.isValidTransition(TicketStatus.Ready, TicketStatus.Review), 'ready → review should be valid');
       assert.ok(ticketService.isValidTransition(TicketStatus.InProgress, TicketStatus.Done), 'in-progress → done should be valid');
       assert.ok(ticketService.isValidTransition(TicketStatus.InProgress, TicketStatus.Review), 'in-progress → review should be valid');
       assert.ok(ticketService.isValidTransition(TicketStatus.Review, TicketStatus.Done), 'review → done should be valid');
+      assert.ok(ticketService.isValidTransition(TicketStatus.Review, TicketStatus.Blocked), 'review → blocked should be valid');
+      assert.ok(ticketService.isValidTransition(TicketStatus.Blocked, TicketStatus.Ready), 'blocked → ready should be valid');
     });
 
     test('should return false for invalid transitions', () => {
@@ -554,64 +517,76 @@ tags: []
       );
     });
 
-    test('should call wf CLI with correct arguments', async () => {
+    test('should move ticket file to target status directory', async () => {
       createTestStructure(testDir);
-      createTicketInStore('IMPL-001', 'Test Ticket', TicketStatus.Backlog);
+      // Create ticket file in backlog
+      const ticket = await ticketService.create('IMPL', 'Test Ticket');
 
-      // Call move - mock spawn will simulate success
-      await ticketService.move('IMPL-001', TicketStatus.Ready);
+      // Move to ready
+      await ticketService.move(ticket.id, TicketStatus.Ready);
 
-      // Verify spawn was called with correct arguments
-      assert.strictEqual(mockSpawnCalls.length, 1, 'Should call spawn once');
-      assert.strictEqual(mockSpawnCalls[0].command, 'wf', 'Should call wf command');
-      assert.deepStrictEqual(mockSpawnCalls[0].args, ['move', 'IMPL-001', 'ready'], 'Should pass correct arguments');
+      const sourcePath = path.join(testDir, '.workflow', 'tickets', 'backlog', `${ticket.id}.md`);
+      const targetPath = path.join(testDir, '.workflow', 'tickets', 'ready', `${ticket.id}.md`);
 
-      // Verify status was updated in store
-      const moved = ticketService.getById('IMPL-001');
-      assert.strictEqual(moved?.status, TicketStatus.Ready, 'Should update status to ready');
+      assert.ok(!fs.existsSync(sourcePath), 'Should remove file from backlog');
+      assert.ok(fs.existsSync(targetPath), 'Should create file in ready');
     });
 
-    test('should handle CLI error (non-zero exit code)', async () => {
+    test('should update frontmatter status and updated_at when moving', async () => {
       createTestStructure(testDir);
-      createTicketInStore('IMPL-001', 'Test Ticket', TicketStatus.Backlog);
+      const ticket = await ticketService.create('IMPL', 'Test Ticket');
+      const beforeMove = new Date().toISOString();
 
-      // Create a mock spawn that simulates CLI error
-      const errorSpawn: SpawnFunction = () => {
-        const mock = new MockChildProcess();
-        setImmediate(() => {
-          mock.stdout.emit('data', Buffer.from(''));
-          mock.stderr.emit('data', Buffer.from('Error: ticket not found'));
-          mock.emit('close', 1); // non-zero exit code
-        });
-        return mock as any as ChildProcess;
-      };
+      await ticketService.move(ticket.id, TicketStatus.Ready);
 
-      const errorTicketService = new TicketService(store, testDir, errorSpawn);
+      const targetPath = path.join(testDir, '.workflow', 'tickets', 'ready', `${ticket.id}.md`);
+      const content = fs.readFileSync(targetPath, 'utf-8');
 
-      await assert.rejects(
-        async () => errorTicketService.move('IMPL-001', TicketStatus.Ready),
-        /wf move failed with code 1/
-      );
+      assert.ok(content.includes('status: ready'), 'Should update status to ready');
+      assert.ok(content.includes('updated_at:'), 'Should have updated_at field');
+
+      // Verify updated_at is after beforeMove
+      const updatedMatch = content.match(/updated_at:\s*["']?([^"'\n\r]+)/);
+      assert.ok(updatedMatch, 'Should find updated_at in frontmatter');
+      if (updatedMatch) {
+        const updatedDate = new Date(updatedMatch[1]);
+        assert.ok(updatedDate >= new Date(beforeMove), 'updated_at should be >= beforeMove');
+      }
     });
 
-    test('should handle spawn error', async () => {
+    test('should set completed_at when moving to Done', async () => {
       createTestStructure(testDir);
+      const ticket = await ticketService.create('IMPL', 'Test Ticket');
+
+      // Move through workflow to done
+      await ticketService.move(ticket.id, TicketStatus.Ready);
+      await ticketService.move(ticket.id, TicketStatus.InProgress);
+      await ticketService.move(ticket.id, TicketStatus.Done);
+
+      const targetPath = path.join(testDir, '.workflow', 'tickets', 'done', `${ticket.id}.md`);
+      const content = fs.readFileSync(targetPath, 'utf-8');
+
+      assert.ok(content.includes('completed_at:'), 'Should set completed_at when moving to done');
+    });
+
+    test('should update store with new status after move', async () => {
+      createTestStructure(testDir);
+      const ticket = await ticketService.create('IMPL', 'Test Ticket');
+
+      await ticketService.move(ticket.id, TicketStatus.Ready);
+
+      const moved = ticketService.getById(ticket.id);
+      assert.strictEqual(moved?.status, TicketStatus.Ready, 'Should update status in store');
+    });
+
+    test('should handle move error when source file not found', async () => {
+      createTestStructure(testDir);
+      // Add ticket to store but don't create file
       createTicketInStore('IMPL-001', 'Test Ticket', TicketStatus.Backlog);
 
-      // Create a mock spawn that simulates spawn error
-      const errorSpawn: SpawnFunction = () => {
-        const mock = new MockChildProcess();
-        setImmediate(() => {
-          mock.emit('error', new Error('spawn ENOENT'));
-        });
-        return mock as any as ChildProcess;
-      };
-
-      const errorTicketService = new TicketService(store, testDir, errorSpawn);
-
       await assert.rejects(
-        async () => errorTicketService.move('IMPL-001', TicketStatus.Ready),
-        /wf move failed: spawn ENOENT/
+        async () => ticketService.move('IMPL-001', TicketStatus.Ready),
+        /Failed to read ticket file/
       );
     });
   });
@@ -676,13 +651,15 @@ tags: []
       const validTransitions: Array<[TicketStatus, TicketStatus]> = [
         [TicketStatus.Backlog, TicketStatus.Ready],
         [TicketStatus.Ready, TicketStatus.InProgress],
+        [TicketStatus.Ready, TicketStatus.Review],
         [TicketStatus.InProgress, TicketStatus.Review],
         [TicketStatus.InProgress, TicketStatus.Blocked],
         [TicketStatus.InProgress, TicketStatus.Done],
         [TicketStatus.Review, TicketStatus.Done],
         [TicketStatus.Review, TicketStatus.InProgress],
-        [TicketStatus.Blocked, TicketStatus.Ready],
-        [TicketStatus.Blocked, TicketStatus.Backlog]
+        [TicketStatus.Review, TicketStatus.Ready],
+        [TicketStatus.Review, TicketStatus.Blocked],
+        [TicketStatus.Blocked, TicketStatus.Ready]
       ];
 
       for (const [from, to] of validTransitions) {

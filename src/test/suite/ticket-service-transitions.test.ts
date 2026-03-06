@@ -61,11 +61,12 @@ suite('TicketService Transitions Suite', () => {
       assert.ok(transitions.includes(TicketStatus.Ready));
     });
 
-    test('should return [in-progress] for ready status', () => {
+    test('should return [in-progress, review] for ready status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Ready);
 
-      assert.strictEqual(transitions.length, 1);
+      assert.strictEqual(transitions.length, 2);
       assert.ok(transitions.includes(TicketStatus.InProgress));
+      assert.ok(transitions.includes(TicketStatus.Review));
     });
 
     test('should return [review, blocked, done] for in-progress status', () => {
@@ -77,20 +78,21 @@ suite('TicketService Transitions Suite', () => {
       assert.ok(transitions.includes(TicketStatus.Done));
     });
 
-    test('should return [done, in-progress] for review status', () => {
+    test('should return [done, in-progress, ready, blocked] for review status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Review);
 
-      assert.strictEqual(transitions.length, 2);
+      assert.strictEqual(transitions.length, 4);
       assert.ok(transitions.includes(TicketStatus.Done));
       assert.ok(transitions.includes(TicketStatus.InProgress));
+      assert.ok(transitions.includes(TicketStatus.Ready));
+      assert.ok(transitions.includes(TicketStatus.Blocked));
     });
 
-    test('should return [ready, backlog] for blocked status', () => {
+    test('should return [ready] for blocked status', () => {
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
 
-      assert.strictEqual(transitions.length, 2);
+      assert.strictEqual(transitions.length, 1);
       assert.ok(transitions.includes(TicketStatus.Ready));
-      assert.ok(transitions.includes(TicketStatus.Backlog));
     });
 
     test('should return [] for done status (terminal state)', () => {
@@ -146,23 +148,28 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(isValid, true);
     });
 
+    test('should return true for valid transition review -> blocked', () => {
+      const isValid = ticketService.isValidTransition(TicketStatus.Review, TicketStatus.Blocked);
+      assert.strictEqual(isValid, true);
+    });
+
+    test('should return true for valid transition review -> ready', () => {
+      const isValid = ticketService.isValidTransition(TicketStatus.Review, TicketStatus.Ready);
+      assert.strictEqual(isValid, true);
+    });
+
     test('should return true for valid transition blocked -> ready', () => {
       const isValid = ticketService.isValidTransition(TicketStatus.Blocked, TicketStatus.Ready);
       assert.strictEqual(isValid, true);
     });
 
-    test('should return true for valid transition blocked -> backlog', () => {
+    test('should return false for invalid transition blocked -> backlog', () => {
       const isValid = ticketService.isValidTransition(TicketStatus.Blocked, TicketStatus.Backlog);
-      assert.strictEqual(isValid, true);
+      assert.strictEqual(isValid, false);
     });
 
     test('should return false for invalid transition backlog -> in-progress', () => {
       const isValid = ticketService.isValidTransition(TicketStatus.Backlog, TicketStatus.InProgress);
-      assert.strictEqual(isValid, false);
-    });
-
-    test('should return false for invalid transition ready -> review', () => {
-      const isValid = ticketService.isValidTransition(TicketStatus.Ready, TicketStatus.Review);
       assert.strictEqual(isValid, false);
     });
 
@@ -209,17 +216,19 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(menuItems.length, 0);
     });
 
-    test('context menu should have single item for ready ticket', () => {
+    test('context menu items should match valid transitions for ready ticket', () => {
       const status = TicketStatus.Ready;
       const transitions = ticketService.getValidTransitions(status);
 
+      // Simulate context menu formation
       const menuItems = transitions.map(s => ({
         label: s,
         description: `Move to ${s}`
       }));
 
-      assert.strictEqual(menuItems.length, 1);
-      assert.strictEqual(menuItems[0].label, TicketStatus.InProgress);
+      assert.strictEqual(menuItems.length, 2);
+      assert.ok(menuItems.some(item => item.label === TicketStatus.InProgress));
+      assert.ok(menuItems.some(item => item.label === TicketStatus.Review));
     });
 
     test('inline actions should use first valid transition for move next', () => {
@@ -268,8 +277,9 @@ suite('TicketService Transitions Suite', () => {
       assert.strictEqual(updatedTicket.status, TicketStatus.Ready);
 
       transitions = ticketService.getValidTransitions(updatedTicket.status);
-      assert.strictEqual(transitions.length, 1);
+      assert.strictEqual(transitions.length, 2);
       assert.ok(transitions.includes(TicketStatus.InProgress));
+      assert.ok(transitions.includes(TicketStatus.Review));
 
       // Move to in-progress
       await ticketService.move(ticket.id, TicketStatus.InProgress);
@@ -305,11 +315,10 @@ suite('TicketService Transitions Suite', () => {
       assert.ok(blockedTicket);
       assert.strictEqual(blockedTicket.status, TicketStatus.Blocked);
 
-      // Verify transitions from blocked
+      // Verify transitions from blocked - only ready is allowed
       const transitions = ticketService.getValidTransitions(TicketStatus.Blocked);
-      assert.strictEqual(transitions.length, 2);
+      assert.strictEqual(transitions.length, 1);
       assert.ok(transitions.includes(TicketStatus.Ready));
-      assert.ok(transitions.includes(TicketStatus.Backlog));
 
       // Unblock to ready
       await ticketService.move(ticket.id, TicketStatus.Ready);

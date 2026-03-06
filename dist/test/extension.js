@@ -82,12 +82,26 @@ async function checkCliInstalled() {
                 // Fall through to standard detection
             }
         }
-        // Platform-specific detection
+        // Platform-specific detection with fallback to workflow-ai
         if (platform === 'win32') {
-            await execAsync('where workflow');
+            try {
+                await execAsync('where workflow');
+                return true;
+            }
+            catch {
+                // fallthrough to workflow-ai
+            }
+            await execAsync('where workflow-ai');
         }
         else {
-            await execAsync('which workflow');
+            try {
+                await execAsync('which workflow');
+                return true;
+            }
+            catch {
+                // fallthrough to workflow-ai
+            }
+            await execAsync('which workflow-ai');
         }
         return true;
     }
@@ -105,8 +119,8 @@ function checkWorkflowDir() {
         return false;
     }
     const workflowDir = path.join(workspaceRoot, '.workflow');
-    const configPath = path.join(workflowDir, 'config.yaml');
-    const pipelinePath = path.join(workflowDir, 'pipeline.yaml');
+    const configPath = path.join(workflowDir, 'config', 'config.yaml');
+    const pipelinePath = path.join(workflowDir, 'config', 'pipeline.yaml');
     try {
         const dirExists = fs.existsSync(workflowDir);
         const configExists = fs.existsSync(configPath);
@@ -158,6 +172,7 @@ async function installCli() {
 }
 /**
  * Initialize workflow in the current workspace.
+ * Tries 'workflow init' first, falls back to 'workflow-ai init' if binary not found.
  */
 async function initWorkflow() {
     await vscode.window.withProgress({
@@ -171,7 +186,20 @@ async function initWorkflow() {
             if (!workspaceRoot) {
                 throw new Error('No workspace folder open');
             }
-            await execAsync('workflow init', { cwd: workspaceRoot });
+            // Try 'workflow init' first, fallback to 'workflow-ai init' if binary not found
+            try {
+                await execAsync('workflow init', { cwd: workspaceRoot });
+            }
+            catch (err) {
+                if (err.code === 'ENOENT') {
+                    // Binary 'workflow' not found, try 'workflow-ai'
+                    await execAsync('workflow-ai init', { cwd: workspaceRoot });
+                }
+                else {
+                    // Re-throw other errors
+                    throw err;
+                }
+            }
             progress.report({ increment: 100 });
             await updateContextKeys();
             vscode.window.showInformationMessage(vscode.l10n.t('Workflow initialized successfully!'));
@@ -349,7 +377,7 @@ async function activate(context) {
             vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
             return;
         }
-        const ticketPath = path.join(workflowRoot, '.workflow', 'tickets', ticket.status, `${ticketId}.md`);
+        const ticketPath = path.join(workflowRoot, 'tickets', ticket.status, `${ticketId}.md`);
         try {
             await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(ticketPath));
         }
@@ -455,7 +483,7 @@ async function activate(context) {
             vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
             return;
         }
-        const ticketPath = path.join(workflowRoot, '.workflow', 'tickets', ticket.status, `${ticketId}.md`);
+        const ticketPath = path.join(workflowRoot, 'tickets', ticket.status, `${ticketId}.md`);
         try {
             await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(ticketPath));
         }

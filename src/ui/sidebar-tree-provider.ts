@@ -96,7 +96,6 @@ export class PlanTreeItem extends SidebarTreeItem {
     // Command to open plan file on click
     const planPath = path.join(
       workflowRoot,
-      '.workflow',
       'plans',
       groupId,
       `${plan.id}.md`
@@ -143,7 +142,6 @@ export class ReportTreeItem extends SidebarTreeItem {
     // Command to open report file on click
     const reportPath = path.join(
       workflowRoot,
-      '.workflow',
       'reports',
       `${report.id}.md`
     );
@@ -177,7 +175,6 @@ function getTicketIcon(priority: number): vscode.ThemeIcon {
 function getTicketPath(ticket: Ticket, workflowRoot: string): string {
   return path.join(
     workflowRoot,
-    '.workflow',
     'tickets',
     ticket.status,
     `${ticket.id}.md`

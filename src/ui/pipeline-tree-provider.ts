@@ -135,13 +135,13 @@ export class StatisticsTreeItem extends PipelineTreeItem {
     public readonly retries: number,
     public readonly gotos: number
   ) {
-    const label = `$(graph) Statistics`;
     super(
-      label,
+      'Statistics',
       vscode.TreeItemCollapsibleState.Collapsed,
       'statistics',
       'statistics'
     );
+    this.iconPath = new vscode.ThemeIcon('graph');
 
     this.description = `${vscode.l10n.t('Stages Started')}: ${stagesStarted} | ${vscode.l10n.t('Retries')}: ${retries} | ${vscode.l10n.t('Goto Transitions')}: ${gotos}`;
     this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos);
@@ -156,13 +156,13 @@ export class HistoryTreeItem extends PipelineTreeItem {
   constructor(
     public readonly history: RunHistoryEntry[]
   ) {
-    const label = `$(history) History`;
     super(
-      label,
+      'History',
       vscode.TreeItemCollapsibleState.Collapsed,
       'history',
       'history'
     );
+    this.iconPath = new vscode.ThemeIcon('history');
 
     this.description = history.length > 0 ? `${history.length} ${vscode.l10n.t('runs')}` : vscode.l10n.t('No runs yet');
     this.tooltip = createHistoryTooltip(history);
@@ -372,7 +372,7 @@ function createHistoryTooltip(history: RunHistoryEntry[]): vscode.MarkdownString
 function createHistoryItemTooltip(entry: RunHistoryEntry): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
-  markdown.appendMarkdown(`**${vscode.l10n.t('Run')} #{entry.runNumber}**\n\n`);
+  markdown.appendMarkdown(`**${vscode.l10n.t('Run')} ${entry.runNumber}**\n\n`);
   markdown.appendMarkdown(`| ${vscode.l10n.t('Field')} | ${vscode.l10n.t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
   markdown.appendMarkdown(`| **${vscode.l10n.t('Date')}** | ${entry.date} |\n`);
@@ -396,7 +396,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private outputChannel: vscode.OutputChannel | null = null;
   private runHistory: RunHistoryEntry[] = [];
   private runCounter: number = 0;
-  
+  private currentMode: PipelineMode | undefined;
+
   // Statistics
   private stagesStarted: number = 0;
   private retries: number = 0;
@@ -492,8 +493,86 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
 
   /**
    * Parse log entries to update stage tracking
+   * 
+   * Real CLI format:
+   * [2024-01-01T12:00:00] [INFO] [stage-name] message
+   * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
+   * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
+   * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   private parseLogForState(log: string): void {
+    // Pattern: [timestamp] [LEVEL] [stage] message
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = log.match(basePattern);
+
+    if (!baseMatch) {
+      // Fallback to legacy parsing
+      this.parseLogForStateLegacy(log);
+      return;
+    }
+
+    const [, timestamp, level, stage, message] = baseMatch;
+
+    // Parse GOTO: [timestamp] [INFO] [stage] GOTO next-stage
+    const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (gotoMatch) {
+      this.gotos++;
+      const gotoStage = gotoMatch[1];
+      const elapsed = gotoMatch[2];
+
+      // Mark previous stage as completed if exists
+      if (this.currentStage) {
+        this.completedStages.set(this.currentStage, {
+          elapsed: this.elapsed,
+          success: true
+        });
+      }
+
+      this.currentStage = gotoStage;
+      this.elapsed = elapsed;
+      this.stagesStarted++;
+      return;
+    }
+
+    // Parse START: [timestamp] [INFO] [stage] START stage="X" agent="Y" skill="Z"
+    const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
+    if (startMatch) {
+      if (startMatch[1]) this.currentStage = startMatch[1];
+      if (startMatch[2]) this.currentAgent = startMatch[2];
+      if (startMatch[3]) this.currentSkill = startMatch[3];
+      return;
+    }
+
+    // Parse RETRY: [timestamp] [WARN] [stage] RETRY stage="X" attempt=N/M
+    const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
+    if (retryMatch) {
+      this.currentStage = retryMatch[1];
+      this.currentAttempt = parseInt(retryMatch[2], 10);
+      this.currentMaxAttempts = parseInt(retryMatch[3], 10);
+      this.retries++;
+      return;
+    }
+
+    // Generic info - extract agent/ticket from message if present
+    if (level === 'INFO') {
+      const agentMatch = message.match(/agent:\s*([^,]+)/);
+      const ticketMatch = message.match(/ticket:\s*([A-Z]+-\d+)/);
+      const retryInfoMatch = message.match(/retry:\s*(\d+)\/(\d+)/);
+
+      if (agentMatch) this.currentAgent = agentMatch[1].trim();
+      if (ticketMatch) this.currentTicket = ticketMatch[1];
+      if (retryInfoMatch) {
+        this.currentAttempt = parseInt(retryInfoMatch[1], 10);
+        this.currentMaxAttempts = parseInt(retryInfoMatch[2], 10);
+        this.retries++;
+      }
+    }
+  }
+
+  /**
+   * Legacy parser for old format (fallback)
+   */
+  private parseLogForStateLegacy(log: string): void {
     // Track GOTO transitions
     if (log.includes('[GOTO]')) {
       this.gotos++;
@@ -501,7 +580,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       if (gotoMatch) {
         const stage = gotoMatch[1];
         const elapsed = gotoMatch[2];
-        
+
         // Mark previous stage as completed if exists
         if (this.currentStage) {
           this.completedStages.set(this.currentStage, {
@@ -509,13 +588,13 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
             success: true
           });
         }
-        
+
         this.currentStage = stage;
         this.elapsed = elapsed;
         this.stagesStarted++;
       }
     }
-    
+
     // Track INFO with agent/ticket/retry
     if (log.includes('[INFO]')) {
       const infoMatch = log.match(/\[INFO\](?:\s+agent:\s*([^,]+))?(?:\s*,?\s*ticket:\s*([A-Z]+-\d+))?(?:\s*,?\s*retry:\s*(\d+)\/(\d+))?/);
@@ -528,7 +607,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
           this.retries++;
         }
       }
-      
+
       // Retry only
       const retryOnlyMatch = log.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
       if (retryOnlyMatch) {
@@ -537,7 +616,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
         this.retries++;
       }
     }
-    
+
     // Track CTX for skill info
     if (log.includes('[CTX]')) {
       const ctxMatch = log.match(/\[CTX\]\s+([^:]+):\s*(.+)/);
@@ -704,6 +783,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     }
 
     try {
+      this.currentMode = mode.label as PipelineMode;
       await this.pipelineService.start(mode.label as PipelineMode, n);
 
       // Show output channel

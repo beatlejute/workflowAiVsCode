@@ -285,38 +285,84 @@ suite('PipelineService Suite', () => {
   });
 
   /**
-   * Test: start with continuous mode
+   * Test: start with continuous mode passes only run arg
    */
-  test('start with continuous mode passes correct args', async () => {
+  test('start with continuous mode passes only run arg', async () => {
     let capturedArgs: readonly string[] | undefined;
-    
+
     const mockSpawn: SpawnFunction = (command, args) => {
       capturedArgs = args;
       return mockChild as any;
     };
-    
+
     const service = new PipelineService(mockSpawn);
     await service.start('continuous');
-    
-    assert.deepStrictEqual(capturedArgs, ['run', '--mode', 'continuous']);
+
+    assert.deepStrictEqual(capturedArgs, ['run']);
     service.dispose();
   });
 
   /**
-   * Test: start with n-tasks mode passes count argument
+   * Test: start with n-tasks mode passes only run arg
    */
-  test('start with n-tasks mode passes count argument', async () => {
+  test('start with n-tasks mode passes only run arg', async () => {
     let capturedArgs: readonly string[] | undefined;
-    
+
     const mockSpawn: SpawnFunction = (command, args) => {
       capturedArgs = args;
       return mockChild as any;
     };
-    
+
     const service = new PipelineService(mockSpawn);
     await service.start('n-tasks', 5);
-    
-    assert.deepStrictEqual(capturedArgs, ['run', '--mode', 'n-tasks', '--count', '5']);
+
+    assert.deepStrictEqual(capturedArgs, ['run']);
+    service.dispose();
+  });
+
+  /**
+   * Test: spawnWithFallback uses primary command when available
+   */
+  test('spawnWithFallback uses primary command when available', async () => {
+    let capturedCommand: string | undefined;
+
+    const mockSpawn: SpawnFunction = (command, args) => {
+      capturedCommand = command;
+      return mockChild as any;
+    };
+
+    const service = new PipelineService(mockSpawn);
+    await service.start('single-cycle');
+
+    assert.strictEqual(capturedCommand, 'workflow');
+    service.dispose();
+  });
+
+  /**
+   * Test: spawnWithFallback falls back to workflow-ai on ENOENT
+   */
+  test('spawnWithFallback falls back to workflow-ai on ENOENT', async () => {
+    const commands: string[] = [];
+
+    const mockSpawn: SpawnFunction = (command, args) => {
+      commands.push(command);
+      const mock = new MockChildProcess();
+      // Simulate ENOENT on first call (workflow)
+      if (command === 'workflow') {
+        setTimeout(() => mock.emit('error', Object.assign(new Error('spawn failed'), { code: 'ENOENT' })), 0);
+      }
+      return mock as any;
+    };
+
+    const service = new PipelineService(mockSpawn);
+    await service.start('single-cycle');
+
+    // Wait for async fallback
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    assert.strictEqual(commands.length, 2);
+    assert.strictEqual(commands[0], 'workflow');
+    assert.strictEqual(commands[1], 'workflow-ai');
     service.dispose();
   });
 

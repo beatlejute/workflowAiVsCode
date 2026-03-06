@@ -14,11 +14,11 @@ async function main() {
 
   if (testType === 'e2e') {
     // E2E tests with fixtures workspace
-    extensionTestsPath = path.resolve(__dirname, '../../dist/test/e2e/suite');
+    extensionTestsPath = path.resolve(__dirname, '../../dist/test/test/e2e/suite');
     launchArgs = [path.resolve(__dirname, '../fixtures')];
   } else {
     // Unit tests
-    extensionTestsPath = path.resolve(__dirname, '../../dist/test/suite');
+    extensionTestsPath = path.resolve(__dirname, '../../dist/test/test/suite');
   }
 
   await runTests({

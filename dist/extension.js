@@ -9837,7 +9837,6 @@ ${vscode.l10n.t("Status")}: ${plan.status}`;
     this.iconPath = new vscode.ThemeIcon("notebook");
     const planPath = path3.join(
       workflowRoot,
-      ".workflow",
       "plans",
       groupId,
       `${plan.id}.md`
@@ -9871,7 +9870,6 @@ ${vscode.l10n.t("Created")}: ${report.created_at}`;
     this.iconPath = new vscode.ThemeIcon("document");
     const reportPath = path3.join(
       workflowRoot,
-      ".workflow",
       "reports",
       `${report.id}.md`
     );
@@ -9896,7 +9894,6 @@ function getTicketIcon(priority) {
 function getTicketPath(ticket, workflowRoot) {
   return path3.join(
     workflowRoot,
-    ".workflow",
     "tickets",
     ticket.status,
     `${ticket.id}.md`
@@ -10299,6 +10296,22 @@ var PipelineService = class extends import_events3.EventEmitter {
     this.spawnFn = spawnFn || import_child_process.spawn;
   }
   /**
+   * Spawn with fallback: try primary command, fallback to alternative on ENOENT
+   * @param primary - Primary command name
+   * @param fallback - Fallback command name
+   * @param args - Command arguments
+   * @param options - Spawn options
+   */
+  spawnWithFallback(primary, fallback, args, options) {
+    const child = this.spawnFn(primary, args, options);
+    child.on("error", (err) => {
+      if (err.code === "ENOENT") {
+        return this.spawnFn(fallback, args, options);
+      }
+    });
+    return child;
+  }
+  /**
    * Get current pipeline state
    */
   getState() {
@@ -10357,15 +10370,8 @@ var PipelineService = class extends import_events3.EventEmitter {
     this.currentAgent = void 0;
     this.currentTicket = void 0;
     const args = ["run"];
-    if (mode === "single-cycle") {
-      args.push("--mode", "single-cycle");
-    } else if (mode === "continuous") {
-      args.push("--mode", "continuous");
-    } else if (mode === "n-tasks" && n !== void 0) {
-      args.push("--mode", "n-tasks", "--count", n.toString());
-    }
     try {
-      const child = this.spawnFn("workflow", args, {
+      const child = this.spawnWithFallback("workflow", "workflow-ai", args, {
         stdio: ["ignore", "pipe", "pipe"]
       });
       this.childProcess = child;
@@ -10432,8 +10438,71 @@ var PipelineService = class extends import_events3.EventEmitter {
   }
   /**
    * Parse a single line of stdout
+   * 
+   * Real CLI format:
+   * [2024-01-01T12:00:00] [INFO] [stage-name] message
+   * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
+   * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
+   * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   parseLine(line) {
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = line.match(basePattern);
+    if (!baseMatch) {
+      return this.parseLineLegacy(line);
+    }
+    const [, timestamp2, level, stage, message] = baseMatch;
+    const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (gotoMatch) {
+      return {
+        type: "goto",
+        raw: line,
+        timestamp: timestamp2,
+        stage: gotoMatch[1],
+        elapsed: gotoMatch[2]
+      };
+    }
+    const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
+    if (startMatch) {
+      return {
+        type: "info",
+        raw: line,
+        timestamp: timestamp2,
+        stage: startMatch[1],
+        agent: startMatch[2],
+        skill: startMatch[3]
+      };
+    }
+    const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
+    if (retryMatch) {
+      return {
+        type: "info",
+        raw: line,
+        timestamp: timestamp2,
+        stage: retryMatch[1],
+        retry: parseInt(retryMatch[2], 10),
+        maxAttempts: parseInt(retryMatch[3], 10)
+      };
+    }
+    if (level === "INFO") {
+      return {
+        type: "info",
+        raw: line,
+        timestamp: timestamp2,
+        stage
+      };
+    }
+    return {
+      type: level.toLowerCase(),
+      raw: line,
+      timestamp: timestamp2,
+      stage
+    };
+  }
+  /**
+   * Legacy parser for old format (fallback)
+   */
+  parseLineLegacy(line) {
     const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
     if (gotoMatch) {
       return {
@@ -10575,9 +10644,8 @@ var CompletedStageTreeItem = class extends PipelineTreeItem {
 };
 var StatisticsTreeItem = class extends PipelineTreeItem {
   constructor(stagesStarted, retries, gotos) {
-    const label = `$(graph) Statistics`;
     super(
-      label,
+      "Statistics",
       vscode3.TreeItemCollapsibleState.Collapsed,
       "statistics",
       "statistics"
@@ -10585,6 +10653,7 @@ var StatisticsTreeItem = class extends PipelineTreeItem {
     this.stagesStarted = stagesStarted;
     this.retries = retries;
     this.gotos = gotos;
+    this.iconPath = new vscode3.ThemeIcon("graph");
     this.description = `${vscode3.l10n.t("Stages Started")}: ${stagesStarted} | ${vscode3.l10n.t("Retries")}: ${retries} | ${vscode3.l10n.t("Goto Transitions")}: ${gotos}`;
     this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos);
     this.contextValue = "statistics";
@@ -10592,14 +10661,14 @@ var StatisticsTreeItem = class extends PipelineTreeItem {
 };
 var HistoryTreeItem = class extends PipelineTreeItem {
   constructor(history) {
-    const label = `$(history) History`;
     super(
-      label,
+      "History",
       vscode3.TreeItemCollapsibleState.Collapsed,
       "history",
       "history"
     );
     this.history = history;
+    this.iconPath = new vscode3.ThemeIcon("history");
     this.description = history.length > 0 ? `${history.length} ${vscode3.l10n.t("runs")}` : vscode3.l10n.t("No runs yet");
     this.tooltip = createHistoryTooltip(history);
     this.contextValue = "history";
@@ -10765,7 +10834,7 @@ function createHistoryTooltip(history) {
 function createHistoryItemTooltip(entry) {
   const markdown = new vscode3.MarkdownString();
   markdown.isTrusted = true;
-  markdown.appendMarkdown(`**${vscode3.l10n.t("Run")} #{entry.runNumber}**
+  markdown.appendMarkdown(`**${vscode3.l10n.t("Run")} ${entry.runNumber}**
 
 `);
   markdown.appendMarkdown(`| ${vscode3.l10n.t("Field")} | ${vscode3.l10n.t("Value")} |
@@ -10801,6 +10870,7 @@ var PipelineTreeProvider = class {
   outputChannel = null;
   runHistory = [];
   runCounter = 0;
+  currentMode;
   // Statistics
   stagesStarted = 0;
   retries = 0;
@@ -10863,8 +10933,69 @@ var PipelineTreeProvider = class {
   }
   /**
    * Parse log entries to update stage tracking
+   * 
+   * Real CLI format:
+   * [2024-01-01T12:00:00] [INFO] [stage-name] message
+   * [2024-01-01T12:00:00] [INFO] [Runner] GOTO next-stage
+   * [2024-01-01T12:00:00] [INFO] [Runner] START stage="X" agent="Y" skill="Z"
+   * [2024-01-01T12:00:00] [WARN] [stage] RETRY stage="X" attempt=N/M
    */
   parseLogForState(log) {
+    const basePattern = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]\s+\[(\w+)\]\s+\[([^\]]+)\]\s+(.*)$/;
+    const baseMatch = log.match(basePattern);
+    if (!baseMatch) {
+      this.parseLogForStateLegacy(log);
+      return;
+    }
+    const [, timestamp2, level, stage, message] = baseMatch;
+    const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (gotoMatch) {
+      this.gotos++;
+      const gotoStage = gotoMatch[1];
+      const elapsed = gotoMatch[2];
+      if (this.currentStage) {
+        this.completedStages.set(this.currentStage, {
+          elapsed: this.elapsed,
+          success: true
+        });
+      }
+      this.currentStage = gotoStage;
+      this.elapsed = elapsed;
+      this.stagesStarted++;
+      return;
+    }
+    const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
+    if (startMatch) {
+      if (startMatch[1]) this.currentStage = startMatch[1];
+      if (startMatch[2]) this.currentAgent = startMatch[2];
+      if (startMatch[3]) this.currentSkill = startMatch[3];
+      return;
+    }
+    const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
+    if (retryMatch) {
+      this.currentStage = retryMatch[1];
+      this.currentAttempt = parseInt(retryMatch[2], 10);
+      this.currentMaxAttempts = parseInt(retryMatch[3], 10);
+      this.retries++;
+      return;
+    }
+    if (level === "INFO") {
+      const agentMatch = message.match(/agent:\s*([^,]+)/);
+      const ticketMatch = message.match(/ticket:\s*([A-Z]+-\d+)/);
+      const retryInfoMatch = message.match(/retry:\s*(\d+)\/(\d+)/);
+      if (agentMatch) this.currentAgent = agentMatch[1].trim();
+      if (ticketMatch) this.currentTicket = ticketMatch[1];
+      if (retryInfoMatch) {
+        this.currentAttempt = parseInt(retryInfoMatch[1], 10);
+        this.currentMaxAttempts = parseInt(retryInfoMatch[2], 10);
+        this.retries++;
+      }
+    }
+  }
+  /**
+   * Legacy parser for old format (fallback)
+   */
+  parseLogForStateLegacy(log) {
     if (log.includes("[GOTO]")) {
       this.gotos++;
       const gotoMatch = log.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
@@ -11034,6 +11165,7 @@ var PipelineTreeProvider = class {
       n = parseInt(input, 10);
     }
     try {
+      this.currentMode = mode.label;
       await this.pipelineService.start(mode.label, n);
       if (this.outputChannel) {
         this.outputChannel.show(true);
@@ -13349,10 +13481,10 @@ var path8 = __toESM(require("path"));
 var import_child_process2 = require("child_process");
 var VALID_TRANSITIONS = {
   ["backlog" /* Backlog */]: ["ready" /* Ready */],
-  ["ready" /* Ready */]: ["in-progress" /* InProgress */],
+  ["ready" /* Ready */]: ["in-progress" /* InProgress */, "review" /* Review */],
   ["in-progress" /* InProgress */]: ["review" /* Review */, "blocked" /* Blocked */, "done" /* Done */],
-  ["review" /* Review */]: ["done" /* Done */, "in-progress" /* InProgress */],
-  ["blocked" /* Blocked */]: ["ready" /* Ready */, "backlog" /* Backlog */],
+  ["review" /* Review */]: ["done" /* Done */, "in-progress" /* InProgress */, "ready" /* Ready */, "blocked" /* Blocked */],
+  ["blocked" /* Blocked */]: ["ready" /* Ready */],
   ["done" /* Done */]: []
 };
 var TicketService = class {
@@ -13426,7 +13558,7 @@ var TicketService = class {
    */
   async create(type2, title, fields) {
     const id = await this.generateTicketId(type2);
-    const templatePath = path8.join(this.workflowRoot, ".workflow", "templates", "ticket-template.md");
+    const templatePath = path8.join(this.workflowRoot, "templates", "ticket-template.md");
     let templateContent;
     try {
       templateContent = await fs5.readFile(templatePath, "utf-8");
@@ -13461,7 +13593,7 @@ var TicketService = class {
       ...fields
     };
     const content = serialize(frontmatter, body);
-    const backlogDir = path8.join(this.workflowRoot, ".workflow", "tickets", "backlog");
+    const backlogDir = path8.join(this.workflowRoot, "tickets", "backlog");
     const filePath = path8.join(backlogDir, `${id}.md`);
     await fs5.mkdir(backlogDir, { recursive: true });
     await this.withOwnWrite(async () => {
@@ -13605,7 +13737,6 @@ var TicketService = class {
     }
     const filePath = path8.join(
       this.workflowRoot,
-      ".workflow",
       "tickets",
       ticket.status,
       `${id}.md`
@@ -14054,7 +14185,15 @@ async function initWorkflow() {
         if (!workspaceRoot) {
           throw new Error("No workspace folder open");
         }
-        await execAsync("workflow init", { cwd: workspaceRoot });
+        try {
+          await execAsync("workflow init", { cwd: workspaceRoot });
+        } catch (err) {
+          if (err.code === "ENOENT") {
+            await execAsync("workflow-ai init", { cwd: workspaceRoot });
+          } else {
+            throw err;
+          }
+        }
         progress.report({ increment: 100 });
         await updateContextKeys();
         vscode18.window.showInformationMessage(vscode18.l10n.t("Workflow initialized successfully!"));
@@ -14240,7 +14379,6 @@ async function activate(context) {
       }
       const ticketPath = path11.join(
         workflowRoot,
-        ".workflow",
         "tickets",
         ticket.status,
         `${ticketId}.md`
@@ -14345,7 +14483,6 @@ async function activate(context) {
       }
       const ticketPath = path11.join(
         workflowRoot,
-        ".workflow",
         "tickets",
         ticket.status,
         `${ticketId}.md`

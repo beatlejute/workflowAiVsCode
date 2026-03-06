@@ -155,6 +155,7 @@ async function installCli(): Promise<void> {
 
 /**
  * Initialize workflow in the current workspace.
+ * Tries 'workflow init' first, falls back to 'workflow-ai init' if binary not found.
  */
 async function initWorkflow(): Promise<void> {
   await vscode.window.withProgress(
@@ -171,7 +172,19 @@ async function initWorkflow(): Promise<void> {
           throw new Error('No workspace folder open');
         }
 
-        await execAsync('workflow init', { cwd: workspaceRoot });
+        // Try 'workflow init' first, fallback to 'workflow-ai init' if binary not found
+        try {
+          await execAsync('workflow init', { cwd: workspaceRoot });
+        } catch (err: any) {
+          if (err.code === 'ENOENT') {
+            // Binary 'workflow' not found, try 'workflow-ai'
+            await execAsync('workflow-ai init', { cwd: workspaceRoot });
+          } else {
+            // Re-throw other errors
+            throw err;
+          }
+        }
+
         progress.report({ increment: 100 });
         await updateContextKeys();
         vscode.window.showInformationMessage(vscode.l10n.t('Workflow initialized successfully!'));
@@ -412,7 +425,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       const ticketPath = path.join(
         workflowRoot,
-        '.workflow',
         'tickets',
         ticket.status,
         `${ticketId}.md`
@@ -553,7 +565,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       const ticketPath = path.join(
         workflowRoot,
-        '.workflow',
         'tickets',
         ticket.status,
         `${ticketId}.md`
