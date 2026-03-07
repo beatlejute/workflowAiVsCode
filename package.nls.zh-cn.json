@@ -62,5 +62,9 @@
   "menu.editTicket.title": "编辑工单",
   "menu.moveTicketFromMenu.title": "移动工单",
   "menu.showTicketDependencies.title": "显示依赖关系",
-  "menu.copyTicketId.title": "复制工单 ID"
+  "menu.copyTicketId.title": "复制工单 ID",
+  "views.sidebar.skills.name": "技能",
+  "views.sidebar.logs.name": "日志",
+  "command.filterTicketsByPlan.title": "按计划筛选",
+  "kanban.badge.tooltip": "{0} 个工单就绪"
 }

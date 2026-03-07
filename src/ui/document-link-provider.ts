@@ -81,7 +81,7 @@ export class TicketDocumentLinkProvider implements vscode.DocumentLinkProvider {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const lineNum = i + 1; // Frontmatter starts at line 1, but we need to offset by frontmatter start
+      const lineNum = i; // Frontmatter lines are already 0-indexed in the split
 
       // Check for context: section start
       if (line.trim().match(/^context:\s*$/)) {
@@ -144,7 +144,7 @@ export class TicketDocumentLinkProvider implements vscode.DocumentLinkProvider {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const lineNum = i + 1;
+      const lineNum = i; // Frontmatter lines are already 0-indexed in the split
 
       // Check for dependencies: section start
       const depsMatch = line.match(/^dependencies:\s*$/);
@@ -298,7 +298,7 @@ export class PipelineDocumentLinkProvider implements vscode.DocumentLinkProvider
 
   /**
    * Extract stage reference links from a line
-   * Matches both `stage: <id>` (nested under goto) and shorthand `<status>: <stage-id>`
+   * Matches `stage: <id>` nested under `goto:` block in pipeline.yaml
    */
   private extractGotoStageLinks(
     line: string,
@@ -308,7 +308,8 @@ export class PipelineDocumentLinkProvider implements vscode.DocumentLinkProvider
     links: vscode.DocumentLink[]
   ): void {
     // Match stage: stage-id (nested under goto block)
-    const stageMatch = line.match(/^\s+stage:\s*["']?([a-z0-9-_]+)["']?/i);
+    // Must be indented (at least 2 spaces) to be inside goto:
+    const stageMatch = line.match(/^\s{2,}stage:\s*["']?([a-z0-9-_]+)["']?/i);
     if (!stageMatch) {
       return;
     }
@@ -367,12 +368,13 @@ export class WorkflowDocumentLinkProvider implements vscode.DocumentLinkProvider
    */
   provideDocumentLinks(document: vscode.TextDocument): vscode.DocumentLink[] {
     const fsPath = document.uri.fsPath;
+    const normalizedPath = fsPath.replace(/\\/g, '/');
 
-    if (fsPath.endsWith('.md') && fsPath.includes(path.join('.workflow', 'tickets'))) {
+    if (normalizedPath.endsWith('.md') && normalizedPath.includes('.workflow/tickets/')) {
       return this.ticketProvider.provideDocumentLinks(document);
     }
 
-    if (fsPath.endsWith(path.join('.workflow', 'config', 'pipeline.yaml'))) {
+    if (normalizedPath.endsWith('.workflow/config/pipeline.yaml') || normalizedPath.endsWith('.workflow/config/pipeline.yml')) {
       return this.pipelineProvider.provideDocumentLinks(document);
     }
 

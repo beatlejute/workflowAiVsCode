@@ -16,10 +16,13 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import { load as loadYaml } from 'js-yaml';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketService } from '../services/ticket-service';
 import { DependencyService } from '../services/dependency-service';
 import { Ticket, TicketStatus } from '../data/types';
+import { PipelineCodeLensProvider } from './pipeline-codelens-provider';
 
 /**
  * Status icon mapping for ticket status
@@ -258,10 +261,120 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
 }
 
 /**
+ * ConfigCodeLensProvider - Code lenses for config.yaml
+ *
+ * Provides CodeLens implementations for config.yaml:
+ * - Project info: Project: {name} | {N} task types | {M} priorities
+ *
+ * Features:
+ * - Parse YAML via loadYaml
+ * - Extract project name, count task types and priorities
+ */
+export class ConfigCodeLensProvider implements vscode.CodeLensProvider {
+  private workflowRoot: string | null = null;
+  private _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+  public readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
+
+  /**
+   * Set workflow root directory
+   */
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
+  }
+
+  /**
+   * Refresh code lenses when config.yaml changes
+   */
+  refresh(): void {
+    this._onDidChangeCodeLenses.fire();
+  }
+
+  /**
+   * Provide CodeLenses for a config.yaml file
+   */
+  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    if (!this.workflowRoot) {
+      return [];
+    }
+
+    const fileName = path.basename(document.fileName);
+    if (fileName !== 'config.yaml') {
+      return [];
+    }
+
+    const content = document.getText();
+    const lenses: vscode.CodeLens[] = [];
+
+    try {
+      const config = loadYaml(content) as ConfigYaml;
+
+      if (!config) {
+        return lenses;
+      }
+
+      // Find first line position
+      const firstLine = new vscode.Position(0, 0);
+
+      // Create Project info CodeLens
+      const infoLens = this.createInfoLens(firstLine, config);
+      if (infoLens) {
+        lenses.push(infoLens);
+      }
+    } catch (error) {
+      // YAML parsing failed - no lenses
+      console.error('Failed to parse config.yaml for code lenses:', error);
+    }
+
+    return lenses;
+  }
+
+  /**
+   * Create CodeLens with project info
+   * Format: Project: {name} | {N} task types | {M} priorities
+   */
+  private createInfoLens(
+    position: vscode.Position,
+    config: ConfigYaml
+  ): vscode.CodeLens | null {
+    const range = new vscode.Range(position, position);
+
+    const projectName = config.project?.name || 'Untitled';
+    const taskTypesCount = Object.keys(config.task_types || {}).length;
+    const prioritiesCount = Object.keys(config.priorities || {}).length;
+
+    const title = `Project: ${projectName} | ${taskTypesCount} task types | ${prioritiesCount} priorities`;
+
+    const command: vscode.Command = {
+      title,
+      command: 'workflow.openConfig'
+    };
+
+    return new vscode.CodeLens(range, command);
+  }
+}
+
+interface ConfigYaml {
+  project?: {
+    name?: string;
+    description?: string;
+    created_at?: string;
+  };
+  task_types?: Record<string, unknown>;
+  priorities?: Record<string, unknown>;
+  statuses?: Record<string, unknown>;
+  condition_types?: Record<string, unknown>;
+  paths?: Record<string, string>;
+  reporting?: Record<string, unknown>;
+  version?: string;
+}
+
+/**
  * WorkflowCodeLensProvider - Composite provider for all workflow files
  */
 export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
   private readonly ticketProvider: TicketCodeLensProvider;
+  private readonly pipelineProvider: PipelineCodeLensProvider;
+  private readonly configProvider: ConfigCodeLensProvider;
 
   constructor(
     store: WorkflowStore,
@@ -273,6 +386,8 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
       ticketService,
       dependencyService
     );
+    this.pipelineProvider = new PipelineCodeLensProvider();
+    this.configProvider = new ConfigCodeLensProvider();
   }
 
   /**
@@ -280,6 +395,8 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
    */
   setWorkflowRoot(root: string): void {
     this.ticketProvider.setWorkflowRoot(root);
+    this.pipelineProvider.setWorkflowRoot(root);
+    this.configProvider.setWorkflowRoot(root);
   }
 
   /**
@@ -287,11 +404,21 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
    */
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const fileName = document.fileName;
+    const normalizedPath = fileName.replace(/\\/g, '/');
 
     // Ticket .md files
-    const normalizedPath = fileName.replace(/\\/g, '/');
     if (normalizedPath.includes('.workflow/tickets/') && normalizedPath.endsWith('.md')) {
       return this.ticketProvider.provideCodeLenses(document);
+    }
+
+    // pipeline.yaml
+    if (normalizedPath.includes('.workflow/config/pipeline.yaml')) {
+      return this.pipelineProvider.provideCodeLenses(document);
+    }
+
+    // config.yaml
+    if (normalizedPath.includes('.workflow/config/config.yaml')) {
+      return this.configProvider.provideCodeLenses(document);
     }
 
     return [];

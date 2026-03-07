@@ -62,5 +62,9 @@
   "menu.editTicket.title": "Modifier le ticket",
   "menu.moveTicketFromMenu.title": "Déplacer le ticket",
   "menu.showTicketDependencies.title": "Afficher les dépendances",
-  "menu.copyTicketId.title": "Copier l'ID du ticket"
+  "menu.copyTicketId.title": "Copier l'ID du ticket",
+  "views.sidebar.skills.name": "COMPÉTENCES",
+  "views.sidebar.logs.name": "JOURNAUX",
+  "command.filterTicketsByPlan.title": "Filtrer par plan",
+  "kanban.badge.tooltip": "{0} tickets prêts"
 }

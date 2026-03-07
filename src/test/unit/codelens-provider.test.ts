@@ -6,6 +6,8 @@
  * - TicketCodeLensProvider: Dependencies line with status icons
  * - TicketCodeLensProvider: Plan link
  * - TicketCodeLensProvider: Review status (if present)
+ * - PipelineCodeLensProvider: Stage info and goto lenses
+ * - ConfigCodeLensProvider: Project info lens
  * - Valid transitions match state machine
  * - Non-existent tickets don't create CodeLenses
  */
@@ -19,8 +21,10 @@ import { TicketService } from '../../services/ticket-service';
 import { DependencyService } from '../../services/dependency-service';
 import {
   TicketCodeLensProvider,
-  WorkflowCodeLensProvider
+  WorkflowCodeLensProvider,
+  ConfigCodeLensProvider
 } from '../../ui/codelens-provider';
+import { PipelineCodeLensProvider } from '../../ui/pipeline-codelens-provider';
 import { Ticket, TicketStatus } from '../../data/types';
 
 suite('CodeLensProvider Tests', () => {
@@ -688,6 +692,240 @@ Not a workflow ticket.
           `Transitions from ${fromStatus} should match state machine`
         );
       }
+    });
+  });
+
+  suite('PipelineCodeLensProvider', () => {
+    let provider: PipelineCodeLensProvider;
+
+    setup(() => {
+      provider = new PipelineCodeLensProvider();
+      provider.setWorkflowRoot(tempWorkflowRoot);
+    });
+
+    test('creates stage info CodeLens for pipeline.yaml', async () => {
+      const pipelineContent = `version: "1.0"
+pipeline:
+  stages:
+    analyze:
+      description: "Analyze report"
+      agent: claude
+      skill: analyze-report
+      goto:
+        passed: plan
+        failed: end
+    plan:
+      description: "Create plan"
+      agent: claude
+      skill: create-plan
+      goto:
+        passed: execute
+        default: end
+`;
+      const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
+      fs.writeFileSync(pipelinePath, pipelineContent);
+
+      const document = await vscode.workspace.openTextDocument(pipelinePath);
+      const lenses = provider.provideCodeLenses(document);
+
+      // Should have stage info lenses for each stage
+      assert.ok(lenses.length >= 2, 'Should have at least 2 stage info CodeLenses');
+
+      // Find first stage lens
+      const stageLens = lenses.find((l: vscode.CodeLens) => l.command?.title?.includes('Stage 1/'));
+      assert.ok(stageLens, 'Should have stage 1 CodeLens');
+      assert.ok(
+        stageLens.command!.title.includes('Agent: claude'),
+        'Should show agent name'
+      );
+      assert.ok(
+        stageLens.command!.title.includes('Skill: analyze-report'),
+        'Should show skill name'
+      );
+    });
+
+    test('creates goto CodeLens for pipeline.yaml stages', async () => {
+      const pipelineContent = `version: "1.0"
+pipeline:
+  stages:
+    analyze:
+      agent: claude
+      skill: analyze-report
+      goto:
+        passed: plan
+        failed: end
+`;
+      const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
+      fs.writeFileSync(pipelinePath, pipelineContent);
+
+      const document = await vscode.workspace.openTextDocument(pipelinePath);
+      const lenses = provider.provideCodeLenses(document);
+
+      // Should have goto lenses
+      const gotoLens = lenses.find((l: vscode.CodeLens) => l.command?.title?.includes('Goto:'));
+      assert.ok(gotoLens, 'Should have goto CodeLens');
+      assert.ok(
+        gotoLens.command!.title.includes('passed->plan'),
+        'Should show passed transition'
+      );
+      assert.ok(
+        gotoLens.command!.title.includes('failed->end'),
+        'Should show failed transition'
+      );
+    });
+
+    test('returns empty array for non-pipeline.yaml files', async () => {
+      const otherContent = `# Other YAML File
+not: pipeline
+`;
+      const otherPath = path.join(tempWorkflowRoot, 'config', 'other.yaml');
+      fs.writeFileSync(otherPath, otherContent);
+
+      const document = await vscode.workspace.openTextDocument(otherPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses for non-pipeline.yaml files');
+    });
+
+    test('returns empty array when workflow root not set', async () => {
+      const providerWithoutRoot = new PipelineCodeLensProvider();
+      // Don't set workflow root
+
+      const pipelineContent = `version: "1.0"
+pipeline:
+  stages:
+    analyze:
+      agent: claude
+`;
+      const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
+      fs.writeFileSync(pipelinePath, pipelineContent);
+
+      const document = await vscode.workspace.openTextDocument(pipelinePath);
+      const lenses = providerWithoutRoot.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses when workflow root not set');
+    });
+  });
+
+  suite('ConfigCodeLensProvider', () => {
+    let provider: ConfigCodeLensProvider;
+
+    setup(() => {
+      provider = new ConfigCodeLensProvider();
+      provider.setWorkflowRoot(tempWorkflowRoot);
+    });
+
+    test('creates project info CodeLens for config.yaml', async () => {
+      const configContent = `version: "1.0"
+project:
+  name: "Test Project"
+  description: "Test Description"
+task_types:
+  planning:
+    prefix: ARCH
+  implementation:
+    prefix: IMPL
+  bugfix:
+    prefix: FIX
+priorities:
+  1:
+    name: critical
+  2:
+    name: high
+  3:
+    name: medium
+`;
+      const configPath = path.join(tempWorkflowRoot, 'config', 'config.yaml');
+      fs.writeFileSync(configPath, configContent);
+
+      const document = await vscode.workspace.openTextDocument(configPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      // Should have project info lens
+      assert.strictEqual(lenses.length, 1, 'Should have 1 project info CodeLens');
+
+      const infoLens = lenses[0];
+      assert.ok(infoLens.command, 'Should have command');
+      assert.ok(
+        infoLens.command!.title.includes('Project: Test Project'),
+        'Should show project name'
+      );
+      assert.ok(
+        infoLens.command!.title.includes('3 task types'),
+        'Should show task types count'
+      );
+      assert.ok(
+        infoLens.command!.title.includes('3 priorities'),
+        'Should show priorities count'
+      );
+    });
+
+    test('shows default values when project name is missing', async () => {
+      const configContent = `version: "1.0"
+task_types:
+  IMPL:
+    description: Implementation
+priorities:
+  1: Critical
+`;
+      const configPath = path.join(tempWorkflowRoot, 'config', 'config.yaml');
+      fs.writeFileSync(configPath, configContent);
+
+      const document = await vscode.workspace.openTextDocument(configPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 1, 'Should have 1 CodeLens');
+      const infoLens = lenses[0];
+      assert.ok(
+        infoLens.command!.title.includes('Project: Untitled'),
+        'Should show Untitled when project name is missing'
+      );
+    });
+
+    test('returns empty array for non-config.yaml files', async () => {
+      const otherContent = `# Other YAML File
+not: config
+`;
+      const otherPath = path.join(tempWorkflowRoot, 'config', 'other.yaml');
+      fs.writeFileSync(otherPath, otherContent);
+
+      const document = await vscode.workspace.openTextDocument(otherPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses for non-config.yaml files');
+    });
+
+    test('returns empty array when workflow root not set', async () => {
+      const providerWithoutRoot = new ConfigCodeLensProvider();
+      // Don't set workflow root
+
+      const configContent = `version: "1.0"
+project:
+  name: "Test"
+`;
+      const configPath = path.join(tempWorkflowRoot, 'config', 'config.yaml');
+      fs.writeFileSync(configPath, configContent);
+
+      const document = await vscode.workspace.openTextDocument(configPath);
+      const lenses = providerWithoutRoot.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses when workflow root not set');
+    });
+
+    test('handles YAML parsing errors gracefully', async () => {
+      const invalidYaml = `version: "1.0"
+project:
+  name: "Invalid YAML
+  missing: colon
+    invalid indentation
+`;
+      const configPath = path.join(tempWorkflowRoot, 'config', 'config.yaml');
+      fs.writeFileSync(configPath, invalidYaml);
+
+      const document = await vscode.workspace.openTextDocument(configPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses for invalid YAML');
     });
   });
 });

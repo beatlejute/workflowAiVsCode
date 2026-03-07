@@ -5,19 +5,21 @@
  * - Tickets (grouped by status with counts)
  * - Plans (current/archive)
  * - Reports (sorted by date)
+ * - Logs (log files sorted by modification date)
  *
  * ADR-005: Event-driven architecture for reactive UI updates
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
 import { Ticket, TicketStatus, Plan, Report } from '../data/types';
 
 /**
  * Tree item types for sidebar navigation
  */
-export type TreeItemType = 'ticket' | 'plan' | 'report' | 'status-group' | 'plan-group';
+export type TreeItemType = 'ticket' | 'plan' | 'report' | 'status-group' | 'plan-group' | 'skill' | 'log';
 
 /**
  * Base tree item for all sidebar items
@@ -225,6 +227,7 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
   readonly onDidChangeTreeData: vscode.Event<SidebarTreeItem | undefined> = this._onDidChangeTreeData.event;
 
   private workflowRoot: string | null = null;
+  private filterPlan: string | null = null;
 
   constructor(private readonly store: WorkflowStore) {
     // Subscribe to store change events for reactive updates
@@ -241,6 +244,22 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
   setWorkflowRoot(root: string): void {
     this.workflowRoot = root;
     this.refresh();
+  }
+
+  /**
+   * Set plan filter for tickets
+   * @param planId Plan ID to filter by, or null to clear filter
+   */
+  setPlanFilter(planId: string | null): void {
+    this.filterPlan = planId;
+    this.refresh();
+  }
+
+  /**
+   * Get current plan filter
+   */
+  getPlanFilter(): string | null {
+    return this.filterPlan;
   }
 
   /**
@@ -283,8 +302,13 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    * Get status groups with ticket counts
    */
   private getStatusGroups(): Thenable<SidebarTreeItem[]> {
-    const tickets = this.store.getTickets();
-    
+    let tickets = this.store.getTickets();
+
+    // Apply plan filter if set
+    if (this.filterPlan) {
+      tickets = tickets.filter(ticket => ticket.parent_plan === this.filterPlan);
+    }
+
     // Count tickets by status
     const counts: Record<TicketStatus, number> = {
       [TicketStatus.Backlog]: 0,
@@ -323,11 +347,16 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    * Get tickets for a specific status
    */
   private getTicketsForStatus(status: TicketStatus): Thenable<SidebarTreeItem[]> {
-    const tickets = this.store.getTicketsByStatus(status);
-    
+    let tickets = this.store.getTicketsByStatus(status);
+
+    // Apply plan filter if set
+    if (this.filterPlan) {
+      tickets = tickets.filter(ticket => ticket.parent_plan === this.filterPlan);
+    }
+
     // Sort by priority (ascending, 1 = highest priority first)
     tickets.sort((a, b) => a.priority - b.priority);
-    
+
     const items = tickets.map(
       ticket => new TicketTreeItem(ticket, this.workflowRoot!)
     );
@@ -576,7 +605,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<SidebarTree
    */
   private getPipelineStages(): Thenable<SidebarTreeItem[]> {
     const pipeline = this.store.getPipeline();
-    
+
     if (!pipeline?.pipeline?.stages) {
       return Promise.resolve([]);
     }
@@ -591,14 +620,334 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<SidebarTree
         'ticket',
         stageId
       );
-      
+
       item.description = stageConfig.description || '';
       item.tooltip = stageConfig.description || stageId;
       item.iconPath = new vscode.ThemeIcon('gear');
-      
+
       items.push(item);
     }
 
     return Promise.resolve(items);
+  }
+}
+
+/**
+ * Tree item representing a skill
+ */
+export class SkillTreeItem extends SidebarTreeItem {
+  constructor(
+    public readonly skillId: string,
+    public readonly skillPath: string,
+    public readonly stagesCount: number,
+    public readonly isUnlinked: boolean
+  ) {
+    const label = skillId;
+    const description = `${stagesCount} stage${stagesCount !== 1 ? 's' : ''}`;
+    super(label, vscode.TreeItemCollapsibleState.None, 'skill', skillId);
+
+    this.description = description;
+    this.tooltip = `${skillId}\nStages: ${stagesCount}\nPath: ${skillPath}`;
+    this.iconPath = isUnlinked
+      ? new vscode.ThemeIcon('warning', new vscode.ThemeColor('notificationsWarningIcon.foreground'))
+      : new vscode.ThemeIcon('symbol-method');
+
+    // Command to open SKILL.md file on click
+    this.command = {
+      command: 'vscode.open',
+      title: vscode.l10n.t('Open Skill'),
+      arguments: [vscode.Uri.file(skillPath)]
+    };
+  }
+}
+
+/**
+ * TreeDataProvider for skills view
+ * Scans .workflow/src/skills/{skill}/SKILL.md and displays skills with stages count
+ */
+export class SkillsTreeProvider implements vscode.TreeDataProvider<SidebarTreeItem> {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<SidebarTreeItem | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<SidebarTreeItem | undefined> = this._onDidChangeTreeData.event;
+
+  private workflowRoot: string | null = null;
+  private skillsWatcher: vscode.FileSystemWatcher | null = null;
+
+  constructor(private readonly store: WorkflowStore) {
+    // Subscribe to store change events for reactive updates
+    store.onDidChange((event: StoreChangeEvent) => {
+      if (event.type === 'config') {
+        this.refresh();
+      }
+    });
+  }
+
+  /**
+   * Set workflow root directory and setup file watcher
+   */
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
+
+    // Setup file watcher for SKILL.md files
+    if (this.skillsWatcher) {
+      this.skillsWatcher.dispose();
+    }
+
+    const skillsPattern = path.join(root, 'src', 'skills', '*', 'SKILL.md');
+    this.skillsWatcher = vscode.workspace.createFileSystemWatcher(skillsPattern);
+
+    this.skillsWatcher.onDidChange(() => this.refresh());
+    this.skillsWatcher.onDidCreate(() => this.refresh());
+    this.skillsWatcher.onDidDelete(() => this.refresh());
+
+    this.refresh();
+  }
+
+  /**
+   * Dispose file watcher
+   */
+  dispose(): void {
+    if (this.skillsWatcher) {
+      this.skillsWatcher.dispose();
+    }
+  }
+
+  /**
+   * Refresh tree data
+   */
+  refresh(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /**
+   * Get tree item for element
+   */
+  getTreeItem(element: SidebarTreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  /**
+   * Get children for element
+   */
+  getChildren(element?: SidebarTreeItem): Thenable<SidebarTreeItem[]> {
+    if (!this.workflowRoot) {
+      return Promise.resolve([]);
+    }
+
+    if (element) {
+      return Promise.resolve([]);
+    }
+
+    // Root level: show all skills
+    return this.getSkills();
+  }
+
+  /**
+   * Scan and return all skills as tree items
+   */
+  private async getSkills(): Promise<SidebarTreeItem[]> {
+    const skillsDir = path.join(this.workflowRoot!, 'src', 'skills');
+
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(skillsDir));
+      const items: SkillTreeItem[] = [];
+
+      // Filter directories and sort alphabetically
+      const skillDirs = entries
+        .filter(([_, type]) => type === vscode.FileType.Directory)
+        .map(([name]) => name)
+        .sort();
+
+      // Get pipeline stages to check skill bindings
+      const pipeline = this.store.getPipeline();
+      const stageSkills = this.getStageSkillsFromPipeline(pipeline);
+
+      for (const skillDir of skillDirs) {
+        const skillPath = path.join(skillsDir, skillDir, 'SKILL.md');
+        const skillUri = vscode.Uri.file(skillPath);
+
+        // Check if SKILL.md exists
+        try {
+          await vscode.workspace.fs.stat(skillUri);
+        } catch {
+          continue; // Skip if SKILL.md doesn't exist
+        }
+
+        // Count stages that reference this skill
+        const stagesCount = stageSkills.get(skillDir) || 0;
+        const isUnlinked = stagesCount === 0;
+
+        items.push(new SkillTreeItem(skillDir, skillPath, stagesCount, isUnlinked));
+      }
+
+      return items;
+    } catch (error) {
+      console.error('Failed to read skills directory:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Extract skill bindings from pipeline configuration
+   * Returns a map of skillId -> stages count
+   */
+  private getStageSkillsFromPipeline(pipeline: any): Map<string, number> {
+    const skillCounts = new Map<string, number>();
+
+    if (!pipeline?.pipeline?.stages) {
+      return skillCounts;
+    }
+
+    const stages = pipeline.pipeline.stages;
+
+    for (const stageConfig of Object.values(stages)) {
+      const stage = stageConfig as any;
+      if (stage.skill && typeof stage.skill === 'string') {
+        const count = skillCounts.get(stage.skill) || 0;
+        skillCounts.set(stage.skill, count + 1);
+      }
+    }
+
+    return skillCounts;
+  }
+}
+
+/**
+ * Tree item representing a log file
+ */
+export class LogFileTreeItem extends SidebarTreeItem {
+  constructor(
+    public readonly fileName: string,
+    public readonly filePath: string,
+    public readonly modifiedDate: Date
+  ) {
+    const label = fileName;
+    const description = modifiedDate.toLocaleString();
+    super(label, vscode.TreeItemCollapsibleState.None, 'log', fileName);
+
+    this.description = description;
+    this.tooltip = `${fileName}\nModified: ${modifiedDate.toLocaleString()}`;
+    this.iconPath = new vscode.ThemeIcon('output');
+
+    // Command to open log file on click
+    this.command = {
+      command: 'vscode.open',
+      title: vscode.l10n.t('Open Log'),
+      arguments: [vscode.Uri.file(filePath)]
+    };
+  }
+}
+
+/**
+ * TreeDataProvider for logs view
+ * Scans .workflow/logs/ and displays log files sorted by modification date (newest first)
+ */
+export class LogsTreeProvider implements vscode.TreeDataProvider<SidebarTreeItem> {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<SidebarTreeItem | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<SidebarTreeItem | undefined> = this._onDidChangeTreeData.event;
+
+  private workflowRoot: string | null = null;
+  private logsWatcher: vscode.FileSystemWatcher | null = null;
+
+  constructor(private readonly store: WorkflowStore) {
+    // Subscribe to store change events for reactive updates
+    store.onDidChange((event: StoreChangeEvent) => {
+      if (event.type === 'config') {
+        this.refresh();
+      }
+    });
+  }
+
+  /**
+   * Set workflow root directory and setup file watcher
+   */
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
+
+    // Setup file watcher for log files
+    if (this.logsWatcher) {
+      this.logsWatcher.dispose();
+    }
+
+    const logsPattern = path.join(root, 'logs', '*');
+    this.logsWatcher = vscode.workspace.createFileSystemWatcher(logsPattern);
+
+    this.logsWatcher.onDidChange(() => this.refresh());
+    this.logsWatcher.onDidCreate(() => this.refresh());
+    this.logsWatcher.onDidDelete(() => this.refresh());
+
+    this.refresh();
+  }
+
+  /**
+   * Dispose file watcher
+   */
+  dispose(): void {
+    if (this.logsWatcher) {
+      this.logsWatcher.dispose();
+    }
+  }
+
+  /**
+   * Refresh tree data
+   */
+  refresh(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /**
+   * Get tree item for element
+   */
+  getTreeItem(element: SidebarTreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  /**
+   * Get children for element
+   */
+  getChildren(element?: SidebarTreeItem): Thenable<SidebarTreeItem[]> {
+    if (!this.workflowRoot) {
+      return Promise.resolve([]);
+    }
+
+    if (element) {
+      return Promise.resolve([]);
+    }
+
+    // Root level: show all log files
+    return this.getLogFiles();
+  }
+
+  /**
+   * Scan and return all log files sorted by modification date (newest first)
+   */
+  private async getLogFiles(): Promise<SidebarTreeItem[]> {
+    const logsDir = path.join(this.workflowRoot!, 'logs');
+
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(logsDir));
+      const items: LogFileTreeItem[] = [];
+
+      // Filter files and get their stats
+      for (const [fileName, fileType] of entries) {
+        if (fileType === vscode.FileType.File) {
+          const filePath = path.join(logsDir, fileName);
+          try {
+            const stats = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+            const modifiedDate = new Date(stats.mtime);
+            items.push(new LogFileTreeItem(fileName, filePath, modifiedDate));
+          } catch {
+            // Skip files that can't be read
+          }
+        }
+      }
+
+      // Sort by modification date (newest first)
+      items.sort((a, b) => b.modifiedDate.getTime() - a.modifiedDate.getTime());
+
+      return items;
+    } catch (error) {
+      console.error('Failed to read logs directory:', error);
+      return [];
+    }
   }
 }

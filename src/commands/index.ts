@@ -2,12 +2,13 @@
  * Command handlers for configuration and navigation commands
  *
  * Includes: workflow.openPipelineConfig, workflow.openConfig, workflow.focusTicketsView,
- * workflow.focusKanban, workflow.refreshAll, workflow.copyTicketId
+ * workflow.focusKanban, workflow.refreshAll, workflow.copyTicketId, workflow.filterTicketsByPlan
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkflowStore } from '../data/workflow-store';
+import { TicketsTreeProvider } from '../ui/sidebar-tree-provider';
 
 /**
  * Execute workflow.openPipelineConfig command
@@ -108,4 +109,62 @@ export async function executeCopyTicketId(ticketId?: string): Promise<void> {
 
   await vscode.env.clipboard.writeText(ticketId);
   vscode.window.showInformationMessage(vscode.l10n.t('Copied {0} to clipboard', ticketId));
+}
+
+/**
+ * Execute workflow.filterTicketsByPlan command
+ * Shows QuickPick with plans and applies filter to tickets view
+ */
+export async function executeFilterTicketsByPlan(
+  store: WorkflowStore,
+  ticketsProvider: TicketsTreeProvider
+): Promise<void> {
+  const plans = store.getPlans();
+
+  if (plans.length === 0) {
+    vscode.window.showInformationMessage(vscode.l10n.t('No plans available'));
+    return;
+  }
+
+  // Sort plans by ID
+  plans.sort((a, b) => a.id.localeCompare(b.id));
+
+  // Create QuickPick items
+  const currentFilter = ticketsProvider.getPlanFilter();
+
+  const planItems = plans.map(plan => ({
+    label: plan.id,
+    description: plan.title,
+    planId: plan.id,
+    isCurrent: plan.folder === 'current'
+  }));
+
+  // Add "Clear filter" option if filter is active
+  const quickPickItems = currentFilter
+    ? [{
+        label: vscode.l10n.t('$(clear-all) Clear Filter'),
+        description: vscode.l10n.t('Show all tickets'),
+        planId: null,
+        isCurrent: false
+      }, ...planItems]
+    : planItems;
+
+  const selected = await vscode.window.showQuickPick(quickPickItems, {
+    placeHolder: vscode.l10n.t('Select a plan to filter tickets'),
+    title: vscode.l10n.t('Filter Tickets by Plan'),
+    matchOnDescription: true
+  });
+
+  if (!selected) {
+    return; // User cancelled
+  }
+
+  // Apply filter or clear it
+  ticketsProvider.setPlanFilter(selected.planId);
+
+  if (selected.planId) {
+    vscode.window.showInformationMessage(
+      vscode.l10n.t('Filtered tickets by plan: {0}', selected.planId)
+    );
+  }
 }

@@ -616,8 +616,12 @@ tags: []
       const transitions = ticketService.getValidTransitions(TicketStatus.Backlog);
       assert.ok(transitions.includes(TicketStatus.Ready), 'Should allow backlog → ready');
 
-      // Note: Actual move requires wf CLI which may not be installed
-      // Manually simulate move for integration test
+      // NOTE: Actual move requires wf CLI which may not be installed in test environment.
+      // This test verifies state machine logic but not the CLI-based file move operation.
+      // The move() functionality is tested separately in ticket-service-transitions.test.ts
+      // which validates valid transitions without requiring CLI execution.
+      //
+      // For this integration test, we simulate the status change to verify the workflow:
       store.updateTicket(ticket.id, { ...updated!, status: TicketStatus.Ready });
 
       const moved = ticketService.getById(ticket.id);

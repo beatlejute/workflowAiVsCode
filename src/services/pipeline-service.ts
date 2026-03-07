@@ -10,6 +10,7 @@
 
 import { spawn, ChildProcess, execSync } from 'child_process';
 import { EventEmitter } from 'events';
+import * as vscode from 'vscode';
 
 /**
  * Pipeline execution state
@@ -25,7 +26,7 @@ export enum PipelineState {
  * Parsed log entry from stdout
  */
 export interface ParsedLogEntry {
-  type: 'goto' | 'info' | 'ctx' | 'raw';
+  type: 'goto' | 'start' | 'info' | 'ctx' | 'raw';
   raw: string;
   stage?: string;
   agent?: string;
@@ -69,8 +70,15 @@ export class PipelineService extends EventEmitter {
   private currentAgent: string | undefined;
   private currentTicket: string | undefined;
   private retryCount: number = 0;
+  private stopping = false;
   private spawnFn: SpawnFunction;
   private workflowRoot: string | undefined;
+  private progress?: vscode.Progress<{ message?: string; increment?: number }>;
+  private progressCancellationToken?: vscode.CancellationTokenSource;
+  private startTime?: number;
+  private totalStages: number = 0;
+  private completedStages: number = 0;
+  private fallbackUsed = false;
 
   /**
    * Create PipelineService
@@ -148,7 +156,9 @@ export class PipelineService extends EventEmitter {
     }
 
     this.setState(PipelineState.Running);
+    this.stopping = false;
     this.retryCount = 0;
+    this.fallbackUsed = false;
     this.currentStage = undefined;
     this.currentAgent = undefined;
     this.currentTicket = undefined;
@@ -160,52 +170,112 @@ export class PipelineService extends EventEmitter {
       const env = { ...process.env };
       delete env.CLAUDECODE;
 
-      this.emit('log', `[PIPELINE] Starting: workflow run (shell: ${process.platform === 'win32'})\n`);
+      // Create progress bar with cancellation support
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Pipeline',
+          cancellable: true
+        },
+        async (progress, token) => {
+          this.progress = progress;
+          this.startTime = Date.now();
+          this.completedStages = 0;
+          
+          // Handle cancellation
+          token.onCancellationRequested(() => {
+            this.emit('log', '[PIPELINE] Cancellation requested\n');
+            this.stop();
+          });
 
-      const child = this.spawnFn('workflow', args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env,
-        cwd: this.workflowRoot,
-        shell: process.platform === 'win32'
-      });
+          this.progressCancellationToken = new vscode.CancellationTokenSource();
+          token.onCancellationRequested(() => {
+            this.progressCancellationToken?.cancel();
+          });
 
-      this.childProcess = child;
+          // Initial progress report
+          this.reportProgress('Starting pipeline...', 0);
 
-      // Handle stdout
-      child.stdout?.on('data', (data: Buffer) => {
-        const output = data.toString();
-        this.emit('log', output);
-        this.parseStdout(output);
-      });
-
-      // Handle stderr
-      child.stderr?.on('data', (data: Buffer) => {
-        const output = data.toString();
-        this.emit('log', `[STDERR] ${output}`);
-      });
-
-      // Handle process exit
-      child.on('close', (code: number | null) => {
-        this.childProcess = null;
-        this.emit('log', `[PIPELINE] Process exited with code: ${code}\n`);
-        if (code === 0) {
-          this.setState(PipelineState.Completed);
-        } else {
-          this.setState(PipelineState.Error);
+          this.spawnWithFallback('workflow', args, env);
         }
-      });
-
-      // Handle process errors (e.g. ENOENT)
-      child.on('error', (err: NodeJS.ErrnoException) => {
-        this.emit('log', `[PIPELINE] Spawn error: ${err.message} (code: ${err.code})\n`);
-        this.childProcess = null;
-        this.setState(PipelineState.Error);
-      });
+      );
 
     } catch (error) {
       this.setState(PipelineState.Error);
       throw error;
     }
+  }
+
+  /**
+   * Spawn process with fallback to workflow-ai on ENOENT
+   */
+  private spawnWithFallback(command: string, args: readonly string[], env: NodeJS.ProcessEnv): void {
+    const child = this.spawnFn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env,
+      cwd: this.workflowRoot,
+      shell: process.platform === 'win32'
+    });
+
+    this.childProcess = child;
+
+    // Handle stdout
+    child.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      this.emit('log', output);
+      this.parseStdout(output);
+    });
+
+    // Handle stderr
+    child.stderr?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      this.emit('log', `[ERROR] ${output}`);
+    });
+
+    // Handle process exit
+    child.on('close', (code: number | null) => {
+      this.childProcess = null;
+      this.emit('log', `[PIPELINE] Process exited with code: ${code}\n`);
+
+      // Complete progress
+      if (this.progressCancellationToken) {
+        this.progressCancellationToken.dispose();
+        this.progressCancellationToken = undefined;
+      }
+
+      // If stop() was called, state is already Idle — don't override
+      if (this.stopping) {
+        this.stopping = false;
+        return;
+      }
+      if (code === 0) {
+        this.reportProgress('Pipeline completed', 100);
+        this.setState(PipelineState.Completed);
+      } else {
+        this.reportProgress('Pipeline failed', 100);
+        this.setState(PipelineState.Error);
+      }
+    });
+
+    // Handle process errors (e.g. ENOENT)
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      this.emit('log', `[PIPELINE] Spawn error: ${err.message} (code: ${err.code})\n`);
+      this.childProcess = null;
+
+      if (this.progressCancellationToken) {
+        this.progressCancellationToken.dispose();
+        this.progressCancellationToken = undefined;
+      }
+
+      // Fallback to workflow-ai on ENOENT from primary command
+      if (err.code === 'ENOENT' && command === 'workflow' && !this.fallbackUsed) {
+        this.fallbackUsed = true;
+        this.emit('log', '[PIPELINE] workflow not found, trying workflow-ai...\n');
+        this.spawnWithFallback('workflow-ai', args, env);
+      } else {
+        this.setState(PipelineState.Error);
+      }
+    });
   }
 
   /**
@@ -216,6 +286,7 @@ export class PipelineService extends EventEmitter {
       return;
     }
 
+    this.stopping = true;
     const pid = this.childProcess.pid;
 
     if (process.platform === 'win32' && pid) {
@@ -247,8 +318,14 @@ export class PipelineService extends EventEmitter {
       const parsed = this.parseLine(trimmedLine);
 
       // Update state based on parsed data
-      if (parsed.stage) {
+      // Only update currentStage from START and GOTO messages,
+      // not from generic log lines where stage is just the logger name (e.g. "Runner")
+      if (parsed.stage && (parsed.type === 'goto' || parsed.type === 'start')) {
         this.currentStage = parsed.stage;
+      }
+      if (parsed.type === 'goto' && parsed.stage) {
+        this.completedStages++;
+        this.updateStageProgress(parsed.stage, parsed.elapsed);
       }
       if (parsed.agent) {
         this.currentAgent = parsed.agent;
@@ -302,7 +379,7 @@ export class PipelineService extends EventEmitter {
     const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
     if (startMatch) {
       return {
-        type: 'info',
+        type: 'start',
         raw: line,
         timestamp,
         stage: startMatch[1],
@@ -412,10 +489,35 @@ export class PipelineService extends EventEmitter {
   }
 
   /**
+   * Report progress to the progress bar
+   */
+  private reportProgress(message: string, increment?: number): void {
+    if (this.progress && !this.progressCancellationToken?.token.isCancellationRequested) {
+      this.progress.report({ message, increment });
+    }
+  }
+
+  /**
+   * Update progress when transitioning to a new stage
+   */
+  private updateStageProgress(stageName: string, elapsed?: string): void {
+    const elapsedText = elapsed ? ` • ${elapsed}` : '';
+    const timeText = this.startTime ? ` • ${(Date.now() - this.startTime) / 1000}s` : '';
+    const message = `Stage: ${stageName}${elapsedText}${timeText}`;
+    
+    // Increment progress (each stage adds ~10%)
+    this.reportProgress(message, 10);
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
     this.stop();
     this.removeAllListeners();
+    if (this.progressCancellationToken) {
+      this.progressCancellationToken.dispose();
+      this.progressCancellationToken = undefined;
+    }
   }
 }

@@ -70,6 +70,16 @@
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
+          "id": "workflow-sidebar.skills",
+          "name": "%views.sidebar.skills.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
+          "id": "workflow-sidebar.logs",
+          "name": "%views.sidebar.logs.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
+        },
+        {
           "id": "workflow-sidebar.welcome",
           "name": "%views.sidebar.welcome.name%",
           "when": "!workflow.cliInstalled || !workflow.workflowFound",
@@ -290,6 +300,12 @@
         "title": "%command.copyTicketId.title%",
         "category": "%category.workflow%",
         "icon": "$(copy)"
+      },
+      {
+        "command": "workflow.filterTicketsByPlan",
+        "title": "%command.filterTicketsByPlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(filter)"
       }
     ],
     "keybindings": [
@@ -319,6 +335,16 @@
         }
       }
     },
+    "snippets": [
+      {
+        "language": "markdown",
+        "path": "./snippets/workflow.code-snippets"
+      },
+      {
+        "language": "yaml",
+        "path": "./snippets/workflow.code-snippets"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -328,6 +354,11 @@
         },
         {
           "command": "workflow.refreshTickets",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.filterTicketsByPlan",
           "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },

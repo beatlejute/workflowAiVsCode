@@ -121,7 +121,7 @@ TODO
   suiteTeardown(async () => {
     // Cleanup temporary directory
     try {
-      fs.rmSync(path.join(tempWorkflowRoot, '.workflow'), { recursive: true, force: true });
+      fs.rmSync(tempWorkflowRoot, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }

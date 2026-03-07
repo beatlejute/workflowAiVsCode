@@ -62,5 +62,9 @@
   "menu.editTicket.title": "Editar ticket",
   "menu.moveTicketFromMenu.title": "Mover ticket",
   "menu.showTicketDependencies.title": "Mostrar dependências",
-  "menu.copyTicketId.title": "Copiar ID do ticket"
+  "menu.copyTicketId.title": "Copiar ID do ticket",
+  "views.sidebar.skills.name": "HABILIDADES",
+  "views.sidebar.logs.name": "REGISTROS",
+  "command.filterTicketsByPlan.title": "Filtrar por plano",
+  "kanban.badge.tooltip": "{0} tickets prontos"
 }

@@ -7,6 +7,8 @@
   "views.sidebar.tickets.name": "ТИКЕТЫ",
   "views.sidebar.plans.name": "ПЛАНЫ",
   "views.sidebar.reports.name": "ОТЧЁТЫ",
+  "views.sidebar.skills.name": "SKILLS",
+  "views.sidebar.logs.name": "ЛОГИ",
   "views.sidebar.welcome.name": "Добро пожаловать",
   "views.kanban.backlog.name": "БЭКЛОГ",
   "views.kanban.ready.name": "ГОТОВО",
@@ -44,6 +46,7 @@
   "command.focusKanban.title": "Фокус на Канбан",
   "command.refreshAll.title": "Обновить всё",
   "command.copyTicketId.title": "Копировать ID тикета",
+  "command.filterTicketsByPlan.title": "Фильтровать по плану",
   "category.workflow": "Workflow",
   "config.title": "Workflow",
   "config.cliPath.description": "Пользовательский путь к исполняемому файлу workflow CLI",
@@ -62,5 +65,6 @@
   "menu.editTicket.title": "Редактировать тикет",
   "menu.moveTicketFromMenu.title": "Переместить тикет",
   "menu.showTicketDependencies.title": "Показать зависимости",
-  "menu.copyTicketId.title": "Копировать ID тикета"
+  "menu.copyTicketId.title": "Копировать ID тикета",
+  "kanban.badge.tooltip": "{0} тикетов готово"
 }

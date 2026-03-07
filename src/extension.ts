@@ -7,7 +7,9 @@ import { WorkflowStore } from './data/workflow-store';
 import {
   TicketsTreeProvider,
   PlansTreeProvider,
-  ReportsTreeProvider
+  ReportsTreeProvider,
+  SkillsTreeProvider,
+  LogsTreeProvider
 } from './ui/sidebar-tree-provider';
 import {
   createKanbanProviders,
@@ -35,7 +37,8 @@ import {
   executeFocusTicketsView,
   executeFocusKanban,
   executeRefreshAll,
-  executeCopyTicketId
+  executeCopyTicketId,
+  executeFilterTicketsByPlan
 } from './commands/index';
 
 const execAsync = promisify(exec);
@@ -283,6 +286,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await updateContextKeys(pipelineService);
   
   const pipelineProvider = new PipelineTreeProvider(store, pipelineService);
+  const skillsProvider = new SkillsTreeProvider(store);
+  const logsProvider = new LogsTreeProvider(store);
   const kanbanProviders = createKanbanProviders(store);
 
   // Create StatusBar
@@ -302,6 +307,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     plansProvider.setWorkflowRoot(workflowRoot);
     reportsProvider.setWorkflowRoot(workflowRoot);
     pipelineProvider.setWorkflowRoot(workflowRoot);
+    skillsProvider.setWorkflowRoot(workflowRoot);
+    logsProvider.setWorkflowRoot(workflowRoot);
     kanbanProviders.backlog.setWorkflowRoot(workflowRoot);
     kanbanProviders.ready.setWorkflowRoot(workflowRoot);
     kanbanProviders.inProgress.setWorkflowRoot(workflowRoot);
@@ -315,8 +322,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerTreeDataProvider('workflow-sidebar.tickets', ticketsProvider),
     vscode.window.registerTreeDataProvider('workflow-sidebar.plans', plansProvider),
     vscode.window.registerTreeDataProvider('workflow-sidebar.reports', reportsProvider),
+    vscode.window.registerTreeDataProvider('workflow-sidebar.skills', skillsProvider),
+    vscode.window.registerTreeDataProvider('workflow-sidebar.logs', logsProvider),
     vscode.window.registerTreeDataProvider('workflow-sidebar.pipeline', pipelineProvider),
-    statusBar
+    statusBar,
+    skillsProvider,
+    logsProvider
   );
 
   // Register Kanban views using createTreeView for title/badge support
@@ -346,15 +357,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     doneTreeView.title = `DONE (${kanbanProviders.done.getCount()})`;
   };
 
+  // Update Kanban view badges with ticket counts
+  const updateKanbanBadges = () => {
+    backlogTreeView.badge = kanbanProviders.backlog.getBadge();
+    readyTreeView.badge = kanbanProviders.ready.getBadge();
+    inProgressTreeView.badge = kanbanProviders.inProgress.getBadge();
+    blockedTreeView.badge = kanbanProviders.blocked.getBadge();
+    reviewTreeView.badge = kanbanProviders.review.getBadge();
+    doneTreeView.badge = kanbanProviders.done.getBadge();
+  };
+
   // Initial title update
   updateKanbanTitles();
+  updateKanbanBadges();
 
   // Subscribe to store changes to update titles and refresh all tree providers
   store.onDidChange(() => {
     updateKanbanTitles();
+    updateKanbanBadges();
     ticketsProvider.refresh();
     plansProvider.refresh();
     reportsProvider.refresh();
+    skillsProvider.refresh();
+    logsProvider.refresh();
     pipelineProvider.refresh();
     kanbanProviders.backlog.refresh();
     kanbanProviders.ready.refresh();
@@ -388,7 +413,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   context.subscriptions.push(documentLinkDisposable);
 
-  // Register CodeLens provider for ticket .md files
+  // Register CodeLens provider for ticket .md files and pipeline.yaml
   if (workflowRoot) {
     const ticketService = new TicketService(store, workflowRoot);
     const dependencyService = new DependencyService(store);
@@ -399,7 +424,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     codeLensProvider.setWorkflowRoot(workflowRoot);
     const codeLensDisposable = vscode.languages.registerCodeLensProvider(
-      { scheme: 'file', pattern: '**/.workflow/tickets/**/*.md' },
+      [
+        { scheme: 'file', pattern: '**/.workflow/tickets/**/*.md' },
+        { scheme: 'file', pattern: '**/.workflow/config/pipeline.yaml' },
+        { scheme: 'file', pattern: '**/.workflow/config/config.yaml' }
+      ],
       codeLensProvider
     );
     context.subscriptions.push(codeLensDisposable);
@@ -450,6 +479,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Register commands
   const installCliCmd = registerCommandSafe('workflow.installCli', installCli);
   const initCmd = registerCommandSafe('workflow.init', initWorkflow);
+
+  /**
+   * Focus pipeline stage command - opens pipeline.yaml and focuses on a stage
+   */
+  registerCommandSafe(
+    'workflow.focusPipelineStage',
+    async (stageId: string) => {
+      if (!workflowRoot) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Workflow root not available'));
+        return;
+      }
+
+      const pipelinePath = path.join(workflowRoot, 'config', 'pipeline.yaml');
+      
+      try {
+        const doc = await vscode.workspace.openTextDocument(pipelinePath);
+        const editor = await vscode.window.showTextDocument(doc);
+        
+        // Find the stage in the document
+        const content = doc.getText();
+        const escapedStageId = stageId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const stageRegex = new RegExp(`^\\s{4}${escapedStageId}:\\s*$`, 'm');
+        const match = stageRegex.exec(content);
+        
+        if (match) {
+          const textBeforeMatch = content.substring(0, match.index);
+          const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
+          const position = new vscode.Position(lineNumber, 0);
+          
+          editor.revealRange(
+            new vscode.Range(position, position),
+            vscode.TextEditorRevealType.InCenter
+          );
+          editor.selection = new vscode.Selection(position, position);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to focus on stage: {0}', message));
+      }
+    }
+  );
 
   /**
    * Open ticket command - opens ticket file in editor
@@ -937,6 +1007,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     async (arg?: unknown) => {
       const ticketId = resolveTicketId(arg);
       await executeCopyTicketId(ticketId);
+    }
+  );
+
+  /**
+   * workflow.filterTicketsByPlan command - filter tickets by plan
+   */
+  registerCommandSafe(
+    'workflow.filterTicketsByPlan',
+    async () => {
+      if (!workflowRoot) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Workflow root not available'));
+        return;
+      }
+      await executeFilterTicketsByPlan(store, ticketsProvider);
     }
   );
 

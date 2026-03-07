@@ -105,6 +105,7 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
  * Tree item representing a completed stage
  */
 export class CompletedStageTreeItem extends PipelineTreeItem {
+  private static counter = 0;
   constructor(
     public readonly stage: string,
     public readonly elapsed?: string,
@@ -116,7 +117,7 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
       label,
       vscode.TreeItemCollapsibleState.None,
       'completed-stage',
-      `completed-stage-${stage}`
+      `completed-stage-${CompletedStageTreeItem.counter++}-${stage}`
     );
 
     this.description = elapsed ? `${vscode.l10n.t('Elapsed')}: ${elapsed}` : '';
@@ -390,7 +391,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private currentAttempt: number | undefined;
   private currentMaxAttempts: number | undefined;
   private elapsed: string | undefined;
-  private completedStages: Map<string, { elapsed?: string; success: boolean }> = new Map();
+  private completedStages: Array<{ stage: string; elapsed?: string; success: boolean }> = [];
 
   constructor(
     private readonly store: WorkflowStore,
@@ -515,7 +516,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       const elapsed = gotoMatch[2];
 
       if (this.currentStage) {
-        this.completedStages.set(this.currentStage, {
+        this.completedStages.push({
+          stage: this.currentStage,
           elapsed: this.elapsed,
           success: true
         });
@@ -580,7 +582,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
       if (gotoMatch) {
         if (this.currentStage) {
-          this.completedStages.set(this.currentStage, {
+          this.completedStages.push({
+            stage: this.currentStage,
             elapsed: this.elapsed,
             success: true
           });
@@ -733,9 +736,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       ));
     }
 
-    // 3. Completed stages
-    for (const [stage, info] of this.completedStages.entries()) {
-      items.push(new CompletedStageTreeItem(stage, info.elapsed, info.success));
+    // 3. Completed stages (newest on top)
+    for (let i = this.completedStages.length - 1; i >= 0; i--) {
+      const info = this.completedStages[i];
+      items.push(new CompletedStageTreeItem(info.stage, info.elapsed, info.success));
     }
 
     // 4. Statistics
@@ -759,6 +763,20 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       vscode.window.showErrorMessage(vscode.l10n.t('Pipeline service not available'));
       return;
     }
+
+    // Reset state from previous run
+    this.completedStages = [];
+    this.currentStage = undefined;
+    this.currentAgent = undefined;
+    this.currentFallbackAgent = undefined;
+    this.currentSkill = undefined;
+    this.currentTicket = undefined;
+    this.currentAttempt = undefined;
+    this.currentMaxAttempts = undefined;
+    this.elapsed = undefined;
+    this.stagesStarted = 0;
+    this.retries = 0;
+    this.gotos = 0;
 
     try {
       await this.pipelineService.start();
@@ -805,7 +823,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     this.stagesStarted = 0;
     this.retries = 0;
     this.gotos = 0;
-    this.completedStages.clear();
+    this.completedStages = [];
     this.refresh();
     vscode.window.showInformationMessage(vscode.l10n.t('Pipeline history cleared'));
   }

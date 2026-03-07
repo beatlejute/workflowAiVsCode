@@ -7,7 +7,9 @@
   "views.sidebar.tickets.name": "TICKETS",
   "views.sidebar.plans.name": "PLANS",
   "views.sidebar.reports.name": "REPORTS",
-  "views.sidebar.welcome.name": "Welcome",
+  "views.sidebar.skills.name": "SKILLS",
+  "views.sidebar.logs.name": "LOGS",
+  "views.sidebar.welcome.name": "WELCOME",
   "views.kanban.backlog.name": "BACKLOG",
   "views.kanban.ready.name": "READY",
   "views.kanban.inProgress.name": "IN PROGRESS",
@@ -44,6 +46,7 @@
   "command.focusKanban.title": "Focus Kanban",
   "command.refreshAll.title": "Refresh All",
   "command.copyTicketId.title": "Copy Ticket ID",
+  "command.filterTicketsByPlan.title": "Filter by Plan",
   "category.workflow": "Workflow",
   "config.title": "Workflow",
   "config.cliPath.description": "Custom path to the workflow CLI executable",
@@ -62,5 +65,6 @@
   "menu.editTicket.title": "Edit Ticket",
   "menu.moveTicketFromMenu.title": "Move Ticket",
   "menu.showTicketDependencies.title": "Show Dependencies",
-  "menu.copyTicketId.title": "Copy Ticket ID"
+  "menu.copyTicketId.title": "Copy Ticket ID",
+  "kanban.badge.tooltip": "{0} tickets ready"
 }

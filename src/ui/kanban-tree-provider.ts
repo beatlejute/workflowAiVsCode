@@ -217,6 +217,21 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   getCount(): number {
     return this.store.getTicketsByStatus(this.status).length;
   }
+
+  /**
+   * Get badge for this status
+   * Used for TreeView.badge property
+   */
+  getBadge(): vscode.ViewBadge | undefined {
+    const count = this.getCount();
+    if (count === 0) {
+      return undefined;
+    }
+    return {
+      value: count,
+      tooltip: vscode.l10n.t('{0} tickets ready', count)
+    };
+  }
 }
 
 /**

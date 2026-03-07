@@ -62,5 +62,9 @@
   "menu.editTicket.title": "티켓 편집",
   "menu.moveTicketFromMenu.title": "티켓 이동",
   "menu.showTicketDependencies.title": "종속성 표시",
-  "menu.copyTicketId.title": "티켓 ID 복사"
+  "menu.copyTicketId.title": "티켓 ID 복사",
+  "views.sidebar.skills.name": "기술",
+  "views.sidebar.logs.name": "로그",
+  "command.filterTicketsByPlan.title": "계획으로 필터링",
+  "kanban.badge.tooltip": "{0} 티켓 준비됨"
 }

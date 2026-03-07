@@ -8,6 +8,9 @@
  * - TicketHoverProvider: Status icons are correct
  * - TicketHoverProvider: Dependencies with status icons
  * - WorkflowHoverProvider: Delegates to ticket provider for .md and .yaml
+ * - AgentHoverProvider: Hover displays for agent: in pipeline.yaml
+ * - AgentHoverProvider: Hover displays for fallback_agent: in pipeline.yaml
+ * - AgentHoverProvider: Hover shows command, args, workdir, description
  */
 
 import * as assert from 'assert';
@@ -17,7 +20,8 @@ import * as fs from 'fs';
 import { WorkflowStore } from '../../data/workflow-store';
 import {
   TicketHoverProvider,
-  WorkflowHoverProvider
+  WorkflowHoverProvider,
+  AgentHoverProvider
 } from '../../ui/hover-provider';
 import { Ticket, TicketStatus } from '../../data/types';
 
@@ -463,6 +467,188 @@ Ticket body.
       const hover = provider.provideHover(document, position);
 
       assert.ok(hover, 'Hover should be created for .yml file');
+    });
+  });
+
+  suite('AgentHoverProvider', () => {
+    let agentProvider: AgentHoverProvider;
+
+    setup(() => {
+      agentProvider = new AgentHoverProvider();
+      agentProvider.setWorkflowRoot(tempWorkflowRoot);
+    });
+
+    test('creates hover for agent: value in pipeline.yaml', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet
+      fallback_agent: qwen-code`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16); // Position within claude-sonnet
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.ok(hover, 'Hover should be created for agent: value');
+      assert.ok(hover!.contents instanceof vscode.MarkdownString, 'Contents should be MarkdownString');
+    });
+
+    test('creates hover for fallback_agent: value in pipeline.yaml', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet
+      fallback_agent: qwen-code`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(4, 24); // Position within qwen-code
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.ok(hover, 'Hover should be created for fallback_agent: value');
+    });
+
+    test('hover content contains agent command', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+      const markdown = hover!.contents as vscode.MarkdownString;
+
+      assert.ok(markdown.value.includes('Command:'), 'Hover should contain Command label');
+      assert.ok(markdown.value.includes('claude'), 'Hover should contain claude in command');
+    });
+
+    test('hover content contains agent args', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+      const markdown = hover!.contents as vscode.MarkdownString;
+
+      assert.ok(markdown.value.includes('Args:'), 'Hover should contain Args label');
+    });
+
+    test('hover content contains agent workdir', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+      const markdown = hover!.contents as vscode.MarkdownString;
+
+      assert.ok(markdown.value.includes('Workdir:'), 'Hover should contain Workdir label');
+    });
+
+    test('hover content contains agent description', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+      const markdown = hover!.contents as vscode.MarkdownString;
+
+      assert.ok(markdown.value.includes('Description:'), 'Hover should contain Description label');
+      assert.ok(markdown.value.includes('быстрая модель'), 'Hover should contain description text');
+    });
+
+    test('no hover for non-existent agent', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: non-existent-agent`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.strictEqual(hover, undefined, 'Hover should not be created for non-existent agent');
+    });
+
+    test('no hover when workflow root is not set', async () => {
+      const providerWithoutRoot = new AgentHoverProvider();
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = providerWithoutRoot.provideHover(document, position);
+
+      assert.strictEqual(hover, undefined, 'Hover should not be created without workflow root');
+    });
+
+    test('no hover for non-pipeline.yaml files', async () => {
+      const content = `stages:
+  execute-task:
+    agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'config.yaml');
+      const position = new vscode.Position(2, 14);
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.strictEqual(hover, undefined, 'Hover should not be created for non-pipeline.yaml files');
+    });
+
+    test('hover works for agent with underscore in name', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: script-move`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.ok(hover, 'Hover should work for agent with underscore');
+      const markdown = hover!.contents as vscode.MarkdownString;
+      assert.ok(markdown.value.includes('script-move'), 'Hover should contain script-move agent');
+    });
+
+    test('hover works for agent with dash in name', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: kilo-deepseek`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      const hover = agentProvider.provideHover(document, position);
+
+      assert.ok(hover, 'Hover should work for agent with dash');
+      const markdown = hover!.contents as vscode.MarkdownString;
+      assert.ok(markdown.value.includes('kilo-deepseek'), 'Hover should contain kilo-deepseek agent');
+    });
+
+    test('hover caches parsed agents for performance', async () => {
+      const content = `pipeline:
+  stages:
+    execute-task:
+      agent: claude-sonnet`;
+      const document = await createTestDocument(content, 'pipeline.yaml');
+      const position = new vscode.Position(3, 16);
+
+      // First hover should parse and cache
+      const hover1 = agentProvider.provideHover(document, position);
+      assert.ok(hover1, 'First hover should work');
+
+      // Second hover should use cache
+      const hover2 = agentProvider.provideHover(document, position);
+      assert.ok(hover2, 'Second hover should work from cache');
     });
   });
 });

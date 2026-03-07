@@ -1,23 +1,37 @@
 /**
- * HoverProvider - Ticket preview on hover
+ * HoverProvider - Ticket preview on hover + Agent info in pipeline.yaml
  *
  * Provides HoverProvider implementation for:
  * - .md files: ticket ID references
  * - .yaml files: ticket ID references
+ * - pipeline.yaml: agent: and fallback_agent: values
  *
  * Features:
  * - Hover preview on ticket ID (IMPL-003, FIX-001, etc.)
  * - MarkdownString preview with: ID, title, status, priority, type, complexity, plan, deps, tags
  * - Status icons for visual distinction
  * - No hover for non-existent ticket IDs
+ * - Hover on agent:/fallback_agent: in pipeline.yaml shows agent info (command, args, workdir, description)
  *
  * ADR-006: VS Code Hover API for inline previews
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 import { WorkflowStore } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
+
+/**
+ * Agent definition interface
+ */
+interface AgentDefinition {
+  command: string;
+  args?: string[];
+  workdir?: string;
+  description?: string;
+}
 
 /**
  * Status icons mapping for hover preview
@@ -192,13 +206,180 @@ export class TicketHoverProvider implements vscode.HoverProvider {
 }
 
 /**
+ * HoverProvider for agent definitions in pipeline.yaml
+ *
+ * Shows agent info when hovering over agent: or fallback_agent: values
+ */
+export class AgentHoverProvider implements vscode.HoverProvider {
+  private workflowRoot: string | null = null;
+  private agentsCache: Map<string, AgentDefinition> = new Map();
+  private lastParsedFile: string | null = null;
+
+  /**
+   * Set workflow root directory
+   */
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
+    this.agentsCache.clear();
+    this.lastParsedFile = null;
+  }
+
+  /**
+   * Parse pipeline.yaml and extract agents definitions
+   */
+  private parsePipelineYaml(document: vscode.TextDocument): Map<string, AgentDefinition> {
+    const fsPath = document.uri.fsPath;
+    
+    // Use cache if already parsed
+    if (this.lastParsedFile === fsPath && this.agentsCache.size > 0) {
+      return this.agentsCache;
+    }
+
+    try {
+      const content = document.getText();
+      const parsed = yaml.load(content) as any;
+
+      if (parsed?.pipeline?.agents) {
+        this.agentsCache.clear();
+        const agents = parsed.pipeline.agents;
+        
+        for (const [agentId, agentData] of Object.entries(agents)) {
+          const data = agentData as any;
+          this.agentsCache.set(agentId, {
+            command: data.command || '',
+            args: data.args || [],
+            workdir: data.workdir || '.',
+            description: data.description || ''
+          });
+        }
+        
+        this.lastParsedFile = fsPath;
+      }
+    } catch (error) {
+      console.error('Failed to parse pipeline.yaml:', error);
+      this.agentsCache.clear();
+      this.lastParsedFile = null;
+    }
+
+    return this.agentsCache;
+  }
+
+  /**
+   * Check if pipeline.yaml has agents section
+   */
+  private hasAgents(document: vscode.TextDocument): boolean {
+    const agents = this.parsePipelineYaml(document);
+    return agents.size > 0;
+  }
+
+  /**
+   * Extract agent name at cursor position for agent: or fallback_agent:
+   */
+  private extractAgentNameAtPosition(line: string, charPosition: number): string | null {
+    // Match agent: value or fallback_agent: value
+    const agentValueRegex = /(agent|fallback_agent):\s*([a-zA-Z0-9_-]+)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = agentValueRegex.exec(line)) !== null) {
+      const fullMatchStart = match.index;
+      const valueStart = fullMatchStart + match[1].length + 1; // +1 for colon
+      const valueEnd = fullMatchStart + match[0].length;
+
+      // Skip whitespace after colon
+      const trimmedValueStart = line.indexOf(match[2], valueStart);
+      const trimmedValueEnd = trimmedValueStart + match[2].length;
+
+      // Check if cursor position is within the agent value
+      if (charPosition >= trimmedValueStart && charPosition <= trimmedValueEnd) {
+        return match[2];
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Provide hover for agent values in pipeline.yaml
+   */
+  provideHover(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): vscode.Hover | undefined {
+    if (!this.workflowRoot) {
+      return undefined;
+    }
+
+    const fsPath = document.uri.fsPath;
+    
+    // Only support pipeline.yaml
+    if (!fsPath.endsWith('pipeline.yaml') && !fsPath.endsWith('pipeline.yml')) {
+      return undefined;
+    }
+
+    const line = document.lineAt(position.line).text;
+    const agentName = this.extractAgentNameAtPosition(line, position.character);
+
+    if (!agentName) {
+      return undefined;
+    }
+
+    // Parse agents if not already cached
+    const agents = this.parsePipelineYaml(document);
+    const agent = agents.get(agentName);
+
+    if (!agent) {
+      return undefined;
+    }
+
+    // Build hover content
+    const hoverContent = this.buildAgentHoverContent(agentName, agent);
+    return new vscode.Hover(hoverContent);
+  }
+
+  /**
+   * Build MarkdownString hover content for agent
+   */
+  private buildAgentHoverContent(agentId: string, agent: AgentDefinition): vscode.MarkdownString {
+    const markdown = new vscode.MarkdownString();
+    markdown.isTrusted = true;
+    markdown.supportHtml = true;
+
+    // Header: Agent ID
+    markdown.appendMarkdown(`#### 🤖 ${agentId}\n\n`);
+
+    // Command
+    markdown.appendMarkdown(`**${vscode.l10n.t('Command')}:** \`${agent.command}\`\n\n`);
+
+    // Args
+    if (agent.args && agent.args.length > 0) {
+      markdown.appendMarkdown(`**${vscode.l10n.t('Args')}:**\n`);
+      markdown.appendMarkdown('```json\n' + JSON.stringify(agent.args, null, 2) + '\n```\n\n');
+    }
+
+    // Workdir
+    if (agent.workdir) {
+      markdown.appendMarkdown(`**${vscode.l10n.t('Workdir')}:** \`${agent.workdir}\`\n\n`);
+    }
+
+    // Description
+    if (agent.description) {
+      markdown.appendMarkdown(`**${vscode.l10n.t('Description')}:** ${agent.description}\n\n`);
+    }
+
+    return markdown;
+  }
+}
+
+/**
  * Combined HoverProvider that delegates to specific providers
  */
 export class WorkflowHoverProvider implements vscode.HoverProvider {
   private readonly ticketProvider: TicketHoverProvider;
+  private readonly agentProvider: AgentHoverProvider;
 
   constructor(store: WorkflowStore) {
     this.ticketProvider = new TicketHoverProvider(store);
+    this.agentProvider = new AgentHoverProvider();
   }
 
   /**
@@ -206,6 +387,7 @@ export class WorkflowHoverProvider implements vscode.HoverProvider {
    */
   setWorkflowRoot(root: string): void {
     this.ticketProvider.setWorkflowRoot(root);
+    this.agentProvider.setWorkflowRoot(root);
   }
 
   /**
@@ -217,7 +399,17 @@ export class WorkflowHoverProvider implements vscode.HoverProvider {
   ): vscode.Hover | undefined {
     const fsPath = document.uri.fsPath;
 
-    // Support .md and .yaml files
+    // Support pipeline.yaml for agent hover
+    if (fsPath.endsWith('pipeline.yaml') || fsPath.endsWith('pipeline.yml')) {
+      const agentHover = this.agentProvider.provideHover(document, position);
+      if (agentHover) {
+        return agentHover;
+      }
+      // Fall back to ticket hover for ticket IDs in pipeline.yaml
+      return this.ticketProvider.provideHover(document, position);
+    }
+
+    // Support .md and other .yaml/.yml files for ticket hover
     if (fsPath.endsWith('.md') || fsPath.endsWith('.yaml') || fsPath.endsWith('.yml')) {
       return this.ticketProvider.provideHover(document, position);
     }
