@@ -16,9 +16,17 @@ import * as path from 'path';
 import { load as loadYaml } from 'js-yaml';
 
 interface PipelineConfig {
-  pipeline?: {
-    stages?: Record<string, StageConfig>;
-  };
+  pipeline?: PipelineFullConfig;
+}
+
+interface PipelineFullConfig {
+  name?: string;
+  version?: string;
+  agents?: Record<string, unknown>;
+  stages?: Record<string, StageConfig>;
+  entry?: string;
+  context?: Record<string, unknown>;
+  execution?: Record<string, unknown>;
 }
 
 interface StageConfig {
@@ -72,13 +80,31 @@ export class PipelineCodeLensProvider implements vscode.CodeLensProvider {
     try {
       const config = loadYaml(content) as PipelineConfig;
 
-      if (!config?.pipeline?.stages) {
+      if (!config?.pipeline) {
         return lenses;
       }
 
-      const stages = config.pipeline.stages;
+      const pipeline = config.pipeline;
+
+      // Summary CodeLens at line 0
+      const summaryLens = this.createSummaryLens(pipeline);
+      if (summaryLens) {
+        lenses.push(summaryLens);
+      }
+
+      const stages = pipeline.stages;
+      if (!stages) {
+        return lenses;
+      }
+
       const stageIds = Object.keys(stages);
       const totalStages = stageIds.length;
+
+      // Entry point CodeLens
+      const entryLens = this.createEntryLens(content, pipeline, totalStages);
+      if (entryLens) {
+        lenses.push(entryLens);
+      }
 
       // Process each stage
       stageIds.forEach((stageId, index) => {
@@ -115,6 +141,64 @@ export class PipelineCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     return lenses;
+  }
+
+  /**
+   * Create summary CodeLens at line 0
+   * Format: Pipeline: {name} v{version} | {N} agents | {M} stages | entry: {entry}
+   */
+  private createSummaryLens(pipeline: PipelineFullConfig): vscode.CodeLens | null {
+    const range = new vscode.Range(0, 0, 0, 0);
+
+    const name = pipeline.name || 'unnamed';
+    const version = pipeline.version || '?';
+    const agentCount = Object.keys(pipeline.agents || {}).length;
+    const stageCount = Object.keys(pipeline.stages || {}).length;
+    const entry = pipeline.entry || 'N/A';
+
+    const title = `Pipeline: ${name} v${version} | ${agentCount} agents | ${stageCount} stages | entry: ${entry}`;
+
+    const command: vscode.Command = {
+      title,
+      command: 'workflow.openPipelineConfig'
+    };
+
+    return new vscode.CodeLens(range, command);
+  }
+
+  /**
+   * Create entry point CodeLens above the "entry:" line
+   * Format: Entry Point -> {stage-id}
+   */
+  private createEntryLens(
+    content: string,
+    pipeline: PipelineFullConfig,
+    totalStages: number
+  ): vscode.CodeLens | null {
+    if (!pipeline.entry) {
+      return null;
+    }
+
+    const entryRegex = /^\s{2}entry:\s/m;
+    const match = entryRegex.exec(content);
+    if (!match) {
+      return null;
+    }
+
+    const textBeforeMatch = content.substring(0, match.index);
+    const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
+    const position = new vscode.Position(lineNumber, 0);
+    const range = new vscode.Range(position, position);
+
+    const title = `Entry Point \u2192 ${pipeline.entry}`;
+
+    const command: vscode.Command = {
+      title,
+      command: 'workflow.focusPipelineStage',
+      arguments: [pipeline.entry]
+    };
+
+    return new vscode.CodeLens(range, command);
   }
 
   /**
@@ -203,10 +287,13 @@ export class PipelineCodeLensProvider implements vscode.CodeLensProvider {
 
     const title = `Goto: ${transitions.join(', ')}`;
 
+    // Use the first target stage for navigation
+    const firstTarget = this.extractTargetStage(Object.values(goto)[0]);
+
     const command: vscode.Command = {
       title,
       command: 'workflow.focusPipelineStage',
-      arguments: [Object.keys(goto)[0]]
+      arguments: [firstTarget || '']
     };
 
     lenses.push(new vscode.CodeLens(range, command));

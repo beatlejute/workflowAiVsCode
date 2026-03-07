@@ -12985,12 +12985,24 @@ var PipelineCodeLensProvider = class {
     const lenses = [];
     try {
       const config = load(content);
-      if (!config?.pipeline?.stages) {
+      if (!config?.pipeline) {
         return lenses;
       }
-      const stages = config.pipeline.stages;
+      const pipeline = config.pipeline;
+      const summaryLens = this.createSummaryLens(pipeline);
+      if (summaryLens) {
+        lenses.push(summaryLens);
+      }
+      const stages = pipeline.stages;
+      if (!stages) {
+        return lenses;
+      }
       const stageIds = Object.keys(stages);
       const totalStages = stageIds.length;
+      const entryLens = this.createEntryLens(content, pipeline, totalStages);
+      if (entryLens) {
+        lenses.push(entryLens);
+      }
       stageIds.forEach((stageId, index) => {
         const stage = stages[stageId];
         if (!stage) {
@@ -13017,6 +13029,49 @@ var PipelineCodeLensProvider = class {
       console.error("Failed to parse pipeline.yaml for code lenses:", error);
     }
     return lenses;
+  }
+  /**
+   * Create summary CodeLens at line 0
+   * Format: Pipeline: {name} v{version} | {N} agents | {M} stages | entry: {entry}
+   */
+  createSummaryLens(pipeline) {
+    const range = new vscode9.Range(0, 0, 0, 0);
+    const name = pipeline.name || "unnamed";
+    const version = pipeline.version || "?";
+    const agentCount = Object.keys(pipeline.agents || {}).length;
+    const stageCount = Object.keys(pipeline.stages || {}).length;
+    const entry = pipeline.entry || "N/A";
+    const title = `Pipeline: ${name} v${version} | ${agentCount} agents | ${stageCount} stages | entry: ${entry}`;
+    const command = {
+      title,
+      command: "workflow.openPipelineConfig"
+    };
+    return new vscode9.CodeLens(range, command);
+  }
+  /**
+   * Create entry point CodeLens above the "entry:" line
+   * Format: Entry Point -> {stage-id}
+   */
+  createEntryLens(content, pipeline, totalStages) {
+    if (!pipeline.entry) {
+      return null;
+    }
+    const entryRegex = /^\s{2}entry:\s/m;
+    const match = entryRegex.exec(content);
+    if (!match) {
+      return null;
+    }
+    const textBeforeMatch = content.substring(0, match.index);
+    const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
+    const position = new vscode9.Position(lineNumber, 0);
+    const range = new vscode9.Range(position, position);
+    const title = `Entry Point \u2192 ${pipeline.entry}`;
+    const command = {
+      title,
+      command: "workflow.focusPipelineStage",
+      arguments: [pipeline.entry]
+    };
+    return new vscode9.CodeLens(range, command);
   }
   /**
    * Find the line number where a stage is defined
@@ -13071,10 +13126,11 @@ var PipelineCodeLensProvider = class {
       return lenses;
     }
     const title = `Goto: ${transitions.join(", ")}`;
+    const firstTarget = this.extractTargetStage(Object.values(goto)[0]);
     const command = {
       title,
       command: "workflow.focusPipelineStage",
-      arguments: [Object.keys(goto)[0]]
+      arguments: [firstTarget || ""]
     };
     lenses.push(new vscode9.CodeLens(range, command));
     return lenses;
