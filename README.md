@@ -78,7 +78,7 @@ The sidebar provides organized access to all workflow components:
 - **PLANS** — Project plans and documentation
 - **REPORTS** — Generated reports and summaries
 
-![Sidebar TreeView](docs/images/sidebar-treeview.png)
+![Sidebar TreeView](docs/images/sidebar-treeview.jpg)
 
 > *Figure 1: Sidebar showing the 4 main sections with expandable tree items*
 
@@ -93,7 +93,7 @@ Six-column Kanban view for visual task management:
 - **REVIEW** — Tasks awaiting review/approval
 - **DONE** — Completed tasks
 
-![Kanban Board](docs/images/kanban-board.png)
+![Kanban Board](docs/images/kanban-board.jpg)
 
 > *Figure 2: Kanban board showing tickets distributed across 6 columns with priority indicators*
 
@@ -106,7 +106,7 @@ Real-time pipeline execution monitoring:
 - Start/Stop controls
 - Output viewer
 
-![Pipeline Monitor](docs/images/pipeline-monitor.png)
+![Pipeline Monitor](docs/images/pipeline-monitor.jpg)
 
 > *Figure 3: Pipeline monitor showing active execution with progress indicator*
 
@@ -130,7 +130,7 @@ Inline actions and information directly in markdown ticket files:
 - Dependency information
 - Quick navigation
 
-![CodeLens](docs/images/codelens.png)
+![CodeLens](docs/images/codelens.jpg)
 
 > *Figure 5: CodeLens actions visible above a ticket heading*
 
@@ -142,7 +142,7 @@ Quick ticket information when hovering over ticket IDs:
 - Current status
 - Priority level
 
-![Hover Preview](docs/images/hover-preview.png)
+![Hover Preview](docs/images/hover-preview.jpg)
 
 > *Figure 6: Hover popup showing ticket details when hovering over a ticket reference*
 
@@ -153,8 +153,6 @@ Real-time validation with inline error highlighting:
 - Invalid frontmatter detection
 - Missing required fields
 - Broken dependency references
-
-![Diagnostics Panel](docs/images/diagnostics-panel.png)
 
 > *Figure 7: Problems panel showing validation errors in a ticket file*
 

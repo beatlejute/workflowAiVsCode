@@ -8,7 +8,7 @@
  * ADR-005: Event-driven architecture for reactive UI updates
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import { EventEmitter } from 'events';
 
 /**
@@ -216,8 +216,20 @@ export class PipelineService extends EventEmitter {
       return;
     }
 
-    // Send SIGTERM for graceful shutdown
-    this.childProcess.kill('SIGTERM');
+    const pid = this.childProcess.pid;
+
+    if (process.platform === 'win32' && pid) {
+      // On Windows, kill the entire process tree because shell: true
+      // spawns cmd.exe and SIGTERM only kills the shell, not the child
+      try {
+        execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+      } catch {
+        // Process may have already exited
+      }
+    } else {
+      this.childProcess.kill('SIGTERM');
+    }
+
     this.childProcess = null;
     this.setState(PipelineState.Idle);
   }
