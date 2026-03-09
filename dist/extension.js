@@ -17820,11 +17820,32 @@ ${blocksList}`;
           env: terminalEnv
         });
         terminal.show();
-        terminal.sendText(agentCommand);
         plansProvider.setDecomposing(planId);
-        const cleanupDecomposing = () => {
-          plansProvider.clearDecomposing(planId);
+        let commandSent = false;
+        const sendViaShellIntegration = (si) => {
+          if (commandSent) {
+            return;
+          }
+          commandSent = true;
+          si.executeCommand(agentCommand);
         };
+        if (terminal.shellIntegration) {
+          sendViaShellIntegration(terminal.shellIntegration);
+        } else {
+          const siDisposable = vscode22.window.onDidChangeTerminalShellIntegration((e) => {
+            if (e.terminal === terminal) {
+              siDisposable.dispose();
+              sendViaShellIntegration(e.shellIntegration);
+            }
+          });
+          setTimeout(() => {
+            siDisposable.dispose();
+            if (!commandSent) {
+              commandSent = true;
+              terminal.sendText(agentCommand);
+            }
+          }, 3e3);
+        }
         vscode22.window.withProgress(
           {
             location: vscode22.ProgressLocation.Notification,
@@ -17840,7 +17861,7 @@ ${blocksList}`;
               resolved = true;
               shellDisposable.dispose();
               closeDisposable.dispose();
-              cleanupDecomposing();
+              plansProvider.clearDecomposing(planId);
               resolve();
             };
             const shellDisposable = vscode22.window.onDidEndTerminalShellExecution((e) => {
@@ -17848,8 +17869,8 @@ ${blocksList}`;
                 done();
               }
             });
-            const closeDisposable = vscode22.window.onDidCloseTerminal((t2) => {
-              if (t2 === terminal) {
+            const closeDisposable = vscode22.window.onDidCloseTerminal((closed) => {
+              if (closed === terminal) {
                 done();
               }
             });

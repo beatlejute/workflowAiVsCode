@@ -1458,14 +1458,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           env: terminalEnv
         });
         terminal.show();
-        terminal.sendText(agentCommand);
 
         // Show spinner on plan tree item while decomposing
         plansProvider.setDecomposing(planId);
 
-        const cleanupDecomposing = () => {
-          plansProvider.clearDecomposing(planId!);
+        // Send command via shell integration (enables onDidEndTerminalShellExecution)
+        // with fallback to sendText if shell integration is not available
+        let commandSent = false;
+        const sendViaShellIntegration = (si: vscode.TerminalShellIntegration) => {
+          if (commandSent) { return; }
+          commandSent = true;
+          si.executeCommand(agentCommand);
         };
+
+        if (terminal.shellIntegration) {
+          sendViaShellIntegration(terminal.shellIntegration);
+        } else {
+          const siDisposable = vscode.window.onDidChangeTerminalShellIntegration(e => {
+            if (e.terminal === terminal) {
+              siDisposable.dispose();
+              sendViaShellIntegration(e.shellIntegration);
+            }
+          });
+          // Fallback: if shell integration doesn't activate, use sendText
+          setTimeout(() => {
+            siDisposable.dispose();
+            if (!commandSent) {
+              commandSent = true;
+              terminal.sendText(agentCommand);
+            }
+          }, 3000);
+        }
 
         // Show progress notification while terminal is active
         vscode.window.withProgress(
@@ -1481,18 +1504,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               resolved = true;
               shellDisposable.dispose();
               closeDisposable.dispose();
-              cleanupDecomposing();
+              plansProvider.clearDecomposing(planId!);
               resolve();
             };
 
-            // Fires when the command in the terminal finishes (process exit / Ctrl+C)
+            // Fires when the command finishes (requires shell integration)
             const shellDisposable = vscode.window.onDidEndTerminalShellExecution(e => {
               if (e.terminal === terminal) { done(); }
             });
 
             // Fallback: fires when the terminal tab is closed
-            const closeDisposable = vscode.window.onDidCloseTerminal(t => {
-              if (t === terminal) { done(); }
+            const closeDisposable = vscode.window.onDidCloseTerminal(closed => {
+              if (closed === terminal) { done(); }
             });
           })
         );
