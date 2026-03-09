@@ -30,6 +30,8 @@ import { FileWatcherService } from './services/file-watcher-service';
 import { DependencyService } from './services/dependency-service';
 import { TicketStatus } from './data/types';
 import { executeNewTicket } from './commands/new-ticket';
+import { executeNewPlan } from './commands/new-plan';
+import { PlanService } from './services/plan-service';
 import { executeShowDependencies } from './commands/show-dependencies';
 import { executeShowStatistics } from './commands/show-statistics';
 import {
@@ -517,10 +519,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Create services for commands
   let ticketService: TicketService | undefined;
   let dependencyService: DependencyService | undefined;
+  let planService: PlanService | undefined;
 
   if (workflowRoot) {
     ticketService = new TicketService(store, workflowRoot);
     dependencyService = new DependencyService(store);
+    planService = new PlanService(store, workflowRoot);
   }
 
   // Register commands
@@ -1263,21 +1267,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   /**
-   * workflow.newPlan command - creates new plan (placeholder)
+   * workflow.newPlan command - creates new plan via InputBox → PlanService.create()
    */
   const newPlanCmd = registerCommandSafe(
     'workflow.newPlan',
     async () => {
       try {
-        vscode.window.showInformationMessage(t('workflow.newPlan: Plan creation coming soon'));
+        if (!planService) {
+          vscode.window.showErrorMessage(t('Workflow not found'));
+          return;
+        }
+        await executeNewPlan(planService);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'New Plan', {
-            userMessage: t('Failed to show new plan message. Check Output channel for details.')
+            userMessage: t('Failed to create plan. Check Output channel for details.')
           });
         } else {
           const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to show new plan message: {0}', message));
+          vscode.window.showErrorMessage(t('Failed to create plan: {0}', message));
         }
       }
     }

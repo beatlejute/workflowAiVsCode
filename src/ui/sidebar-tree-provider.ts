@@ -199,7 +199,10 @@ export class PlanGroupTreeItem extends SidebarTreeItem {
     public readonly count: number
   ) {
     const label = groupType === 'current' ? t('Current') : t('Archive');
-    super(`${label} (${count})`, vscode.TreeItemCollapsibleState.Collapsed, 'plan-group', groupType);
+    const state = groupType === 'current'
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : vscode.TreeItemCollapsibleState.Collapsed;
+    super(`${label} (${count})`, state, 'plan-group', groupType);
 
     this.contextValue = 'plan-group';
   }

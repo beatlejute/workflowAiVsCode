@@ -285,6 +285,13 @@ export class PlanService {
     return lines.join('\n');
   }
 
+  /**
+   * Get the workflow root directory
+   */
+  getWorkflowRoot(): string {
+    return this.workflowRoot;
+  }
+
   // ==================== Plan-Ticket Relationships ====================
 
   /**
