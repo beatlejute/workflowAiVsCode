@@ -393,15 +393,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Get current plan filter from any kanban provider (they're all synced)
     const filterPlan = kanbanProviders.backlog.getPlanFilter();
     const plan = filterPlan ? store.getPlanById(filterPlan) : undefined;
-    const planTitle = plan ? `: ${plan.title}` : '';
-    const filterPrefix = filterPlan ? `🔍 ${filterPlan}${planTitle} — ` : '';
+    const filterSuffix = filterPlan ? ` — 🔍 ${filterPlan}` : '';
 
-    backlogTreeView.title = `${filterPrefix}BACKLOG (${kanbanProviders.backlog.getCount()})`;
-    readyTreeView.title = `${filterPrefix}READY (${kanbanProviders.ready.getCount()})`;
-    inProgressTreeView.title = `${filterPrefix}IN PROGRESS (${kanbanProviders.inProgress.getCount()})`;
-    blockedTreeView.title = `${filterPrefix}BLOCKED (${kanbanProviders.blocked.getCount()})`;
-    reviewTreeView.title = `${filterPrefix}REVIEW (${kanbanProviders.review.getCount()})`;
-    doneTreeView.title = `${filterPrefix}DONE (${kanbanProviders.done.getCount()})`;
+    backlogTreeView.title = `BACKLOG (${kanbanProviders.backlog.getCount()})${filterSuffix}`;
+    readyTreeView.title = `READY (${kanbanProviders.ready.getCount()})${filterSuffix}`;
+    inProgressTreeView.title = `IN PROGRESS (${kanbanProviders.inProgress.getCount()})${filterSuffix}`;
+    blockedTreeView.title = `BLOCKED (${kanbanProviders.blocked.getCount()})${filterSuffix}`;
+    reviewTreeView.title = `REVIEW (${kanbanProviders.review.getCount()})${filterSuffix}`;
+    doneTreeView.title = `DONE (${kanbanProviders.done.getCount()})${filterSuffix}`;
   };
 
   // Update Kanban view badges with ticket counts
@@ -1959,6 +1958,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await executeFilterTicketsByPlan(store, ticketsProvider, kanbanProviders);
+        updateKanbanTitles();
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Filter Tickets By Plan', {
@@ -1984,6 +1984,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await executeClearTicketFilter(ticketsProvider, kanbanProviders);
+        updateKanbanTitles();
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Clear Ticket Filter', {
