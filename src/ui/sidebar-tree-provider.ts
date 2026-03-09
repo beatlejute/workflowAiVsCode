@@ -163,7 +163,8 @@ export class PlanTreeItem extends SidebarTreeItem {
   constructor(
     public readonly plan: Plan,
     workflowRoot: string,
-    isCurrent: boolean
+    isCurrent: boolean,
+    isDecomposing: boolean = false
   ) {
     const label = plan.id;
     const description = plan.title;
@@ -172,7 +173,9 @@ export class PlanTreeItem extends SidebarTreeItem {
 
     this.description = description;
     this.tooltip = `${plan.id}: ${plan.title}\n${t('Status')}: ${plan.status}`;
-    this.iconPath = new vscode.ThemeIcon('notebook');
+    this.iconPath = isDecomposing
+      ? new vscode.ThemeIcon('loading~spin')
+      : new vscode.ThemeIcon('notebook');
     this.contextValue = isCurrent ? 'plan-current' : 'plan-archive';
 
     // Command to open plan file on click
@@ -521,6 +524,7 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   readonly onDidChangeTreeData: vscode.Event<SidebarTreeItem | undefined> = this._onDidChangeTreeData.event;
 
   private workflowRoot: string | null = null;
+  private readonly decomposingPlanIds = new Set<string>();
 
   constructor(private readonly store: WorkflowStore) {
     // Subscribe to store change events for reactive updates
@@ -529,6 +533,22 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
         this.refresh();
       }
     });
+  }
+
+  /**
+   * Mark a plan as decomposing (shows spinner icon)
+   */
+  setDecomposing(planId: string): void {
+    this.decomposingPlanIds.add(planId);
+    this.refresh();
+  }
+
+  /**
+   * Clear decomposing state for a plan
+   */
+  clearDecomposing(planId: string): void {
+    this.decomposingPlanIds.delete(planId);
+    this.refresh();
   }
 
   /**
@@ -609,7 +629,7 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
     filteredPlans.sort((a, b) => a.id.localeCompare(b.id));
     
     const items = filteredPlans.map(
-      plan => new PlanTreeItem(plan, this.workflowRoot!, groupType === 'current')
+      plan => new PlanTreeItem(plan, this.workflowRoot!, groupType === 'current', this.decomposingPlanIds.has(plan.id))
     );
 
     return Promise.resolve(items);

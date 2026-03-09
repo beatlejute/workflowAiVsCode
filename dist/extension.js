@@ -3223,8 +3223,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path17) {
-      let input = path17;
+    function removeDotSegments(path19) {
+      let input = path19;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3423,8 +3423,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path17, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path17 && path17 !== "/" ? path17 : void 0;
+        const [path19, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path19 && path19 !== "/" ? path19 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6492,11 +6492,11 @@ __export(extension_exports, {
   updateContextKeys: () => updateContextKeys
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode21 = __toESM(require("vscode"));
+var vscode22 = __toESM(require("vscode"));
 var import_child_process3 = require("child_process");
 var import_util = require("util");
-var path16 = __toESM(require("path"));
-var fs8 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
+var fs9 = __toESM(require("fs"));
 
 // node_modules/js-yaml/dist/js-yaml.mjs
 function isNothing(subject) {
@@ -10044,7 +10044,7 @@ Click to clear filter`;
   }
 };
 var PlanTreeItem = class extends SidebarTreeItem {
-  constructor(plan, workflowRoot, isCurrent) {
+  constructor(plan, workflowRoot, isCurrent, isDecomposing = false) {
     const label = plan.id;
     const description = plan.title;
     const groupId = isCurrent ? "current" : "archive";
@@ -10053,7 +10053,7 @@ var PlanTreeItem = class extends SidebarTreeItem {
     this.description = description;
     this.tooltip = `${plan.id}: ${plan.title}
 ${t("Status")}: ${plan.status}`;
-    this.iconPath = new vscode2.ThemeIcon("notebook");
+    this.iconPath = isDecomposing ? new vscode2.ThemeIcon("loading~spin") : new vscode2.ThemeIcon("notebook");
     this.contextValue = isCurrent ? "plan-current" : "plan-archive";
     const planPath = path4.join(
       workflowRoot,
@@ -10071,7 +10071,8 @@ ${t("Status")}: ${plan.status}`;
 var PlanGroupTreeItem = class extends SidebarTreeItem {
   constructor(groupType, count) {
     const label = groupType === "current" ? t("Current") : t("Archive");
-    super(`${label} (${count})`, vscode2.TreeItemCollapsibleState.Collapsed, "plan-group", groupType);
+    const state = groupType === "current" ? vscode2.TreeItemCollapsibleState.Expanded : vscode2.TreeItemCollapsibleState.Collapsed;
+    super(`${label} (${count})`, state, "plan-group", groupType);
     this.groupType = groupType;
     this.count = count;
     this.contextValue = "plan-group";
@@ -10335,6 +10336,21 @@ var PlansTreeProvider = class {
   _onDidChangeTreeData = new vscode2.EventEmitter();
   onDidChangeTreeData = this._onDidChangeTreeData.event;
   workflowRoot = null;
+  decomposingPlanIds = /* @__PURE__ */ new Set();
+  /**
+   * Mark a plan as decomposing (shows spinner icon)
+   */
+  setDecomposing(planId) {
+    this.decomposingPlanIds.add(planId);
+    this.refresh();
+  }
+  /**
+   * Clear decomposing state for a plan
+   */
+  clearDecomposing(planId) {
+    this.decomposingPlanIds.delete(planId);
+    this.refresh();
+  }
   /**
    * Set workflow root directory
    */
@@ -10394,7 +10410,7 @@ var PlansTreeProvider = class {
     const filteredPlans = plans.filter((p) => p.folder === groupType);
     filteredPlans.sort((a, b) => a.id.localeCompare(b.id));
     const items = filteredPlans.map(
-      (plan) => new PlanTreeItem(plan, this.workflowRoot, groupType === "current")
+      (plan) => new PlanTreeItem(plan, this.workflowRoot, groupType === "current", this.decomposingPlanIds.has(plan.id))
     );
     return Promise.resolve(items);
   }
@@ -12652,21 +12668,21 @@ var DependencyService = class {
    * @param foundCycles - Set of normalized cycle signatures to avoid duplicates
    * @param path - Current DFS path
    */
-  dfsVisit(id, colors, cycles, foundCycles, path17) {
+  dfsVisit(id, colors, cycles, foundCycles, path19) {
     colors.set(id, 1 /* Gray */);
-    path17.push(id);
+    path19.push(id);
     const ticket = this.store.getTicketById(id);
     if (!ticket) {
       colors.set(id, 2 /* Black */);
-      path17.pop();
+      path19.pop();
       return;
     }
     for (const depId of ticket.dependencies) {
       const depColor = colors.get(depId) ?? 0 /* White */;
       if (depColor === 1 /* Gray */) {
-        const cycleStart = path17.indexOf(depId);
+        const cycleStart = path19.indexOf(depId);
         if (cycleStart !== -1) {
-          const cycle = path17.slice(cycleStart);
+          const cycle = path19.slice(cycleStart);
           const normalizedCycle = this.normalizeCycle(cycle);
           const cycleSignature = normalizedCycle.join("->");
           if (!foundCycles.has(cycleSignature)) {
@@ -12675,11 +12691,11 @@ var DependencyService = class {
           }
         }
       } else if (depColor === 0 /* White */) {
-        this.dfsVisit(depId, colors, cycles, foundCycles, path17);
+        this.dfsVisit(depId, colors, cycles, foundCycles, path19);
       }
     }
     colors.set(id, 2 /* Black */);
-    path17.pop();
+    path19.pop();
   }
   /**
    * Normalize a cycle to start from the lexicographically smallest ID
@@ -15782,11 +15798,337 @@ async function executeNewTicket(ticketService) {
   }
 }
 
-// src/commands/show-dependencies.ts
+// src/commands/new-plan.ts
 var vscode17 = __toESM(require("vscode"));
+var path15 = __toESM(require("path"));
+async function executeNewPlan(planService) {
+  const title = await vscode17.window.showInputBox({
+    prompt: t("Enter plan title"),
+    placeHolder: t("e.g., Refactor authentication module"),
+    title: t("Create New Plan"),
+    validateInput: (value) => {
+      if (!value || value.trim().length === 0) {
+        return t("Title is required");
+      }
+      return void 0;
+    }
+  });
+  if (!title) {
+    return;
+  }
+  try {
+    const plan = await planService.create(title);
+    vscode17.window.showInformationMessage(t("Created plan {0}: {1}", plan.id, plan.title));
+    const workflowRoot = planService.getWorkflowRoot();
+    const planPath = vscode17.Uri.file(
+      path15.join(workflowRoot, "plans", "current", `${plan.id}.md`)
+    );
+    await vscode17.commands.executeCommand("vscode.open", planPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    vscode17.window.showErrorMessage(t("Failed to create plan: {0}", message));
+  }
+}
+
+// src/services/plan-service.ts
+var fs8 = __toESM(require("fs/promises"));
+var path16 = __toESM(require("path"));
+var PlanService = class {
+  store;
+  workflowRoot;
+  constructor(store, workflowRoot) {
+    this.store = store;
+    this.workflowRoot = workflowRoot;
+  }
+  // ==================== Read Operations ====================
+  /**
+   * Get all plans from the store
+   */
+  getAll() {
+    return this.store.getPlans();
+  }
+  /**
+   * Get only non-archived plans (status != 'archived')
+   */
+  getCurrent() {
+    return this.store.getCurrentPlans();
+  }
+  /**
+   * Get only archived plans (status == 'archived')
+   */
+  getArchived() {
+    return this.store.getArchivedPlans();
+  }
+  /**
+   * Get a plan by ID
+   * @param id - Plan ID to retrieve
+   * @returns Plan or undefined if not found
+   */
+  getById(id) {
+    return this.store.getPlanById(id);
+  }
+  // ==================== Create Operation ====================
+  /**
+   * Create a new plan
+   *
+   * - Generates ID: PLAN-{NNN} - max number + 1
+   * - Reads template from .workflow/templates/plan-template.md
+   * - Fills frontmatter (id, title, status='draft', created_at, author)
+   * - Saves to plans/current/
+   *
+   * @param title - Plan title
+   * @param fields - Optional partial plan fields
+   * @returns Created plan
+   */
+  async create(title, fields) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const nextId = await this.generateNextPlanId();
+    const templatePath = path16.join(this.workflowRoot, "templates", "plan-template.md");
+    let templateContent;
+    try {
+      templateContent = await fs8.readFile(templatePath, "utf-8");
+    } catch (error) {
+      templateContent = this.getDefaultTemplate();
+    }
+    const { frontmatter: templateFrontmatter, body } = parse(templateContent);
+    const newPlan = {
+      ...templateFrontmatter,
+      id: nextId,
+      title,
+      status: "draft",
+      author: fields?.author || "unknown",
+      created_at: now,
+      updated_at: now,
+      completed_at: "",
+      previous_plan: fields?.previous_plan || "",
+      related_reports: fields?.related_reports || [],
+      ...fields
+    };
+    const fileContent = this.generatePlanFileContent(newPlan, body);
+    const plansDir = path16.join(this.workflowRoot, "plans", "current");
+    const filePath = path16.join(plansDir, nextId + ".md");
+    await fs8.mkdir(plansDir, { recursive: true });
+    await fs8.writeFile(filePath, fileContent, "utf-8");
+    this.store.addPlan(newPlan);
+    return newPlan;
+  }
+  /**
+   * Generate next plan ID (PLAN-{NNN})
+   */
+  async generateNextPlanId() {
+    const allPlans = this.getAll();
+    if (allPlans.length === 0) {
+      return "PLAN-001";
+    }
+    const planNumbers = allPlans.map((plan) => plan.id).filter((id) => id.startsWith("PLAN-")).map((id) => parseInt(id.replace("PLAN-", ""), 10)).filter((num) => !isNaN(num));
+    const maxNumber = Math.max(...planNumbers, 0);
+    const nextNumber = maxNumber + 1;
+    return "PLAN-" + String(nextNumber).padStart(3, "0");
+  }
+  /**
+   * Generate plan file content from frontmatter and body
+   */
+  generatePlanFileContent(plan, body) {
+    const frontmatterYaml = this.generateFrontmatterYaml(plan);
+    return "---\n" + frontmatterYaml + "---\n" + body;
+  }
+  /**
+   * Generate YAML frontmatter from plan object
+   */
+  generateFrontmatterYaml(plan) {
+    const lines = [];
+    lines.push('id: "' + plan.id + '"');
+    lines.push('title: "' + plan.title + '"');
+    lines.push("status: " + plan.status);
+    lines.push("author: " + plan.author);
+    lines.push("");
+    lines.push('created_at: "' + plan.created_at + '"');
+    lines.push('updated_at: "' + plan.updated_at + '"');
+    lines.push('completed_at: "' + plan.completed_at + '"');
+    lines.push("");
+    lines.push('previous_plan: "' + plan.previous_plan + '"');
+    if (plan.related_reports && plan.related_reports.length > 0) {
+      lines.push("related_reports:");
+      for (const report of plan.related_reports) {
+        lines.push("  - " + report);
+      }
+    } else {
+      lines.push("related_reports: []");
+    }
+    return lines.join("\n") + "\n";
+  }
+  /**
+   * Default template when file is not found
+   */
+  getDefaultTemplate() {
+    const lines = [];
+    lines.push("---");
+    lines.push('id: "PLAN-{NNN}"');
+    lines.push('title: "Plan Title"');
+    lines.push("status: draft");
+    lines.push("author: unknown");
+    lines.push("");
+    lines.push('created_at: ""');
+    lines.push('updated_at: ""');
+    lines.push('completed_at: ""');
+    lines.push("");
+    lines.push('previous_plan: ""');
+    lines.push("related_reports: []");
+    lines.push("---");
+    lines.push("");
+    lines.push("# Plan: {Title}");
+    lines.push("");
+    lines.push("## Goal");
+    lines.push("");
+    lines.push("<!-- Describe the goal here -->");
+    lines.push("");
+    lines.push("## Context");
+    lines.push("");
+    lines.push("<!-- Why this is important -->");
+    lines.push("");
+    lines.push("## Scope");
+    lines.push("");
+    lines.push("### In Scope");
+    lines.push("");
+    lines.push("- Item 1");
+    lines.push("");
+    lines.push("### Out of Scope");
+    lines.push("");
+    lines.push("- Item 1");
+    lines.push("");
+    lines.push("## High-Level Tasks");
+    lines.push("");
+    lines.push("### 1. Task 1");
+    lines.push("");
+    lines.push("**Priority:** High");
+    lines.push("**Dependencies:** None");
+    lines.push("**Description:** What needs to be done");
+    lines.push("");
+    lines.push("## Technical Decisions");
+    lines.push("");
+    lines.push("<!-- Key architectural decisions -->");
+    lines.push("");
+    lines.push("## Risks and Dependencies");
+    lines.push("");
+    lines.push("| Risk | Probability | Impact | Mitigation |");
+    lines.push("|------|-------------|--------|------------|");
+    lines.push("| Risk 1 | High | High | How to prevent/solve |");
+    lines.push("");
+    lines.push("## External Dependencies");
+    lines.push("");
+    lines.push("<!-- Dependencies on external systems, teams, resources -->");
+    lines.push("");
+    lines.push("## Success Criteria");
+    lines.push("");
+    lines.push("<!-- How we know the plan is successful -->");
+    lines.push("");
+    lines.push("- [ ] Criteria 1");
+    lines.push("");
+    lines.push("## Metrics");
+    lines.push("");
+    lines.push("<!-- What we measure for success -->");
+    lines.push("");
+    lines.push("| Metric | Current | Target |");
+    lines.push("|--------|---------|--------|");
+    lines.push("| Metric 1 | X | Y |");
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push("## Change History");
+    lines.push("");
+    lines.push("| Date | Author | Change |");
+    lines.push("|------|--------|--------|");
+    lines.push("| YYYY-MM-DD | unknown | Plan created |");
+    lines.push("");
+    return lines.join("\n");
+  }
+  /**
+   * Get the workflow root directory
+   */
+  getWorkflowRoot() {
+    return this.workflowRoot;
+  }
+  // ==================== Plan-Ticket Relationships ====================
+  /**
+   * Get all tickets for a specific plan
+   * Filters tickets by parent_plan == planId from Store
+   *
+   * @param planId - Plan ID to get tickets for
+   * @returns Array of tickets belonging to the plan
+   */
+  getTicketsForPlan(planId) {
+    const allTickets = this.store.getTickets();
+    return allTickets.filter((ticket) => ticket.parent_plan === planId);
+  }
+  /**
+   * Get plan progress
+   *
+   * Counts tickets with status='done' / total * 100
+   *
+   * @param planId - Plan ID to get progress for
+   * @returns PlanProgress with total, done, and percentage
+   */
+  getPlanProgress(planId) {
+    const tickets = this.getTicketsForPlan(planId);
+    const total = tickets.length;
+    const done = tickets.filter(
+      (ticket) => ticket.status === "done" /* Done */
+    ).length;
+    const percentage = total === 0 ? 0 : Math.round(done / total * 100);
+    return { total, done, percentage };
+  }
+  // ==================== Archive Operation ====================
+  /**
+   * Archive a plan
+   *
+   * - Moves file from plans/current/ to plans/archive/
+   * - Updates frontmatter: status='archived', completed_at=now
+   * - Uses fs.rename (atomic operation)
+   *
+   * @param id - Plan ID to archive
+   */
+  async archive(id) {
+    const plan = this.getById(id);
+    if (!plan) {
+      throw new Error("Plan " + id + " not found");
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const archivedPlan = {
+      ...plan,
+      status: "archived",
+      completed_at: now,
+      updated_at: now,
+      folder: "archive"
+    };
+    const currentDir = path16.join(this.workflowRoot, "plans", "current");
+    const archiveDir = path16.join(this.workflowRoot, "plans", "archive");
+    const currentPath = path16.join(currentDir, id + ".md");
+    const archivePath = path16.join(archiveDir, id + ".md");
+    let body = "";
+    try {
+      const content = await fs8.readFile(currentPath, "utf-8");
+      const { body: parsedBody } = parse(content);
+      body = parsedBody;
+    } catch (error) {
+      body = "";
+    }
+    const newContent = this.generatePlanFileContent(archivedPlan, body);
+    await fs8.mkdir(archiveDir, { recursive: true });
+    await fs8.writeFile(archivePath, newContent, "utf-8");
+    try {
+      await fs8.unlink(currentPath);
+    } catch (error) {
+      console.error("Failed to remove current plan file " + currentPath + ":", error);
+    }
+    this.store.updatePlan(id, archivedPlan);
+  }
+};
+
+// src/commands/show-dependencies.ts
+var vscode18 = __toESM(require("vscode"));
 async function executeShowDependencies(store, dependencyService, ticketId) {
   if (!ticketId) {
-    const editor = vscode17.window.activeTextEditor;
+    const editor = vscode18.window.activeTextEditor;
     if (editor) {
       const fileName = editor.document.fileName;
       const match = fileName.match(/\/([^\/]+)\.md$/);
@@ -15798,10 +16140,10 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
   if (!ticketId) {
     const tickets = store.getTickets();
     if (tickets.length === 0) {
-      vscode17.window.showInformationMessage(t("No tickets available"));
+      vscode18.window.showInformationMessage(t("No tickets available"));
       return;
     }
-    const selected2 = await vscode17.window.showQuickPick(
+    const selected2 = await vscode18.window.showQuickPick(
       tickets.map((ticket2) => ({
         label: ticket2.id,
         description: ticket2.title,
@@ -15819,7 +16161,7 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
   }
   const ticket = store.getTicketById(ticketId);
   if (!ticket) {
-    vscode17.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+    vscode18.window.showErrorMessage(t("Ticket {0} not found", ticketId));
     return;
   }
   const dependencies = dependencyService.getDependencies(ticketId);
@@ -15850,19 +16192,19 @@ async function executeShowDependencies(store, dependencyService, ticketId) {
       detail: chainList
     }
   ];
-  const selected = await vscode17.window.showQuickPick(items, {
+  const selected = await vscode18.window.showQuickPick(items, {
     placeHolder: t("Dependencies for {0}", ticketId),
     title: t("Ticket Dependencies"),
     matchOnDescription: false,
     matchOnDetail: false
   });
   if (selected && selected.label.startsWith("$(git-pull-request)")) {
-    const openAction = await vscode17.window.showInformationMessage(
+    const openAction = await vscode18.window.showInformationMessage(
       t("Open {0}?", ticketId),
       t("Open")
     );
     if (openAction === "Open") {
-      await vscode17.commands.executeCommand("workflow.openTicket", ticketId);
+      await vscode18.commands.executeCommand("workflow.openTicket", ticketId);
     }
   }
 }
@@ -15886,11 +16228,11 @@ function buildDependencyChain(ticketId, dependencyService, visited = /* @__PURE_
 }
 
 // src/commands/show-statistics.ts
-var vscode18 = __toESM(require("vscode"));
+var vscode19 = __toESM(require("vscode"));
 async function executeShowStatistics(store) {
   const tickets = store.getTickets();
   if (tickets.length === 0) {
-    vscode18.window.showInformationMessage(t("No tickets to analyze"));
+    vscode19.window.showInformationMessage(t("No tickets to analyze"));
     return;
   }
   const byStatus = calculateByStatus(tickets);
@@ -15923,19 +16265,19 @@ async function executeShowStatistics(store) {
       detail: summary
     }
   ];
-  await vscode18.window.showQuickPick(items, {
+  await vscode19.window.showQuickPick(items, {
     placeHolder: t("Statistics"),
     title: t("Statistics"),
     matchOnDescription: false,
     matchOnDetail: false
   });
-  const copyAction = await vscode18.window.showInformationMessage(
+  const copyAction = await vscode19.window.showInformationMessage(
     t("Copy statistics to clipboard?"),
     t("Copy")
   );
   if (copyAction === "Copy") {
-    await vscode18.env.clipboard.writeText(summary);
-    vscode18.window.showInformationMessage(t("Statistics copied to clipboard"));
+    await vscode19.env.clipboard.writeText(summary);
+    vscode19.window.showInformationMessage(t("Statistics copied to clipboard"));
   }
 }
 function calculateByStatus(tickets) {
@@ -15987,42 +16329,42 @@ function buildAsciiBars(data, maxValue, maxWidth) {
 }
 
 // src/commands/index.ts
-var vscode19 = __toESM(require("vscode"));
-var path15 = __toESM(require("path"));
+var vscode20 = __toESM(require("vscode"));
+var path17 = __toESM(require("path"));
 async function executeOpenPipelineConfig(workflowRoot) {
   if (!workflowRoot) {
-    vscode19.window.showErrorMessage(t("Workflow not found"));
+    vscode20.window.showErrorMessage(t("Workflow not found"));
     return;
   }
-  const configPath = path15.join(workflowRoot, "config", "pipeline.yaml");
-  const uri = vscode19.Uri.file(configPath);
+  const configPath = path17.join(workflowRoot, "config", "pipeline.yaml");
+  const uri = vscode20.Uri.file(configPath);
   try {
-    await vscode19.commands.executeCommand("vscode.open", uri);
+    await vscode20.commands.executeCommand("vscode.open", uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    vscode19.window.showErrorMessage(t("Failed to open pipeline config: {0}", message));
+    vscode20.window.showErrorMessage(t("Failed to open pipeline config: {0}", message));
   }
 }
 async function executeOpenConfig(workflowRoot) {
   if (!workflowRoot) {
-    vscode19.window.showErrorMessage(t("Workflow not found"));
+    vscode20.window.showErrorMessage(t("Workflow not found"));
     return;
   }
-  const configPath = path15.join(workflowRoot, "config", "config.yaml");
-  const uri = vscode19.Uri.file(configPath);
+  const configPath = path17.join(workflowRoot, "config", "config.yaml");
+  const uri = vscode20.Uri.file(configPath);
   try {
-    await vscode19.commands.executeCommand("vscode.open", uri);
+    await vscode20.commands.executeCommand("vscode.open", uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    vscode19.window.showErrorMessage(t("Failed to open config: {0}", message));
+    vscode20.window.showErrorMessage(t("Failed to open config: {0}", message));
   }
 }
 async function executeFocusTicketsView() {
-  await vscode19.commands.executeCommand("workbench.view.extension.workflow-sidebar");
-  await vscode19.commands.executeCommand("workbench.action.focusSideBar");
+  await vscode20.commands.executeCommand("workbench.view.extension.workflow-sidebar");
+  await vscode20.commands.executeCommand("workbench.action.focusSideBar");
 }
 async function executeFocusKanban() {
-  await vscode19.commands.executeCommand("workbench.panel.workflow-kanban.view.wf-kanban-backlog");
+  await vscode20.commands.executeCommand("workbench.panel.workflow-kanban.view.wf-kanban-backlog");
 }
 async function executeRefreshAll(workflowRoot, store, refreshCallbacks) {
   if (workflowRoot) {
@@ -16031,11 +16373,11 @@ async function executeRefreshAll(workflowRoot, store, refreshCallbacks) {
   for (const refresh of refreshCallbacks) {
     refresh();
   }
-  vscode19.window.showInformationMessage(t("Workflow data refreshed"));
+  vscode20.window.showInformationMessage(t("Workflow data refreshed"));
 }
 async function executeCopyTicketId(ticketId) {
   if (!ticketId) {
-    const editor = vscode19.window.activeTextEditor;
+    const editor = vscode20.window.activeTextEditor;
     if (editor) {
       const fileName = editor.document.fileName;
       const match = fileName.match(/\/([^\/]+)\.md$/);
@@ -16045,16 +16387,16 @@ async function executeCopyTicketId(ticketId) {
     }
   }
   if (!ticketId) {
-    vscode19.window.showErrorMessage(t("No ticket ID provided or found"));
+    vscode20.window.showErrorMessage(t("No ticket ID provided or found"));
     return;
   }
-  await vscode19.env.clipboard.writeText(ticketId);
-  vscode19.window.showInformationMessage(t("Copied {0} to clipboard", ticketId));
+  await vscode20.env.clipboard.writeText(ticketId);
+  vscode20.window.showInformationMessage(t("Copied {0} to clipboard", ticketId));
 }
 async function executeFilterTicketsByPlan(store, ticketsProvider, kanbanProviders) {
   const plans = store.getPlans();
   if (plans.length === 0) {
-    vscode19.window.showInformationMessage(t("No plans available"));
+    vscode20.window.showInformationMessage(t("No plans available"));
     return;
   }
   plans.sort((a, b) => a.id.localeCompare(b.id));
@@ -16071,7 +16413,7 @@ async function executeFilterTicketsByPlan(store, ticketsProvider, kanbanProvider
     planId: null,
     isCurrent: false
   }, ...planItems] : planItems;
-  const selected = await vscode19.window.showQuickPick(quickPickItems, {
+  const selected = await vscode20.window.showQuickPick(quickPickItems, {
     placeHolder: t("Select a plan to filter tickets"),
     title: t("Filter Tickets by Plan"),
     matchOnDescription: true
@@ -16087,13 +16429,13 @@ async function executeFilterTicketsByPlan(store, ticketsProvider, kanbanProvider
   kanbanProviders.blocked.setPlanFilter(planId);
   kanbanProviders.review.setPlanFilter(planId);
   kanbanProviders.done.setPlanFilter(planId);
-  await vscode19.commands.executeCommand(
+  await vscode20.commands.executeCommand(
     "setContext",
     "workflow.ticketFilterActive",
     planId !== null
   );
   if (planId) {
-    vscode19.window.showInformationMessage(
+    vscode20.window.showInformationMessage(
       t("Filtered tickets by plan: {0}", planId)
     );
   }
@@ -16106,23 +16448,23 @@ async function executeClearTicketFilter(ticketsProvider, kanbanProviders) {
   kanbanProviders.blocked.setPlanFilter(null);
   kanbanProviders.review.setPlanFilter(null);
   kanbanProviders.done.setPlanFilter(null);
-  await vscode19.commands.executeCommand(
+  await vscode20.commands.executeCommand(
     "setContext",
     "workflow.ticketFilterActive",
     false
   );
-  vscode19.window.showInformationMessage(t("Ticket filter cleared"));
+  vscode20.window.showInformationMessage(t("Ticket filter cleared"));
 }
 
 // src/error-handler.ts
-var vscode20 = __toESM(require("vscode"));
+var vscode21 = __toESM(require("vscode"));
 var ErrorHandler = class {
   outputChannel;
   logLevel;
   errorCount = 0;
   sessionStart;
   constructor() {
-    this.outputChannel = vscode20.window.createOutputChannel("Workflow AI");
+    this.outputChannel = vscode21.window.createOutputChannel("Workflow AI");
     this.logLevel = "INFO" /* INFO */;
     this.sessionStart = Date.now();
   }
@@ -16195,7 +16537,7 @@ ${stack}`);
     const shouldShowMessage = errorContext?.showMessage ?? true;
     if (shouldShowMessage) {
       const userMessage = this.getUserFriendlyMessage(error, context, errorContext?.userMessage);
-      vscode20.window.showErrorMessage(userMessage);
+      vscode21.window.showErrorMessage(userMessage);
     }
   }
   /**
@@ -16400,7 +16742,7 @@ function resolveTicketId(arg) {
 async function checkCliInstalled(errorHandler) {
   try {
     const platform = process.platform;
-    const config = vscode21.workspace.getConfiguration("workflow");
+    const config = vscode22.workspace.getConfiguration("workflow");
     const customCliPath = config.get("cliPath", "");
     if (customCliPath) {
       try {
@@ -16433,17 +16775,17 @@ async function checkCliInstalled(errorHandler) {
   }
 }
 function checkWorkflowDir(errorHandler) {
-  const workspaceRoot = vscode21.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceRoot = vscode22.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceRoot) {
     return false;
   }
-  const workflowDir = path16.join(workspaceRoot, ".workflow");
-  const configPath = path16.join(workflowDir, "config", "config.yaml");
-  const pipelinePath = path16.join(workflowDir, "config", "pipeline.yaml");
+  const workflowDir = path18.join(workspaceRoot, ".workflow");
+  const configPath = path18.join(workflowDir, "config", "config.yaml");
+  const pipelinePath = path18.join(workflowDir, "config", "pipeline.yaml");
   try {
-    const dirExists = fs8.existsSync(workflowDir);
-    const configExists = fs8.existsSync(configPath);
-    const pipelineExists = fs8.existsSync(pipelinePath);
+    const dirExists = fs9.existsSync(workflowDir);
+    const configExists = fs9.existsSync(configPath);
+    const pipelineExists = fs9.existsSync(pipelinePath);
     return dirExists && configExists && pipelineExists;
   } catch (error) {
     if (errorHandler) {
@@ -16453,7 +16795,7 @@ function checkWorkflowDir(errorHandler) {
   }
 }
 async function setContextKey(key, value) {
-  await vscode21.commands.executeCommand("setContext", key, value);
+  await vscode22.commands.executeCommand("setContext", key, value);
 }
 async function updateContextKeys(pipelineService, errorHandler) {
   const cliInstalled = await checkCliInstalled(errorHandler);
@@ -16465,9 +16807,9 @@ async function updateContextKeys(pipelineService, errorHandler) {
   await setContextKey("workflow.sortAscending", false);
 }
 async function installCli(errorHandler) {
-  await vscode21.window.withProgress(
+  await vscode22.window.withProgress(
     {
-      location: vscode21.ProgressLocation.Notification,
+      location: vscode22.ProgressLocation.Notification,
       title: "Installing workflow-ai CLI...",
       cancellable: false
     },
@@ -16477,7 +16819,7 @@ async function installCli(errorHandler) {
         await execAsync("npm install -g workflow-ai");
         progress.report({ increment: 100 });
         await updateContextKeys(void 0, errorHandler);
-        vscode21.window.showInformationMessage(t("workflow-ai CLI installed successfully!"));
+        vscode22.window.showInformationMessage(t("workflow-ai CLI installed successfully!"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Install CLI", {
@@ -16485,31 +16827,31 @@ async function installCli(errorHandler) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to install workflow-ai CLI: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to install workflow-ai CLI: {0}", message));
         }
       }
     }
   );
 }
 async function initWorkflow(errorHandler) {
-  await vscode21.window.withProgress(
+  await vscode22.window.withProgress(
     {
-      location: vscode21.ProgressLocation.Notification,
+      location: vscode22.ProgressLocation.Notification,
       title: t("Initializing Workflow..."),
       cancellable: false
     },
     async (progress) => {
       progress.report({ increment: 0 });
       try {
-        const workspaceRoot = vscode21.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const workspaceRoot = vscode22.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) {
           const open = t("Open Folder");
-          const result = await vscode21.window.showWarningMessage(
+          const result = await vscode22.window.showWarningMessage(
             t("Please open a folder first to initialize Workflow."),
             open
           );
           if (result === open) {
-            await vscode21.commands.executeCommand("vscode.openFolder");
+            await vscode22.commands.executeCommand("vscode.openFolder");
           }
           return;
         }
@@ -16524,7 +16866,7 @@ async function initWorkflow(errorHandler) {
         }
         progress.report({ increment: 100 });
         await updateContextKeys(void 0, errorHandler);
-        vscode21.window.showInformationMessage(t("Workflow initialized successfully!"));
+        vscode22.window.showInformationMessage(t("Workflow initialized successfully!"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Initialize Workflow", {
@@ -16532,7 +16874,7 @@ async function initWorkflow(errorHandler) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to initialize workflow: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to initialize workflow: {0}", message));
         }
       }
     }
@@ -16545,7 +16887,7 @@ async function activate(context) {
   context.subscriptions.push(errorHandler);
   const registerCommandSafe = (command, callback) => {
     try {
-      return vscode21.commands.registerCommand(command, callback);
+      return vscode22.commands.registerCommand(command, callback);
     } catch (err) {
       console.warn(`Command ${command} already registered, skipping`);
       return { dispose: () => {
@@ -16557,10 +16899,10 @@ async function activate(context) {
   context.subscriptions.push({
     dispose: () => store.clear()
   });
-  const workspaceRoot = vscode21.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceRoot = vscode22.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let workflowRoot = null;
   if (workspaceRoot && checkWorkflowDir()) {
-    workflowRoot = path16.join(workspaceRoot, ".workflow");
+    workflowRoot = path18.join(workspaceRoot, ".workflow");
     await store.refresh(workflowRoot).catch((err) => {
       console.error("Failed to refresh workflow store:", err);
     });
@@ -16601,22 +16943,22 @@ async function activate(context) {
     kanbanProviders.done.setWorkflowRoot(workflowRoot);
   }
   context.subscriptions.push(
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.tickets", ticketsProvider),
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.plans", plansProvider),
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.reports", reportsProvider),
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.skills", skillsProvider),
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.logs", logsProvider),
-    vscode21.window.registerTreeDataProvider("workflow-sidebar.pipeline", pipelineProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.tickets", ticketsProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.plans", plansProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.reports", reportsProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.skills", skillsProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.logs", logsProvider),
+    vscode22.window.registerTreeDataProvider("workflow-sidebar.pipeline", pipelineProvider),
     statusBar,
     skillsProvider,
     logsProvider
   );
-  const backlogTreeView = vscode21.window.createTreeView("wf-kanban-backlog", { treeDataProvider: kanbanProviders.backlog });
-  const readyTreeView = vscode21.window.createTreeView("wf-kanban-ready", { treeDataProvider: kanbanProviders.ready });
-  const inProgressTreeView = vscode21.window.createTreeView("wf-kanban-in-progress", { treeDataProvider: kanbanProviders.inProgress });
-  const blockedTreeView = vscode21.window.createTreeView("wf-kanban-blocked", { treeDataProvider: kanbanProviders.blocked });
-  const reviewTreeView = vscode21.window.createTreeView("wf-kanban-review", { treeDataProvider: kanbanProviders.review });
-  const doneTreeView = vscode21.window.createTreeView("wf-kanban-done", { treeDataProvider: kanbanProviders.done });
+  const backlogTreeView = vscode22.window.createTreeView("wf-kanban-backlog", { treeDataProvider: kanbanProviders.backlog });
+  const readyTreeView = vscode22.window.createTreeView("wf-kanban-ready", { treeDataProvider: kanbanProviders.ready });
+  const inProgressTreeView = vscode22.window.createTreeView("wf-kanban-in-progress", { treeDataProvider: kanbanProviders.inProgress });
+  const blockedTreeView = vscode22.window.createTreeView("wf-kanban-blocked", { treeDataProvider: kanbanProviders.blocked });
+  const reviewTreeView = vscode22.window.createTreeView("wf-kanban-review", { treeDataProvider: kanbanProviders.review });
+  const doneTreeView = vscode22.window.createTreeView("wf-kanban-done", { treeDataProvider: kanbanProviders.done });
   context.subscriptions.push(
     backlogTreeView,
     readyTreeView,
@@ -16673,7 +17015,7 @@ async function activate(context) {
   if (workflowRoot) {
     documentLinkProvider.setWorkflowRoot(workflowRoot);
   }
-  const documentLinkDisposable = vscode21.languages.registerDocumentLinkProvider(
+  const documentLinkDisposable = vscode22.languages.registerDocumentLinkProvider(
     [
       { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
       { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" }
@@ -16690,7 +17032,7 @@ async function activate(context) {
       dependencyService2
     );
     codeLensProvider.setWorkflowRoot(workflowRoot);
-    const codeLensDisposable = vscode21.languages.registerCodeLensProvider(
+    const codeLensDisposable = vscode22.languages.registerCodeLensProvider(
       [
         { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
         { scheme: "file", pattern: "**/.workflow/plans/**/*.md" },
@@ -16705,7 +17047,7 @@ async function activate(context) {
   if (workflowRoot) {
     const completionProvider = new WorkflowCompletionProvider(store);
     completionProvider.setWorkflowRoot(workflowRoot);
-    const completionDisposable = vscode21.languages.registerCompletionItemProvider(
+    const completionDisposable = vscode22.languages.registerCompletionItemProvider(
       [
         { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
         { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" }
@@ -16723,7 +17065,7 @@ async function activate(context) {
   if (workflowRoot) {
     const hoverProvider = new WorkflowHoverProvider(store);
     hoverProvider.setWorkflowRoot(workflowRoot);
-    const hoverDisposable = vscode21.languages.registerHoverProvider(
+    const hoverDisposable = vscode22.languages.registerHoverProvider(
       [
         { scheme: "file", pattern: "**/.workflow/tickets/**/*.md" },
         { scheme: "file", pattern: "**/.workflow/config/pipeline.yaml" },
@@ -16736,9 +17078,11 @@ async function activate(context) {
   }
   let ticketService;
   let dependencyService;
+  let planService;
   if (workflowRoot) {
     ticketService = new TicketService(store, workflowRoot);
     dependencyService = new DependencyService(store);
+    planService = new PlanService(store, workflowRoot);
   }
   const installCliCmd = registerCommandSafe("workflow.installCli", () => installCli(errorHandler));
   const initCmd = registerCommandSafe("workflow.init", () => initWorkflow(errorHandler));
@@ -16746,13 +17090,13 @@ async function activate(context) {
     "workflow.focusPipelineStage",
     async (stageId) => {
       if (!workflowRoot) {
-        vscode21.window.showErrorMessage(t("Workflow root not available"));
+        vscode22.window.showErrorMessage(t("Workflow root not available"));
         return;
       }
-      const pipelinePath = path16.join(workflowRoot, "config", "pipeline.yaml");
+      const pipelinePath = path18.join(workflowRoot, "config", "pipeline.yaml");
       try {
-        const doc = await vscode21.workspace.openTextDocument(pipelinePath);
-        const editor = await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(pipelinePath);
+        const editor = await vscode22.window.showTextDocument(doc);
         const content = doc.getText();
         const escapedStageId = stageId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const stageRegex = new RegExp(`^\\s{4}${escapedStageId}:\\s*$`, "m");
@@ -16760,12 +17104,12 @@ async function activate(context) {
         if (match) {
           const textBeforeMatch = content.substring(0, match.index);
           const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
-          const position = new vscode21.Position(lineNumber, 0);
+          const position = new vscode22.Position(lineNumber, 0);
           editor.revealRange(
-            new vscode21.Range(position, position),
-            vscode21.TextEditorRevealType.InCenter
+            new vscode22.Range(position, position),
+            vscode22.TextEditorRevealType.InCenter
           );
-          editor.selection = new vscode21.Selection(position, position);
+          editor.selection = new vscode22.Selection(position, position);
         }
       } catch (error) {
         if (errorHandler) {
@@ -16774,7 +17118,7 @@ async function activate(context) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to focus on stage: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to focus on stage: {0}", message));
         }
       }
     }
@@ -16784,28 +17128,28 @@ async function activate(context) {
     async (arg) => {
       let ticketId = resolveTicketId(arg);
       if (!ticketId) {
-        const editor = vscode21.window.activeTextEditor;
+        const editor = vscode22.window.activeTextEditor;
         if (editor) {
-          ticketId = path16.basename(editor.document.fileName, ".md");
+          ticketId = path18.basename(editor.document.fileName, ".md");
         }
       }
       if (!ticketId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("No ticket ID provided or workflow not available"));
+        vscode22.window.showErrorMessage(t("No ticket ID provided or workflow not available"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+        vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
         return;
       }
-      const ticketPath = path16.join(
+      const ticketPath = path18.join(
         workflowRoot,
         "tickets",
         ticket.status,
         `${ticketId}.md`
       );
       try {
-        await vscode21.commands.executeCommand("vscode.open", vscode21.Uri.file(ticketPath));
+        await vscode22.commands.executeCommand("vscode.open", vscode22.Uri.file(ticketPath));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Open Ticket", {
@@ -16813,7 +17157,7 @@ async function activate(context) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open ticket: {0}", message));
         }
       }
     }
@@ -16823,20 +17167,20 @@ async function activate(context) {
     async (arg) => {
       const ticketId = resolveTicketId(arg);
       if (!ticketService || !ticketId) {
-        vscode21.window.showErrorMessage(t("Ticket service not available or no ticket ID provided"));
+        vscode22.window.showErrorMessage(t("Ticket service not available or no ticket ID provided"));
         return;
       }
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+        vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
         return;
       }
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode21.window.showInformationMessage(t("No valid transitions from {0}", ticket.status));
+        vscode22.window.showInformationMessage(t("No valid transitions from {0}", ticket.status));
         return;
       }
-      const targetStatus = await vscode21.window.showQuickPick(
+      const targetStatus = await vscode22.window.showQuickPick(
         validTransitions.map((status) => ({
           label: status,
           description: t("Move to {0}", status)
@@ -16851,7 +17195,7 @@ async function activate(context) {
       }
       try {
         await ticketService.move(ticketId, targetStatus.label);
-        vscode21.window.showInformationMessage(t("Moved {0} to {1}", ticketId, targetStatus.label));
+        vscode22.window.showInformationMessage(t("Moved {0} to {1}", ticketId, targetStatus.label));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Move Ticket", {
@@ -16859,7 +17203,7 @@ async function activate(context) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to move ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to move ticket: {0}", message));
         }
       }
     }
@@ -16868,7 +17212,7 @@ async function activate(context) {
     "workflow.moveTicketFromMenu",
     async (arg) => {
       const ticketId = resolveTicketId(arg);
-      await vscode21.commands.executeCommand("workflow.moveTicket", ticketId);
+      await vscode22.commands.executeCommand("workflow.moveTicket", ticketId);
     }
   );
   const moveTicketNextCmd = registerCommandSafe(
@@ -16876,23 +17220,23 @@ async function activate(context) {
     async (arg) => {
       const ticketId = resolveTicketId(arg);
       if (!ticketService || !ticketId) {
-        vscode21.window.showErrorMessage(t("Ticket service not available or no ticket ID provided"));
+        vscode22.window.showErrorMessage(t("Ticket service not available or no ticket ID provided"));
         return;
       }
       const ticket = ticketService.getById(ticketId);
       if (!ticket) {
-        vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+        vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
         return;
       }
       const validTransitions = ticketService.getValidTransitions(ticket.status);
       if (validTransitions.length === 0) {
-        vscode21.window.showInformationMessage(t("No valid transitions from {0}", ticket.status));
+        vscode22.window.showInformationMessage(t("No valid transitions from {0}", ticket.status));
         return;
       }
       const nextStatus = validTransitions[0];
       try {
         await ticketService.move(ticketId, nextStatus);
-        vscode21.window.showInformationMessage(t("Moved {0} to {1}", ticketId, nextStatus));
+        vscode22.window.showInformationMessage(t("Moved {0} to {1}", ticketId, nextStatus));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Move Ticket Next", {
@@ -16900,7 +17244,7 @@ async function activate(context) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to move ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to move ticket: {0}", message));
         }
       }
     }
@@ -16910,28 +17254,28 @@ async function activate(context) {
     async (arg) => {
       let ticketId = resolveTicketId(arg);
       if (!ticketId) {
-        const editor = vscode21.window.activeTextEditor;
+        const editor = vscode22.window.activeTextEditor;
         if (editor) {
-          ticketId = path16.basename(editor.document.fileName, ".md");
+          ticketId = path18.basename(editor.document.fileName, ".md");
         }
       }
       if (!ticketId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("No ticket ID provided or workflow not available"));
+        vscode22.window.showErrorMessage(t("No ticket ID provided or workflow not available"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+        vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
         return;
       }
-      const ticketPath = path16.join(
+      const ticketPath = path18.join(
         workflowRoot,
         "tickets",
         ticket.status,
         `${ticketId}.md`
       );
       try {
-        await vscode21.commands.executeCommand("vscode.open", vscode21.Uri.file(ticketPath));
+        await vscode22.commands.executeCommand("vscode.open", vscode22.Uri.file(ticketPath));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Edit Ticket", {
@@ -16939,7 +17283,7 @@ async function activate(context) {
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open ticket: {0}", message));
         }
       }
     }
@@ -16950,12 +17294,12 @@ async function activate(context) {
       try {
         const ticketId = resolveTicketId(arg);
         if (!dependencyService || !ticketId) {
-          vscode21.window.showErrorMessage(t("Dependency service not available or no ticket ID provided"));
+          vscode22.window.showErrorMessage(t("Dependency service not available or no ticket ID provided"));
           return;
         }
         const ticket = store.getTicketById(ticketId);
         if (!ticket) {
-          vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+          vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
           return;
         }
         const dependencies = dependencyService.getDependencies(ticketId);
@@ -16969,7 +17313,7 @@ ${depList}
 
 **Blocks:**
 ${blocksList}`;
-        await vscode21.window.showInformationMessage(info, { modal: false });
+        await vscode22.window.showInformationMessage(info, { modal: false });
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Show Dependencies", {
@@ -16977,7 +17321,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to show dependencies: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to show dependencies: {0}", message));
         }
       }
     }
@@ -16986,7 +17330,7 @@ ${blocksList}`;
     "workflow.showTicketDependencies",
     async (arg) => {
       const ticketId = resolveTicketId(arg);
-      await vscode21.commands.executeCommand("workflow.showDependencies", ticketId);
+      await vscode22.commands.executeCommand("workflow.showDependencies", ticketId);
     }
   );
   const refreshTicketsCmd = registerCommandSafe(
@@ -17004,7 +17348,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to refresh tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to refresh tickets: {0}", message));
         }
       }
     }
@@ -17022,7 +17366,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllKanbanSortMode("priority");
-        vscode21.window.showInformationMessage(t("Kanban boards sorted by priority"));
+        vscode22.window.showInformationMessage(t("Kanban boards sorted by priority"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Kanban By Priority", {
@@ -17030,7 +17374,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
         }
       }
     }
@@ -17040,7 +17384,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllKanbanSortMode("id");
-        vscode21.window.showInformationMessage(t("Kanban boards sorted by ID"));
+        vscode22.window.showInformationMessage(t("Kanban boards sorted by ID"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Kanban By ID", {
@@ -17048,7 +17392,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
         }
       }
     }
@@ -17058,7 +17402,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllKanbanSortMode("title");
-        vscode21.window.showInformationMessage(t("Kanban boards sorted by title"));
+        vscode22.window.showInformationMessage(t("Kanban boards sorted by title"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Kanban By Title", {
@@ -17066,7 +17410,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
         }
       }
     }
@@ -17076,7 +17420,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllKanbanSortMode("date");
-        vscode21.window.showInformationMessage(t("Kanban boards sorted by date"));
+        vscode22.window.showInformationMessage(t("Kanban boards sorted by date"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Kanban By Date", {
@@ -17084,7 +17428,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort kanban: {0}", message));
         }
       }
     }
@@ -17103,7 +17447,7 @@ ${blocksList}`;
         kanbanProviders.done.setSortAscending(ascending);
         await setContextKey("workflow.sortAscending", ascending);
         const direction = ascending ? t("ascending") : t("descending");
-        vscode21.window.showInformationMessage(t("Sort direction set to {0}", direction));
+        vscode22.window.showInformationMessage(t("Sort direction set to {0}", direction));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Toggle Sort Direction", {
@@ -17111,7 +17455,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to toggle sort direction: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to toggle sort direction: {0}", message));
         }
       }
     }
@@ -17124,7 +17468,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllTicketsSortMode("priority");
-        vscode21.window.showInformationMessage(t("Tickets sidebar sorted by priority"));
+        vscode22.window.showInformationMessage(t("Tickets sidebar sorted by priority"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Tickets By Priority", {
@@ -17132,7 +17476,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
         }
       }
     }
@@ -17142,7 +17486,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllTicketsSortMode("id");
-        vscode21.window.showInformationMessage(t("Tickets sidebar sorted by ID"));
+        vscode22.window.showInformationMessage(t("Tickets sidebar sorted by ID"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Tickets By ID", {
@@ -17150,7 +17494,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
         }
       }
     }
@@ -17160,7 +17504,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllTicketsSortMode("title");
-        vscode21.window.showInformationMessage(t("Tickets sidebar sorted by title"));
+        vscode22.window.showInformationMessage(t("Tickets sidebar sorted by title"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Tickets By Title", {
@@ -17168,7 +17512,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
         }
       }
     }
@@ -17178,7 +17522,7 @@ ${blocksList}`;
     async () => {
       try {
         setAllTicketsSortMode("date");
-        vscode21.window.showInformationMessage(t("Tickets sidebar sorted by date"));
+        vscode22.window.showInformationMessage(t("Tickets sidebar sorted by date"));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Sort Tickets By Date", {
@@ -17186,7 +17530,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to sort tickets: {0}", message));
         }
       }
     }
@@ -17195,21 +17539,21 @@ ${blocksList}`;
     "workflow.gotoReviewSection",
     async () => {
       try {
-        const editor = vscode21.window.activeTextEditor;
+        const editor = vscode22.window.activeTextEditor;
         if (!editor) {
-          vscode21.window.showErrorMessage(t("No active editor"));
+          vscode22.window.showErrorMessage(t("No active editor"));
           return;
         }
         const document = editor.document;
         const content = document.getText();
         const reviewMatch = content.match(/^## Review/m);
         if (!reviewMatch || reviewMatch.index === void 0) {
-          vscode21.window.showInformationMessage(t("No Review section found in this document"));
+          vscode22.window.showInformationMessage(t("No Review section found in this document"));
           return;
         }
         const position = document.positionAt(reviewMatch.index);
-        await editor.revealRange(new vscode21.Range(position, position), vscode21.TextEditorRevealType.InCenter);
-        editor.selection = new vscode21.Selection(position, position);
+        await editor.revealRange(new vscode22.Range(position, position), vscode22.TextEditorRevealType.InCenter);
+        editor.selection = new vscode22.Selection(position, position);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Go To Review Section", {
@@ -17217,7 +17561,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to go to review section: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to go to review section: {0}", message));
         }
       }
     }
@@ -17234,7 +17578,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to start pipeline: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to start pipeline: {0}", message));
         }
       }
     }
@@ -17251,7 +17595,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to stop pipeline: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to stop pipeline: {0}", message));
         }
       }
     }
@@ -17268,7 +17612,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to show pipeline output: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to show pipeline output: {0}", message));
         }
       }
     }
@@ -17285,7 +17629,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to clear pipeline history: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to clear pipeline history: {0}", message));
         }
       }
     }
@@ -17294,7 +17638,7 @@ ${blocksList}`;
     "workflow.statusBarClick",
     async () => {
       try {
-        await vscode21.commands.executeCommand("workbench.action.quickOpen", ">WF:");
+        await vscode22.commands.executeCommand("workbench.action.quickOpen", ">WF:");
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Status Bar Click", {
@@ -17302,7 +17646,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open command palette: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open command palette: {0}", message));
         }
       }
     }
@@ -17312,7 +17656,7 @@ ${blocksList}`;
     async () => {
       try {
         if (!ticketService) {
-          vscode21.window.showErrorMessage(t("Ticket service not available"));
+          vscode22.window.showErrorMessage(t("Ticket service not available"));
           return;
         }
         await executeNewTicket(ticketService);
@@ -17323,7 +17667,7 @@ ${blocksList}`;
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to create new ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to create new ticket: {0}", message));
         }
       }
     }
@@ -17332,15 +17676,19 @@ ${blocksList}`;
     "workflow.newPlan",
     async () => {
       try {
-        vscode21.window.showInformationMessage(t("workflow.newPlan: Plan creation coming soon"));
+        if (!planService) {
+          vscode22.window.showErrorMessage(t("Workflow not found"));
+          return;
+        }
+        await executeNewPlan(planService);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "New Plan", {
-            userMessage: t("Failed to show new plan message. Check Output channel for details.")
+            userMessage: t("Failed to create plan. Check Output channel for details.")
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to show new plan message: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to create plan: {0}", message));
         }
       }
     }
@@ -17418,16 +17766,16 @@ ${blocksList}`;
         let planId = resolvePlanId(arg);
         if (!planId) {
           if (!workflowRoot) {
-            vscode21.window.showErrorMessage(t("Workflow root not available"));
+            vscode22.window.showErrorMessage(t("Workflow root not available"));
             return;
           }
           const plans = store.getPlans().filter((p) => p.folder === "current");
           if (plans.length === 0) {
-            vscode21.window.showInformationMessage(t("No current plans available"));
+            vscode22.window.showInformationMessage(t("No current plans available"));
             return;
           }
           plans.sort((a, b) => a.id.localeCompare(b.id));
-          const picked = await vscode21.window.showQuickPick(
+          const picked = await vscode22.window.showQuickPick(
             plans.map((p) => ({ label: p.id, description: p.title, planId: p.id })),
             { placeHolder: t("Select plan to decompose") }
           );
@@ -17437,54 +17785,72 @@ ${blocksList}`;
           planId = picked.planId;
         }
         if (!workflowRoot) {
-          vscode21.window.showErrorMessage(t("Workflow root not available"));
+          vscode22.window.showErrorMessage(t("Workflow root not available"));
           return;
         }
-        const planPath = path16.join(workflowRoot, "plans", "current", `${planId}.md`);
+        const planPath = path18.join(workflowRoot, "plans", "current", `${planId}.md`);
         let actualPlanPath = planPath;
-        if (!fs8.existsSync(planPath)) {
-          actualPlanPath = path16.join(workflowRoot, "plans", "archive", `${planId}.md`);
+        if (!fs9.existsSync(planPath)) {
+          actualPlanPath = path18.join(workflowRoot, "plans", "archive", `${planId}.md`);
         }
-        if (!fs8.existsSync(actualPlanPath)) {
-          vscode21.window.showErrorMessage(t("Plan {0} not found", planId));
+        if (!fs9.existsSync(actualPlanPath)) {
+          vscode22.window.showErrorMessage(t("Plan {0} not found", planId));
           return;
         }
-        const pipelinePath = path16.join(workflowRoot, "config", "pipeline.yaml");
-        if (!fs8.existsSync(pipelinePath)) {
-          vscode21.window.showErrorMessage(t("Pipeline config not found: {0}", pipelinePath));
+        const pipelinePath = path18.join(workflowRoot, "config", "pipeline.yaml");
+        if (!fs9.existsSync(pipelinePath)) {
+          vscode22.window.showErrorMessage(t("Pipeline config not found: {0}", pipelinePath));
           return;
         }
-        const pipelineContent = fs8.readFileSync(pipelinePath, "utf-8");
+        const pipelineContent = fs9.readFileSync(pipelinePath, "utf-8");
         const pipelineData = load(pipelineContent);
         const defaultAgentId = pipelineData?.pipeline?.default_agent;
         const agent = defaultAgentId ? pipelineData?.pipeline?.agents?.[defaultAgentId] : void 0;
         if (!agent) {
-          vscode21.window.showErrorMessage(t("Default agent not configured in pipeline.yaml"));
+          vscode22.window.showErrorMessage(t("Default agent not configured in pipeline.yaml"));
           return;
         }
-        const prompt = `decompose-plan
-
-Context:
-  plan_id: ${planId}`;
+        const prompt = `decompose-plan Context: plan_id=${planId}`;
         const agentArgs = agent.args.map((a) => `"${a}"`).join(" ");
         const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
-        const terminal = vscode21.window.createTerminal({
+        const terminalEnv = { CLAUDECODE: null };
+        const terminal = vscode22.window.createTerminal({
           name: `Decompose ${planId}`,
-          cwd: workflowRoot
+          cwd: workspaceRoot,
+          env: terminalEnv
         });
         terminal.show();
         terminal.sendText(agentCommand);
-        vscode21.window.withProgress(
+        plansProvider.setDecomposing(planId);
+        const cleanupDecomposing = () => {
+          plansProvider.clearDecomposing(planId);
+        };
+        vscode22.window.withProgress(
           {
-            location: vscode21.ProgressLocation.Notification,
+            location: vscode22.ProgressLocation.Notification,
             title: t("Decomposing plan {0}...", planId),
             cancellable: false
           },
           () => new Promise((resolve) => {
-            const disposable = vscode21.window.onDidCloseTerminal((closedTerminal) => {
-              if (closedTerminal === terminal) {
-                disposable.dispose();
-                resolve();
+            let resolved = false;
+            const done = () => {
+              if (resolved) {
+                return;
+              }
+              resolved = true;
+              shellDisposable.dispose();
+              closeDisposable.dispose();
+              cleanupDecomposing();
+              resolve();
+            };
+            const shellDisposable = vscode22.window.onDidEndTerminalShellExecution((e) => {
+              if (e.terminal === terminal) {
+                done();
+              }
+            });
+            const closeDisposable = vscode22.window.onDidCloseTerminal((t2) => {
+              if (t2 === terminal) {
+                done();
               }
             });
           })
@@ -17496,7 +17862,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to decompose plan: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to decompose plan: {0}", message));
         }
       }
     }
@@ -17506,57 +17872,56 @@ Context:
     async (arg) => {
       try {
         let documentUri;
-        if (arg instanceof vscode21.Uri) {
+        if (arg instanceof vscode22.Uri) {
           documentUri = arg;
         } else if (arg && typeof arg === "object") {
           const item = arg;
-          if (item.uri && item.uri instanceof vscode21.Uri) {
+          if (item.uri && item.uri instanceof vscode22.Uri) {
             documentUri = item.uri;
           }
         }
         if (!documentUri) {
-          vscode21.window.showErrorMessage(t("Document not available"));
+          vscode22.window.showErrorMessage(t("Document not available"));
           return;
         }
         if (!workflowRoot) {
-          vscode21.window.showErrorMessage(t("Workflow root not available"));
+          vscode22.window.showErrorMessage(t("Workflow root not available"));
           return;
         }
         const sourcePath = documentUri.fsPath;
-        const sourceFileName = path16.basename(sourcePath);
-        const pipelinePath = path16.join(workflowRoot, "config", "pipeline.yaml");
-        if (!fs8.existsSync(pipelinePath)) {
-          vscode21.window.showErrorMessage(t("Pipeline config not found: {0}", pipelinePath));
+        const sourceFileName = path18.basename(sourcePath);
+        const pipelinePath = path18.join(workflowRoot, "config", "pipeline.yaml");
+        if (!fs9.existsSync(pipelinePath)) {
+          vscode22.window.showErrorMessage(t("Pipeline config not found: {0}", pipelinePath));
           return;
         }
-        const pipelineContent = fs8.readFileSync(pipelinePath, "utf-8");
+        const pipelineContent = fs9.readFileSync(pipelinePath, "utf-8");
         const pipelineData = load(pipelineContent);
         const defaultAgentId = pipelineData?.pipeline?.default_agent;
         const agent = defaultAgentId ? pipelineData?.pipeline?.agents?.[defaultAgentId] : void 0;
         if (!agent) {
-          vscode21.window.showErrorMessage(t("Default agent not configured in pipeline.yaml"));
+          vscode22.window.showErrorMessage(t("Default agent not configured in pipeline.yaml"));
           return;
         }
-        const prompt = `create-plan
-
-Context:
-  source_file: ${sourcePath}`;
+        const prompt = `create-plan Context: source_file=${sourcePath}`;
         const agentArgs = agent.args.map((a) => `"${a}"`).join(" ");
         const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
-        const terminal = vscode21.window.createTerminal({
+        const terminalEnv = { CLAUDECODE: null };
+        const terminal = vscode22.window.createTerminal({
           name: `Create Plan from ${sourceFileName}`,
-          cwd: workflowRoot
+          cwd: workspaceRoot,
+          env: terminalEnv
         });
         terminal.show();
         terminal.sendText(agentCommand);
-        vscode21.window.withProgress(
+        vscode22.window.withProgress(
           {
-            location: vscode21.ProgressLocation.Notification,
+            location: vscode22.ProgressLocation.Notification,
             title: t("Creating plan from {0}...", sourceFileName),
             cancellable: false
           },
           () => new Promise((resolve) => {
-            const disposable = vscode21.window.onDidCloseTerminal((closedTerminal) => {
+            const disposable = vscode22.window.onDidCloseTerminal((closedTerminal) => {
               if (closedTerminal === terminal) {
                 disposable.dispose();
                 resolve();
@@ -17571,7 +17936,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to create plan: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to create plan: {0}", message));
         }
       }
     }
@@ -17581,28 +17946,28 @@ Context:
     async (arg) => {
       const planId = resolvePlanId(arg);
       if (!planId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("Plan ID not available or workflow not found"));
+        vscode22.window.showErrorMessage(t("Plan ID not available or workflow not found"));
         return;
       }
-      const planPath = path16.join(workflowRoot, "plans", "current", `${planId}.md`);
-      if (!fs8.existsSync(planPath)) {
-        vscode21.window.showErrorMessage(t("Plan {0} not found in current plans", planId));
+      const planPath = path18.join(workflowRoot, "plans", "current", `${planId}.md`);
+      if (!fs9.existsSync(planPath)) {
+        vscode22.window.showErrorMessage(t("Plan {0} not found in current plans", planId));
         return;
       }
       try {
         await pipelineProvider.startPipeline(planId);
-        vscode21.window.showInformationMessage(t("Pipeline started for plan {0}", planId));
+        vscode22.window.showInformationMessage(t("Pipeline started for plan {0}", planId));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         if (message.includes("cancel") || message.includes("abort")) {
-          vscode21.window.showInformationMessage(t("Pipeline cancelled"));
+          vscode22.window.showInformationMessage(t("Pipeline cancelled"));
         } else {
           if (errorHandler) {
             errorHandler.handleError(error, "Run Pipeline For Plan", {
               userMessage: t("Pipeline failed for plan {0}. Check Output channel for details.", planId)
             });
           } else {
-            vscode21.window.showErrorMessage(t("Pipeline failed for plan {0}: {1}", planId, message));
+            vscode22.window.showErrorMessage(t("Pipeline failed for plan {0}: {1}", planId, message));
           }
         }
       }
@@ -17613,23 +17978,23 @@ Context:
     async (arg) => {
       const planId = resolvePlanId(arg);
       if (!planId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("Plan ID not available or workflow not found"));
+        vscode22.window.showErrorMessage(t("Plan ID not available or workflow not found"));
         return;
       }
-      const sourcePath = path16.join(workflowRoot, "plans", "current", `${planId}.md`);
-      const targetPath = path16.join(workflowRoot, "plans", "archive", `${planId}.md`);
-      if (!fs8.existsSync(sourcePath)) {
-        vscode21.window.showErrorMessage(t("Plan {0} not found in current plans", planId));
+      const sourcePath = path18.join(workflowRoot, "plans", "current", `${planId}.md`);
+      const targetPath = path18.join(workflowRoot, "plans", "archive", `${planId}.md`);
+      if (!fs9.existsSync(sourcePath)) {
+        vscode22.window.showErrorMessage(t("Plan {0} not found in current plans", planId));
         return;
       }
       try {
-        const archiveDir = path16.join(workflowRoot, "plans", "archive");
-        if (!fs8.existsSync(archiveDir)) {
-          fs8.mkdirSync(archiveDir, { recursive: true });
+        const archiveDir = path18.join(workflowRoot, "plans", "archive");
+        if (!fs9.existsSync(archiveDir)) {
+          fs9.mkdirSync(archiveDir, { recursive: true });
         }
-        fs8.renameSync(sourcePath, targetPath);
+        fs9.renameSync(sourcePath, targetPath);
         await store.refresh(workflowRoot);
-        vscode21.window.showInformationMessage(t("Plan {0} archived", planId));
+        vscode22.window.showInformationMessage(t("Plan {0} archived", planId));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Archive Plan", {
@@ -17637,7 +18002,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to archive plan {0}: {1}", planId, message));
+          vscode22.window.showErrorMessage(t("Failed to archive plan {0}: {1}", planId, message));
         }
       }
     }
@@ -17647,23 +18012,23 @@ Context:
     async (arg) => {
       const planId = resolvePlanId(arg);
       if (!planId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("Plan ID not available or workflow not found"));
+        vscode22.window.showErrorMessage(t("Plan ID not available or workflow not found"));
         return;
       }
-      const sourcePath = path16.join(workflowRoot, "plans", "archive", `${planId}.md`);
-      const targetPath = path16.join(workflowRoot, "plans", "current", `${planId}.md`);
-      if (!fs8.existsSync(sourcePath)) {
-        vscode21.window.showErrorMessage(t("Plan {0} not found in archive", planId));
+      const sourcePath = path18.join(workflowRoot, "plans", "archive", `${planId}.md`);
+      const targetPath = path18.join(workflowRoot, "plans", "current", `${planId}.md`);
+      if (!fs9.existsSync(sourcePath)) {
+        vscode22.window.showErrorMessage(t("Plan {0} not found in archive", planId));
         return;
       }
       try {
-        const currentDir = path16.join(workflowRoot, "plans", "current");
-        if (!fs8.existsSync(currentDir)) {
-          fs8.mkdirSync(currentDir, { recursive: true });
+        const currentDir = path18.join(workflowRoot, "plans", "current");
+        if (!fs9.existsSync(currentDir)) {
+          fs9.mkdirSync(currentDir, { recursive: true });
         }
-        fs8.renameSync(sourcePath, targetPath);
+        fs9.renameSync(sourcePath, targetPath);
         await store.refresh(workflowRoot);
-        vscode21.window.showInformationMessage(t("Plan {0} unarchived", planId));
+        vscode22.window.showInformationMessage(t("Plan {0} unarchived", planId));
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Unarchive Plan", {
@@ -17671,7 +18036,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to unarchive plan {0}: {1}", planId, message));
+          vscode22.window.showErrorMessage(t("Failed to unarchive plan {0}: {1}", planId, message));
         }
       }
     }
@@ -17682,7 +18047,7 @@ Context:
       try {
         const ticketId = resolveTicketId(arg);
         if (!dependencyService) {
-          vscode21.window.showErrorMessage(t("Dependency service not available"));
+          vscode22.window.showErrorMessage(t("Dependency service not available"));
           return;
         }
         await executeShowDependencies(store, dependencyService, ticketId);
@@ -17693,7 +18058,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to show dependencies: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to show dependencies: {0}", message));
         }
       }
     }
@@ -17710,7 +18075,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to show statistics: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to show statistics: {0}", message));
         }
       }
     }
@@ -17727,7 +18092,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open pipeline config: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open pipeline config: {0}", message));
         }
       }
     }
@@ -17744,7 +18109,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open config: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open config: {0}", message));
         }
       }
     }
@@ -17761,7 +18126,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to focus tickets view: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to focus tickets view: {0}", message));
         }
       }
     }
@@ -17778,7 +18143,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to focus kanban: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to focus kanban: {0}", message));
         }
       }
     }
@@ -17807,7 +18172,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to refresh all: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to refresh all: {0}", message));
         }
       }
     }
@@ -17825,7 +18190,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to copy ticket ID: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to copy ticket ID: {0}", message));
         }
       }
     }
@@ -17834,7 +18199,7 @@ Context:
     "workflow.filterTicketsByPlan",
     async () => {
       if (!workflowRoot) {
-        vscode21.window.showErrorMessage(t("Workflow root not available"));
+        vscode22.window.showErrorMessage(t("Workflow root not available"));
         return;
       }
       try {
@@ -17846,7 +18211,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to filter tickets: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to filter tickets: {0}", message));
         }
       }
     }
@@ -17855,7 +18220,7 @@ Context:
     "workflow.clearTicketFilter",
     async () => {
       if (!workflowRoot) {
-        vscode21.window.showErrorMessage(t("Workflow root not available"));
+        vscode22.window.showErrorMessage(t("Workflow root not available"));
         return;
       }
       try {
@@ -17867,7 +18232,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to clear filter: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to clear filter: {0}", message));
         }
       }
     }
@@ -17877,12 +18242,12 @@ Context:
     async (arg) => {
       const logFile = resolveLogFile(arg);
       if (!logFile) {
-        vscode21.window.showErrorMessage(t("No log file provided"));
+        vscode22.window.showErrorMessage(t("No log file provided"));
         return;
       }
       try {
-        const doc = await vscode21.workspace.openTextDocument(logFile);
-        await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(logFile);
+        await vscode22.window.showTextDocument(doc);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Open History Log", {
@@ -17890,7 +18255,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open log file: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open log file: {0}", message));
         }
       }
     }
@@ -17900,23 +18265,23 @@ Context:
     async (arg) => {
       const planId = resolvePlanId(arg);
       if (!planId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("Plan ID not available or workflow not found"));
+        vscode22.window.showErrorMessage(t("Plan ID not available or workflow not found"));
         return;
       }
-      const currentPath = path16.join(workflowRoot, "plans", "current", `${planId}.md`);
-      const archivePath = path16.join(workflowRoot, "plans", "archive", `${planId}.md`);
+      const currentPath = path18.join(workflowRoot, "plans", "current", `${planId}.md`);
+      const archivePath = path18.join(workflowRoot, "plans", "archive", `${planId}.md`);
       let planPath;
-      if (fs8.existsSync(currentPath)) {
+      if (fs9.existsSync(currentPath)) {
         planPath = currentPath;
-      } else if (fs8.existsSync(archivePath)) {
+      } else if (fs9.existsSync(archivePath)) {
         planPath = archivePath;
       } else {
-        vscode21.window.showErrorMessage(t("Plan {0} not found", planId));
+        vscode22.window.showErrorMessage(t("Plan {0} not found", planId));
         return;
       }
       try {
-        const doc = await vscode21.workspace.openTextDocument(planPath);
-        await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(planPath);
+        await vscode22.window.showTextDocument(doc);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Open History Plan", {
@@ -17924,7 +18289,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open plan: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open plan: {0}", message));
         }
       }
     }
@@ -17934,23 +18299,23 @@ Context:
     async (arg) => {
       const ticketId = resolveTicketId(arg);
       if (!ticketId || !workflowRoot) {
-        vscode21.window.showErrorMessage(t("Ticket ID not available or workflow not found"));
+        vscode22.window.showErrorMessage(t("Ticket ID not available or workflow not found"));
         return;
       }
       const ticket = store.getTicketById(ticketId);
       if (!ticket) {
-        vscode21.window.showErrorMessage(t("Ticket {0} not found", ticketId));
+        vscode22.window.showErrorMessage(t("Ticket {0} not found", ticketId));
         return;
       }
-      const ticketPath = path16.join(
+      const ticketPath = path18.join(
         workflowRoot,
         "tickets",
         ticket.status,
         `${ticketId}.md`
       );
       try {
-        const doc = await vscode21.workspace.openTextDocument(ticketPath);
-        await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(ticketPath);
+        await vscode22.window.showTextDocument(doc);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Open Stage Ticket", {
@@ -17958,7 +18323,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open ticket: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open ticket: {0}", message));
         }
       }
     }
@@ -17968,17 +18333,17 @@ Context:
     async (arg) => {
       const logFile = resolveLogFile(arg);
       if (!logFile) {
-        vscode21.window.showErrorMessage(t("No log file provided"));
+        vscode22.window.showErrorMessage(t("No log file provided"));
         return;
       }
       try {
-        const doc = await vscode21.workspace.openTextDocument(logFile);
-        const editor = await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(logFile);
+        const editor = await vscode22.window.showTextDocument(doc);
         if (arg && typeof arg === "object") {
           const item = arg;
           const stageName = typeof item.stage === "string" ? item.stage : void 0;
           if (stageName) {
-            const content = fs8.readFileSync(logFile, "utf-8");
+            const content = fs9.readFileSync(logFile, "utf-8");
             const lines = content.split("\n");
             const escapedStage = stageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const startPattern = new RegExp(`START stage="${escapedStage}"`);
@@ -18004,10 +18369,10 @@ Context:
                   break;
                 }
               }
-              const from = new vscode21.Position(startLine, 0);
-              const to = new vscode21.Position(endLine, lines[endLine].length);
-              editor.selection = new vscode21.Selection(from, to);
-              editor.revealRange(new vscode21.Range(from, to), vscode21.TextEditorRevealType.InCenter);
+              const from = new vscode22.Position(startLine, 0);
+              const to = new vscode22.Position(endLine, lines[endLine].length);
+              editor.selection = new vscode22.Selection(from, to);
+              editor.revealRange(new vscode22.Range(from, to), vscode22.TextEditorRevealType.InCenter);
             }
           }
         }
@@ -18018,7 +18383,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open log file: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open log file: {0}", message));
         }
       }
     }
@@ -18028,12 +18393,12 @@ Context:
     async (arg) => {
       const reportPath = resolveReportPath(arg);
       if (!reportPath) {
-        vscode21.window.showErrorMessage(t("No report path provided"));
+        vscode22.window.showErrorMessage(t("No report path provided"));
         return;
       }
       try {
-        const doc = await vscode21.workspace.openTextDocument(reportPath);
-        await vscode21.window.showTextDocument(doc);
+        const doc = await vscode22.workspace.openTextDocument(reportPath);
+        await vscode22.window.showTextDocument(doc);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, "Open Stage Report", {
@@ -18041,7 +18406,7 @@ Context:
           });
         } else {
           const message = error instanceof Error ? error.message : "Unknown error";
-          vscode21.window.showErrorMessage(t("Failed to open report: {0}", message));
+          vscode22.window.showErrorMessage(t("Failed to open report: {0}", message));
         }
       }
     }
@@ -18089,6 +18454,10 @@ Context:
     openStageLogCmd,
     openStageReportCmd,
     createPlanFromFileCmd,
+    decomposePlanCmd,
+    runPipelineForPlanCmd,
+    archivePlanCmd,
+    unarchivePlanCmd,
     notificationsManager,
     onLocaleChanged()
   );

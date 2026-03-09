@@ -1441,20 +1441,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           return;
         }
 
-        // Build prompt: skill name + context (same format as runner's PromptBuilder)
-        const prompt = `decompose-plan\n\nContext:\n  plan_id: ${planId}`;
+        // Build prompt: skill name + context
+        const prompt = `decompose-plan Context: plan_id=${planId}`;
 
         // Build agent CLI command
         const agentArgs = agent.args.map((a: string) => `"${a}"`).join(' ');
         const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
 
+        // Remove CLAUDECODE env var to allow nested CLI calls
+        const terminalEnv: Record<string, string | null> = { CLAUDECODE: null };
+
         // Launch agent in terminal with progress indication
         const terminal = vscode.window.createTerminal({
           name: `Decompose ${planId}`,
-          cwd: workflowRoot
+          cwd: workspaceRoot,
+          env: terminalEnv
         });
         terminal.show();
         terminal.sendText(agentCommand);
+
+        // Show spinner on plan tree item while decomposing
+        plansProvider.setDecomposing(planId);
+
+        const cleanupDecomposing = () => {
+          plansProvider.clearDecomposing(planId!);
+        };
 
         // Show progress notification while terminal is active
         vscode.window.withProgress(
@@ -1464,11 +1475,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             cancellable: false
           },
           () => new Promise<void>(resolve => {
-            const disposable = vscode.window.onDidCloseTerminal(closedTerminal => {
-              if (closedTerminal === terminal) {
-                disposable.dispose();
-                resolve();
-              }
+            let resolved = false;
+            const done = () => {
+              if (resolved) { return; }
+              resolved = true;
+              shellDisposable.dispose();
+              closeDisposable.dispose();
+              cleanupDecomposing();
+              resolve();
+            };
+
+            // Fires when the command in the terminal finishes (process exit / Ctrl+C)
+            const shellDisposable = vscode.window.onDidEndTerminalShellExecution(e => {
+              if (e.terminal === terminal) { done(); }
+            });
+
+            // Fallback: fires when the terminal tab is closed
+            const closeDisposable = vscode.window.onDidCloseTerminal(t => {
+              if (t === terminal) { done(); }
             });
           })
         );
@@ -1533,16 +1557,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
 
         // Build prompt: create-plan skill + context (source file path)
-        const prompt = `create-plan\n\nContext:\n  source_file: ${sourcePath}`;
+        const prompt = `create-plan Context: source_file=${sourcePath}`;
 
         // Build agent CLI command
         const agentArgs = agent.args.map((a: string) => `"${a}"`).join(' ');
         const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
 
+        // Remove CLAUDECODE env var to allow nested CLI calls
+        const terminalEnv: Record<string, string | null> = { CLAUDECODE: null };
+
         // Launch agent in terminal with progress indication
         const terminal = vscode.window.createTerminal({
           name: `Create Plan from ${sourceFileName}`,
-          cwd: workflowRoot
+          cwd: workspaceRoot,
+          env: terminalEnv
         });
         terminal.show();
         terminal.sendText(agentCommand);
@@ -2192,6 +2220,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     openStageLogCmd,
     openStageReportCmd,
     createPlanFromFileCmd,
+    decomposePlanCmd,
+    runPipelineForPlanCmd,
+    archivePlanCmd,
+    unarchivePlanCmd,
     notificationsManager,
     onLocaleChanged()
   );

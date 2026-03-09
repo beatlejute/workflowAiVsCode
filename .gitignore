@@ -2,3 +2,5 @@
 .vscode-test/
 node_modules/
 dist/
+
+workflow-vscode-*.vsix
