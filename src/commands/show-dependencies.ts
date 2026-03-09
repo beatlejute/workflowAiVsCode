@@ -5,6 +5,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { DependencyService } from '../services/dependency-service';
 
@@ -33,19 +34,19 @@ export async function executeShowDependencies(
     // Show QuickPick to select ticket
     const tickets = store.getTickets();
     if (tickets.length === 0) {
-      vscode.window.showInformationMessage(vscode.l10n.t('No tickets available'));
+      vscode.window.showInformationMessage(t('No tickets available'));
       return;
     }
 
     const selected = await vscode.window.showQuickPick(
-      tickets.map(t => ({
-        label: t.id,
-        description: t.title,
-        detail: vscode.l10n.t('Status: {0}', t.status)
+      tickets.map(ticket => ({
+        label: ticket.id,
+        description: ticket.title,
+        detail: t('Status: {0}', ticket.status)
       })),
       {
-        placeHolder: vscode.l10n.t('Select ticket to show dependencies'),
-        title: vscode.l10n.t('Show Dependencies')
+        placeHolder: t('Select ticket to show dependencies'),
+        title: t('Show Dependencies')
       }
     );
 
@@ -59,7 +60,7 @@ export async function executeShowDependencies(
   // Get ticket
   const ticket = store.getTicketById(ticketId);
   if (!ticket) {
-    vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
+    vscode.window.showErrorMessage(t('Ticket {0} not found', ticketId));
     return;
   }
 
@@ -73,24 +74,24 @@ export async function executeShowDependencies(
   // Format dependency list
   const depList = dependencies.length > 0
     ? dependencies.map(d => `- ${d.id}: ${d.title} (${d.status})`).join('\n')
-    : vscode.l10n.t('No dependencies');
+    : t('No dependencies');
 
   // Format blocked list
   const blocksList = dependents.length > 0
     ? dependents.map(d => `- ${d.id}: ${d.title} (${d.status})`).join('\n')
-    : vscode.l10n.t('No tickets blocked by this one');
+    : t('No tickets blocked by this one');
 
   // Format chain
   const chainList = chain.length > 0
     ? chain.map((id, index) => `${'  '.repeat(index)}└─ ${id}`).join('\n')
-    : vscode.l10n.t('No dependency chain');
+    : t('No dependency chain');
 
   // Show in QuickPick with detailed information
   const items: vscode.QuickPickItem[] = [
     {
       label: `$(git-pull-request) ${ticketId}: ${ticket.title}`,
       description: '',
-      detail: `${vscode.l10n.t('Status')}: ${ticket.status} | ${vscode.l10n.t('Priority')}: ${ticket.priority} | ${vscode.l10n.t('Type')}: ${ticket.type}`
+      detail: `${t('Status')}: ${ticket.status} | ${t('Priority')}: ${ticket.priority} | ${t('Type')}: ${ticket.type}`
     },
     {
       label: '',
@@ -110,8 +111,8 @@ export async function executeShowDependencies(
   ];
 
   const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: vscode.l10n.t('Dependencies for {0}', ticketId),
-    title: vscode.l10n.t('Ticket Dependencies'),
+    placeHolder: t('Dependencies for {0}', ticketId),
+    title: t('Ticket Dependencies'),
     matchOnDescription: false,
     matchOnDetail: false
   });
@@ -120,8 +121,8 @@ export async function executeShowDependencies(
   if (selected && selected.label.startsWith('$(git-pull-request)')) {
     // This is the main ticket, offer to open
     const openAction = await vscode.window.showInformationMessage(
-      vscode.l10n.t('Open {0}?', ticketId),
-      vscode.l10n.t('Open')
+      t('Open {0}?', ticketId),
+      t('Open')
     );
     if (openAction === 'Open') {
       await vscode.commands.executeCommand('workflow.openTicket', ticketId);

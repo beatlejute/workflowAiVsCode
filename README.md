@@ -11,6 +11,8 @@
 
 - [Description](#description)
 - [Key Features](#key-features)
+  - [Core Features (v0.0.1)](#core-features-v001)
+  - [New in v1.0.0](#new-in-v100)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
   - [From VS Code Marketplace](#from-vs-code-marketplace)
@@ -30,6 +32,7 @@
   - [Running the Pipeline](#running-the-pipeline)
   - [Viewing Ticket Dependencies](#viewing-ticket-dependencies)
   - [Using CodeLens](#using-codelens)
+  - [Examples](#examples)
 - [Commands](#commands)
   - [Ticket Commands](#ticket-commands)
   - [Pipeline Commands](#pipeline-commands)
@@ -52,6 +55,8 @@
 
 ### Key Features
 
+#### Core Features (v0.0.1)
+
 - **Sidebar TreeView** — Browse tickets, plans, reports, and pipeline configurations in an organized tree structure
 - **Kanban Board** — Visual task management with 6 columns (Backlog, Ready, In Progress, Blocked, Review, Done)
 - **Pipeline Monitor** — Real-time pipeline execution monitoring with start/stop controls
@@ -62,6 +67,18 @@
 - **Real-time Diagnostics** — Automatic validation of ticket format and dependencies
 - **Document Links** — Clickable references between tickets and configurations
 - **Notifications** — Stay informed about pipeline events and ticket changes
+
+#### New in v1.0.0
+
+- **🌍 i18n Support** — 10 locales (en, ru, de, fr, es, it, pt, zh, ja, ko) with auto-detection
+- **✅ Review Badges** — Visual indicators (✅/❌) for ticket review status with +N overflow
+- **📅 Date Sorting** — Sort tickets by `updated_at` timestamp (asc/desc)
+- **🔍 Plan Filter** — Filter tickets by plan with sync between sidebar and kanban
+- **⚙️ Config Button** — Quick access to `config.yaml` from Pipeline view
+- **📊 Pipeline Details** — Expanded pipeline step output with ticket/agent/skill info
+- **📜 Run History** — Persistent pipeline execution history (50 runs) with expandable reports
+- **🔧 Sort Controls** — Sort by priority, ID, title, or date with direction toggle
+- **📋 Plan Context Menu** — Quick actions: Decompose, Run Pipeline, Archive/Unarchive
 
 ### Integration with wf CLI
 
@@ -188,6 +205,22 @@ The extension requires the `wf` CLI tool to be installed. You can install it:
 2. **Manually**: Run `npm install -g workflow-ai` in your terminal
 
 After installation, the extension will automatically detect the CLI.
+
+### i18n Scripts
+
+The project includes internationalization (i18n) validation scripts:
+
+| Script | Description |
+|--------|-------------|
+| `npm run i18n:lint` | Validate i18n key synchronization across all locale files |
+| `npm run lint:i18n` | Legacy alias for `i18n:lint` |
+
+The `i18n:lint` script checks:
+- All keys are present in all locale files (`package.nls.json` and `package.nls.*.json`)
+- Placeholders like `{0}`, `{1}` are preserved across translations
+- No missing or extra keys in any locale
+
+**Pre-commit Hook**: A pre-commit hook automatically runs `npm run i18n:lint` before each commit to prevent committing broken translations. The hook is installed via `husky` when you run `npm install`.
 
 ## Configuration
 
@@ -362,6 +395,60 @@ CodeLens provides inline actions in ticket files:
 
 CodeLens appears automatically above the ticket title when editing a `.md` file.
 
+### Examples
+
+#### Create a Ticket via CLI
+
+```bash
+# Create a new implementation ticket
+wf ticket create "Add i18n support" --type IMPL --priority 2
+
+# Create a bug fix ticket
+wf ticket create "Fix kanban rendering" --type FIX --priority 1
+```
+
+#### Filter Tickets by Plan
+
+1. Right-click on a plan (e.g., `PLAN-012`) in the Plans view
+2. Select "Filter Tickets by Plan"
+3. Both sidebar and kanban views now show only tickets from that plan
+4. The filter indicator shows `🔍 PLAN-012: Quality & Automation Improvements`
+5. Click the `×` button to clear the filter
+
+#### Sort Tickets by Date
+
+1. Open the Kanban board
+2. Click the date icon (📅) in any column header
+3. Tickets are sorted by `updated_at` timestamp (newest first)
+4. Click again to toggle ascending/descending order
+
+#### Run Pipeline with Custom Configuration
+
+```bash
+# Run specific stage
+wf pipeline run --stage test
+
+# Run with verbose output
+wf pipeline run --verbose
+```
+
+#### View Ticket Dependencies
+
+```bash
+# Show dependencies for a ticket
+wf ticket deps IMPL-069
+
+# Visualize dependency graph
+wf ticket graph PLAN-012
+```
+
+#### Archive a Plan
+
+1. Right-click on a completed plan in the Plans view
+2. Select "Archive Plan"
+3. The plan is moved to `.workflow/plans/archive/`
+4. To restore: right-click in archive view → "Unarchive Plan"
+
 ## Commands
 
 All Workflow AI commands are accessible via the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
@@ -417,6 +504,62 @@ All Workflow AI commands are accessible via the Command Palette (`Ctrl+Shift+P` 
 | `workflow.sortKanbanByPriority` | Sort Kanban by priority | In Kanban view |
 | `workflow.sortKanbanById` | Sort Kanban by ticket ID | In Kanban view |
 | `workflow.sortKanbanByTitle` | Sort Kanban by title | In Kanban view |
+
+## Testing
+
+The extension includes comprehensive test coverage with unit tests and end-to-end (E2E) tests.
+
+### Unit Tests
+
+Unit tests cover core functionality including:
+
+- **i18n** — Locale bundle validation, translation completeness, placeholder matching
+- **UI Utils** — Review badges generation, ticket formatting
+- **Providers** — Kanban and Sidebar tree providers, filtering, sorting
+- **Commands** — Command handlers and validation
+- **Diagnostics** — Ticket validation and error detection
+
+**Run unit tests:**
+
+```bash
+npm run test:unit
+```
+
+### E2E Tests
+
+End-to-end tests verify the extension works correctly in VS Code:
+
+- **Ticket Creation** — Creating tickets via commands and UI
+- **Ticket Movement** — Moving tickets between statuses
+- **TreeView** — Sidebar and Kanban view rendering
+- **Filter & Sort** — Plan filtering, date/priority sorting
+- **Pipeline Execution** — Starting, stopping, and monitoring pipeline
+
+**Run E2E tests:**
+
+```bash
+npm run test:e2e
+```
+
+### Test Coverage
+
+| Component | Coverage |
+|-----------|----------|
+| i18n wrapper | ~100% |
+| UI utils (getReviewBadges) | ~100% |
+| Sidebar filter/sort | ~80% |
+| Kanban provider | ~80% |
+| Commands | ~70% |
+
+### CI/CD Integration
+
+Tests run automatically on every push and pull request via GitHub Actions:
+
+- Unit tests run on Ubuntu, Windows, macOS
+- E2E tests run on Ubuntu with VS Code stable
+- Coverage reports uploaded to artifacts
+
+**CI Configuration:** `.github/workflows/ci.yml`
 
 ## Troubleshooting
 

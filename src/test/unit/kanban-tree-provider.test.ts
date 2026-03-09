@@ -321,6 +321,109 @@ stages:
 
       assert.strictEqual(item.contextValue, 'kanban-ticket', 'Context value should be kanban-ticket');
     });
+
+    test('shows review badges in description for tickets with reviews', () => {
+      const ticketWithReviews: Ticket = {
+        id: 'KANBAN-REVIEW-001',
+        title: 'Review Badge Test',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: '',
+        reviews: [
+          { date: '2026-03-06', status: 'passed', summary: 'Good work' },
+          { date: '2026-03-07', status: 'failed', summary: 'Needs fixes' }
+        ]
+      };
+
+      const item = new KanbanTicketTreeItem(ticketWithReviews, tempWorkflowRoot);
+      const description = item.description as string;
+
+      assert.ok(
+        description.includes('✅'),
+        'Description should contain passed badge'
+      );
+      assert.ok(
+        description.includes('❌'),
+        'Description should contain failed badge'
+      );
+      assert.ok(
+        description.includes('Review Badge Test'),
+        'Description should contain ticket title'
+      );
+    });
+
+    test('shows max 4 review badges with +N for additional reviews', () => {
+      const ticketWithManyReviews: Ticket = {
+        id: 'KANBAN-REVIEW-002',
+        title: 'Many Reviews Test',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: '',
+        reviews: [
+          { date: '2026-03-06', status: 'passed', summary: 'Good' },
+          { date: '2026-03-07', status: 'passed', summary: 'Good' },
+          { date: '2026-03-08', status: 'passed', summary: 'Good' },
+          { date: '2026-03-09', status: 'passed', summary: 'Good' },
+          { date: '2026-03-10', status: 'failed', summary: 'Bad' },
+          { date: '2026-03-11', status: 'passed', summary: 'Good' }
+        ]
+      };
+
+      const item = new KanbanTicketTreeItem(ticketWithManyReviews, tempWorkflowRoot);
+
+      const description = item.description as string;
+      const badgeCount = (description.match(/✅/g) || []).length + (description.match(/❌/g) || []).length;
+      
+      assert.strictEqual(badgeCount, 4, 'Should show max 4 badges');
+      assert.ok(description.includes('+2'), 'Should show +2 for additional reviews');
+    });
+
+    test('does not show badges for tickets without reviews', () => {
+      const ticketWithoutReviews: Ticket = {
+        id: 'KANBAN-NOREVIEW-001',
+        title: 'No Review Badge Test',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: ''
+      };
+
+      const item = new KanbanTicketTreeItem(ticketWithoutReviews, tempWorkflowRoot);
+      const description = item.description as string;
+
+      assert.strictEqual(description, 'No Review Badge Test', 'Description should be just title');
+      assert.ok(!description.includes('✅'), 'Should not contain passed badge');
+      assert.ok(!description.includes('❌'), 'Should not contain failed badge');
+    });
   });
 
   suite('KanbanTreeProvider', () => {
@@ -501,6 +604,86 @@ type: FIX
         children[2].ticket.priority,
         3,
         'Third ticket should have priority 3'
+      );
+    });
+
+    test('sorts tickets by date (newest first)', async () => {
+      const ticket1: Ticket = {
+        id: 'KANBAN-DATE-001',
+        title: 'Oldest Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-01T00:00:00Z',
+        updated_at: '2026-03-01T00:00:00Z',
+        completed_at: ''
+      };
+
+      const ticket2: Ticket = {
+        id: 'KANBAN-DATE-002',
+        title: 'Newest Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-03T00:00:00Z',
+        updated_at: '2026-03-03T00:00:00Z',
+        completed_at: ''
+      };
+
+      const ticket3: Ticket = {
+        id: 'KANBAN-DATE-003',
+        title: 'Middle Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-02T00:00:00Z',
+        updated_at: '2026-03-02T00:00:00Z',
+        completed_at: ''
+      };
+
+      store.addTicket(ticket1);
+      store.addTicket(ticket2);
+      store.addTicket(ticket3);
+
+      provider.setSortMode('date');
+      const children = await provider.getChildren();
+
+      assert.strictEqual(children.length, 3, 'Should have 3 tickets');
+      assert.strictEqual(
+        children[0].ticket.id,
+        'KANBAN-DATE-002',
+        'First ticket should be newest (2026-03-03)'
+      );
+      assert.strictEqual(
+        children[1].ticket.id,
+        'KANBAN-DATE-003',
+        'Second ticket should be middle (2026-03-02)'
+      );
+      assert.strictEqual(
+        children[2].ticket.id,
+        'KANBAN-DATE-001',
+        'Third ticket should be oldest (2026-03-01)'
       );
     });
 
@@ -700,6 +883,138 @@ type: FIX
         !doneChildren.some(c => c.ticket.id === 'STATUS-BACKLOG-001'),
         'Done provider should not show backlog ticket'
       );
+    });
+  });
+
+  suite('KanbanTreeProvider Plan Filter Tests', () => {
+    beforeEach(() => {
+      store.clear();
+    });
+
+    test('getPlanFilter returns null by default', () => {
+      const provider = new KanbanTreeProvider(store, TicketStatus.Ready);
+      assert.strictEqual(provider.getPlanFilter(), null);
+    });
+
+    test('setPlanFilter updates filter and getPlanFilter returns it', () => {
+      const provider = new KanbanTreeProvider(store, TicketStatus.Ready);
+      provider.setPlanFilter('PLAN-001');
+      assert.strictEqual(provider.getPlanFilter(), 'PLAN-001');
+    });
+
+    test('filters tickets by plan when filter is set', async () => {
+      const provider = new KanbanTreeProvider(store, TicketStatus.Ready);
+      provider.setWorkflowRoot(tempWorkflowRoot);
+
+      // Create tickets with different parent plans
+      const plan1Ticket: Ticket = {
+        id: 'FILTER-PLAN1-001',
+        title: 'Plan 1 Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-001',
+        parent_task: '',
+        created_at: '2026-03-08T00:00:00Z',
+        updated_at: '2026-03-08T00:00:00Z',
+        completed_at: ''
+      };
+
+      const plan2Ticket: Ticket = {
+        id: 'FILTER-PLAN2-001',
+        title: 'Plan 2 Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-002',
+        parent_task: '',
+        created_at: '2026-03-08T00:00:00Z',
+        updated_at: '2026-03-08T00:00:00Z',
+        completed_at: ''
+      };
+
+      const noPlanTicket: Ticket = {
+        id: 'FILTER-NOPLAN-001',
+        title: 'No Plan Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-08T00:00:00Z',
+        updated_at: '2026-03-08T00:00:00Z',
+        completed_at: ''
+      };
+
+      store.addTicket(plan1Ticket);
+      store.addTicket(plan2Ticket);
+      store.addTicket(noPlanTicket);
+
+      // No filter - should show all tickets
+      let children = await provider.getChildren();
+      assert.strictEqual(children.length, 3, 'Should show all tickets without filter');
+
+      // Filter by PLAN-001
+      provider.setPlanFilter('PLAN-001');
+      children = await provider.getChildren();
+      assert.strictEqual(children.length, 1, 'Should show only PLAN-001 ticket');
+      assert.strictEqual(children[0].ticket.id, 'FILTER-PLAN1-001');
+
+      // Filter by PLAN-002
+      provider.setPlanFilter('PLAN-002');
+      children = await provider.getChildren();
+      assert.strictEqual(children.length, 1, 'Should show only PLAN-002 ticket');
+      assert.strictEqual(children[0].ticket.id, 'FILTER-PLAN2-001');
+
+      // Clear filter
+      provider.setPlanFilter(null);
+      children = await provider.getChildren();
+      assert.strictEqual(children.length, 3, 'Should show all tickets after clearing filter');
+    });
+
+    test('filters tickets correctly when no tickets match plan', async () => {
+      const provider = new KanbanTreeProvider(store, TicketStatus.Ready);
+      provider.setWorkflowRoot(tempWorkflowRoot);
+
+      const ticket: Ticket = {
+        id: 'FILTER-SINGLE-001',
+        title: 'Single Ticket',
+        status: TicketStatus.Ready,
+        priority: 3,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-001',
+        parent_task: '',
+        created_at: '2026-03-08T00:00:00Z',
+        updated_at: '2026-03-08T00:00:00Z',
+        completed_at: ''
+      };
+
+      store.addTicket(ticket);
+
+      // Filter by non-existent plan
+      provider.setPlanFilter('PLAN-999');
+      const children = await provider.getChildren();
+      assert.strictEqual(children.length, 0, 'Should show no tickets when plan does not match');
     });
   });
 });

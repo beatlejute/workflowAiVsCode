@@ -149,8 +149,9 @@ export class PipelineService extends EventEmitter {
 
   /**
    * Start pipeline execution
+   * @param planId - Optional plan ID to run pipeline for a specific plan
    */
-  async start(): Promise<void> {
+  async start(planId?: string): Promise<void> {
     if (this.currentState === PipelineState.Running) {
       throw new Error('Pipeline is already running');
     }
@@ -164,6 +165,9 @@ export class PipelineService extends EventEmitter {
     this.currentTicket = undefined;
 
     const args = ['run'];
+    if (planId) {
+      args.push('--plan', planId);
+    }
 
     try {
       // Remove CLAUDECODE env var to allow nested claude CLI calls from pipeline

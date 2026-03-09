@@ -12,6 +12,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
 
@@ -323,7 +324,7 @@ export class DependencyService {
   canMoveToReady(id: string): ReadinessResult {
     const ticket = this.store.getTicketById(id);
     if (!ticket) {
-      return { ok: false, blockers: [vscode.l10n.t('Ticket {0} not found in dependency check', id)] };
+      return { ok: false, blockers: [t('Ticket {0} not found in dependency check', id)] };
     }
 
     const blockers: string[] = [];
@@ -331,7 +332,7 @@ export class DependencyService {
     for (const depId of ticket.dependencies) {
       const depTicket = this.store.getTicketById(depId);
       if (!depTicket) {
-        blockers.push(vscode.l10n.t('Dependency "{0}" does not exist', depId));
+        blockers.push(t('Dependency "{0}" does not exist', depId));
       } else if (depTicket.status !== TicketStatus.Done) {
         blockers.push(depId);
       }

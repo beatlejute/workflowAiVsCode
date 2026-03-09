@@ -2,7 +2,7 @@
   "name": "workflow-vscode",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "workflow-ai",
   "license": "MIT",
   "icon": "assets/icon-128.png",
@@ -70,13 +70,13 @@
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
-          "id": "workflow-sidebar.skills",
-          "name": "%views.sidebar.skills.name%",
+          "id": "workflow-sidebar.logs",
+          "name": "%views.sidebar.logs.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
-          "id": "workflow-sidebar.logs",
-          "name": "%views.sidebar.logs.name%",
+          "id": "workflow-sidebar.skills",
+          "name": "%views.sidebar.skills.name%",
           "when": "workflow.cliInstalled && workflow.workflowFound"
         },
         {
@@ -202,6 +202,42 @@
         "icon": "$(symbol-string)"
       },
       {
+        "command": "workflow.sortKanbanByDate",
+        "title": "%command.sortKanbanByDate.title%",
+        "category": "%category.workflow%",
+        "icon": "$(calendar)"
+      },
+      {
+        "command": "workflow.toggleSortDirection",
+        "title": "%command.toggleSortDirection.title%",
+        "category": "%category.workflow%",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "workflow.sortTicketsByPriority",
+        "title": "%command.sortTicketsByPriority.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-numeric)"
+      },
+      {
+        "command": "workflow.sortTicketsById",
+        "title": "%command.sortTicketsById.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-enum)"
+      },
+      {
+        "command": "workflow.sortTicketsByTitle",
+        "title": "%command.sortTicketsByTitle.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-string)"
+      },
+      {
+        "command": "workflow.sortTicketsByDate",
+        "title": "%command.sortTicketsByDate.title%",
+        "category": "%category.workflow%",
+        "icon": "$(calendar)"
+      },
+      {
         "command": "workflow.runPipeline",
         "title": "%command.runPipeline.title%",
         "category": "%category.workflow%",
@@ -224,6 +260,36 @@
         "title": "%command.clearPipelineHistory.title%",
         "category": "%category.workflow%",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "workflow.decomposePlan",
+        "title": "%command.decomposePlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "workflow.createPlanFromFile",
+        "title": "%command.createPlanFromFile.title%",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflow.runPipelineForPlan",
+        "title": "%command.runPipelineForPlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workflow.archivePlan",
+        "title": "%command.archivePlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "workflow.unarchivePlan",
+        "title": "%command.unarchivePlan.title%",
+        "category": "%category.workflow%",
+        "icon": "$(reply)"
       },
       {
         "command": "workflow.init",
@@ -306,6 +372,48 @@
         "title": "%command.filterTicketsByPlan.title%",
         "category": "%category.workflow%",
         "icon": "$(filter)"
+      },
+      {
+        "command": "workflow.clearTicketFilter",
+        "title": "%command.clearTicketFilter.title%",
+        "category": "%category.workflow%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "workflow.openHistoryLog",
+        "title": "Open Log",
+        "category": "%category.workflow%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "workflow.openHistoryPlan",
+        "title": "Open Plan",
+        "category": "%category.workflow%",
+        "icon": "$(file)"
+      },
+      {
+        "command": "workflow.openStageTicket",
+        "title": "Open Ticket",
+        "category": "%category.workflow%",
+        "icon": "$(file)"
+      },
+      {
+        "command": "workflow.openStageLog",
+        "title": "Open Stage Log",
+        "category": "%category.workflow%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "workflow.openStageReport",
+        "title": "Open Report",
+        "category": "%category.workflow%",
+        "icon": "$(file)"
+      },
+      {
+        "command": "workflow.createPlanFromFile",
+        "title": "Create Workflow Plan",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
       }
     ],
     "keybindings": [
@@ -332,6 +440,37 @@
           "type": "string",
           "default": "",
           "description": "%config.cliPath.description%"
+        },
+        "workflow.locale": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "ru",
+            "de",
+            "fr",
+            "es",
+            "it",
+            "pt",
+            "zh",
+            "ja",
+            "ko"
+          ],
+          "enumDescriptions": [
+            "%config.locale.enumDescriptions.auto%",
+            "%config.locale.enumDescriptions.en%",
+            "%config.locale.enumDescriptions.ru%",
+            "%config.locale.enumDescriptions.de%",
+            "%config.locale.enumDescriptions.fr%",
+            "%config.locale.enumDescriptions.es%",
+            "%config.locale.enumDescriptions.it%",
+            "%config.locale.enumDescriptions.pt%",
+            "%config.locale.enumDescriptions.zh%",
+            "%config.locale.enumDescriptions.ja%",
+            "%config.locale.enumDescriptions.ko%"
+          ],
+          "description": "%config.locale.description%"
         }
       }
     },
@@ -363,6 +502,37 @@
           "group": "navigation"
         },
         {
+          "command": "workflow.clearTicketFilter",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound && workflow.ticketFilterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.sortTicketsByPriority",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.sortTicketsById",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.sortTicketsByTitle",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.sortTicketsByDate",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.toggleSortDirection",
+          "when": "view == workflow-sidebar.tickets && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort",
+          "icon": "$(arrow-up)"
+        },
+        {
           "command": "workflow.newTicket",
           "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
@@ -388,8 +558,19 @@
           "group": "2_sort"
         },
         {
+          "command": "workflow.sortKanbanByDate",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort"
+        },
+        {
+          "command": "workflow.toggleSortDirection",
+          "when": "view =~ /^wf-kanban-/ && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_sort",
+          "icon": "$(arrow-up)"
+        },
+        {
           "command": "workflow.runPipeline",
-          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "when": "view == workflow-sidebar.pipeline && !workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },
         {
@@ -411,6 +592,12 @@
           "command": "workflow.openPipelineConfig",
           "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_pipeline"
+        },
+        {
+          "command": "workflow.openConfig",
+          "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_pipeline",
+          "icon": "$(tools)"
         }
       ],
       "view/item/context": [
@@ -424,7 +611,7 @@
           "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "inline"
         },
-{
+        {
           "command": "workflow.moveTicketFromMenu",
           "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_move"
@@ -449,7 +636,7 @@
           "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "inline"
         },
-{
+        {
           "command": "workflow.moveTicketFromMenu",
           "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_move"
@@ -463,6 +650,51 @@
           "command": "workflow.copyTicketId",
           "when": "view =~ /^wf-kanban-/ && viewItem == kanban-ticket && workflow.cliInstalled && workflow.workflowFound",
           "group": "4_copy"
+        },
+        {
+          "command": "workflow.decomposePlan",
+          "when": "view == workflow-sidebar.plans && viewItem == plan-current && workflow.cliInstalled && workflow.workflowFound",
+          "group": "1_actions"
+        },
+        {
+          "command": "workflow.runPipelineForPlan",
+          "when": "view == workflow-sidebar.plans && viewItem == plan-current && !workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound",
+          "group": "1_actions"
+        },
+        {
+          "command": "workflow.archivePlan",
+          "when": "view == workflow-sidebar.plans && viewItem == plan-current && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_archive"
+        },
+        {
+          "command": "workflow.unarchivePlan",
+          "when": "view == workflow-sidebar.plans && viewItem == plan-archive && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_archive"
+        },
+        {
+          "command": "workflow.openHistoryLog",
+          "when": "viewItem =~ /^history-item/",
+          "group": "1_open"
+        },
+        {
+          "command": "workflow.openHistoryPlan",
+          "when": "viewItem == history-item-plan",
+          "group": "1_open"
+        },
+        {
+          "command": "workflow.openStageTicket",
+          "when": "viewItem =~ /^completed-stage.*ticket/",
+          "group": "1_open"
+        },
+        {
+          "command": "workflow.openStageLog",
+          "when": "viewItem =~ /^completed-stage/",
+          "group": "2_log"
+        },
+        {
+          "command": "workflow.openStageReport",
+          "when": "viewItem =~ /^completed-stage-report/",
+          "group": "1_open"
         }
       ],
       "commandPalette": [
@@ -525,6 +757,30 @@
         {
           "command": "workflow.stopPipeline",
           "when": "workflow.cliInstalled && workflow.workflowFound && workflow.pipelineRunning"
+        },
+        {
+          "command": "workflow.openHistoryLog",
+          "when": "false"
+        },
+        {
+          "command": "workflow.openHistoryPlan",
+          "when": "false"
+        },
+        {
+          "command": "workflow.openStageTicket",
+          "when": "false"
+        },
+        {
+          "command": "workflow.openStageLog",
+          "when": "false"
+        },
+        {
+          "command": "workflow.openStageReport",
+          "when": "false"
+        },
+        {
+          "command": "workflow.createPlanFromFile",
+          "when": "false"
         }
       ]
     }
@@ -541,20 +797,24 @@
     "test": "node ./src/test/runTests.mjs",
     "test:compile": "tsc -p tsconfig.test.json",
     "test:unit": "mocha --require ts-node/register --ui tdd src/test/unit/**/*.test.ts",
-    "test:e2e": "node ./dist/test/test/e2e/runTests.js"
+    "test:e2e": "node ./dist/test/test/e2e/runTests.js",
+    "test:coverage": "c8 --reporter=text --reporter=lcov npm run test:unit",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^20.19.35",
+    "@types/node": "^25.3.5",
     "@types/vscode": "^1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "@vscode/test-electron": "^2.5.2",
-    "esbuild": "^0.24.2",
-    "eslint": "^9.39.3",
-    "glob": "^10.5.0",
-    "mocha": "^10.8.2",
+    "c8": "^11.0.0",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.3",
+    "glob": "^13.0.6",
+    "husky": "^9.1.7",
+    "mocha": "^11.7.5",
     "pngjs": "^7.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",

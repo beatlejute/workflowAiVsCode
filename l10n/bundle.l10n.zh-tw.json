@@ -216,5 +216,12 @@
   "wf move failed with code {0}: {1}": "wf move 失敗，代碼 {0}：{1}",
   "wf move failed: {0}": "wf move 失敗：{0}",
   "Failed to read ticket file: {0}": "讀取工單文件失敗：{0}",
-  "Ticket {0} not found in dependency check": "依賴檢查中未找到工單 {0}"
+  "Ticket {0} not found in dependency check": "依賴檢查中未找到工單 {0}",
+  "Using VS Code locale": "使用 VS Code 區域設定",
+  "Using locale: {0}": "使用區域設定：{0}",
+  "Reload window to apply changes?": "重新載入視窗以套用變更？",
+  "Reload": "重新載入",
+  "No current plans available": "沒有當前計劃可用",
+  "Select plan to decompose": "選擇要分解的計劃",
+  "Decomposing plan {0}...": "正在分解計劃 {0}..."
 }

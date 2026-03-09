@@ -17,6 +17,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
@@ -163,15 +164,15 @@ export class TicketHoverProvider implements vscode.HoverProvider {
 
     // Status, priority, type, complexity
     markdown.appendMarkdown(
-      `**${vscode.l10n.t('Status')}:** ${statusIcon} \`${ticket.status}\`  ` +
-      `| **${vscode.l10n.t('Priority')}:** ${priorityIcon} \`${ticket.priority}\`  ` +
-      `| **${vscode.l10n.t('Type')}:** ${typeIcon} \`${ticket.type}\`  ` +
-      `| **${vscode.l10n.t('Complexity')}:** ${complexityIcon} \`${ticket.complexity}\`\n\n`
+      `**${t('Status')}:** ${statusIcon} \`${ticket.status}\`  ` +
+      `| **${t('Priority')}:** ${priorityIcon} \`${ticket.priority}\`  ` +
+      `| **${t('Type')}:** ${typeIcon} \`${ticket.type}\`  ` +
+      `| **${t('Complexity')}:** ${complexityIcon} \`${ticket.complexity}\`\n\n`
     );
 
     // Plan reference
     if (ticket.parent_plan) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Plan')}:** [${ticket.parent_plan}](command:workflow.openPlan?id=${ticket.parent_plan})  `);
+      markdown.appendMarkdown(`**${t('Plan')}:** [${ticket.parent_plan}](command:workflow.openPlan?id=${ticket.parent_plan})  `);
     }
 
     // Dependencies with status icons
@@ -181,20 +182,20 @@ export class TicketHoverProvider implements vscode.HoverProvider {
         const depStatusIcon = depTicket ? STATUS_ICONS[depTicket.status] : '⬜';
         return `${depId} ${depStatusIcon}`;
       });
-      markdown.appendMarkdown(`**${vscode.l10n.t('Deps')}:** ${depsWithStatus.join(', ')}\n\n`);
+      markdown.appendMarkdown(`**${t('Deps')}:** ${depsWithStatus.join(', ')}\n\n`);
     } else {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Deps')}:** ${vscode.l10n.t('No dependencies')}\n\n`);
+      markdown.appendMarkdown(`**${t('Deps')}:** ${t('No dependencies')}\n\n`);
     }
 
     // Tags
     if (ticket.tags && ticket.tags.length > 0) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Tags')}:** ${ticket.tags.join(', ')}\n\n`);
+      markdown.appendMarkdown(`**${t('Tags')}:** ${ticket.tags.join(', ')}\n\n`);
     }
 
     // Review
     if (ticket.reviews && ticket.reviews.length > 0) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Review')}:**\n\n`);
-      markdown.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+      markdown.appendMarkdown(`**${t('Review')}:**\n\n`);
+      markdown.appendMarkdown(`| ${t('Date')} | ${t('Status')} | ${t('Summary')} |\n|---|---|---|\n`);
       for (const r of ticket.reviews) {
         const icon = r.status === 'passed' ? '✅' : '❌';
         markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
@@ -348,22 +349,22 @@ export class AgentHoverProvider implements vscode.HoverProvider {
     markdown.appendMarkdown(`#### 🤖 ${agentId}\n\n`);
 
     // Command
-    markdown.appendMarkdown(`**${vscode.l10n.t('Command')}:** \`${agent.command}\`\n\n`);
+    markdown.appendMarkdown(`**${t('Command')}:** \`${agent.command}\`\n\n`);
 
     // Args
     if (agent.args && agent.args.length > 0) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Args')}:**\n`);
+      markdown.appendMarkdown(`**${t('Args')}:**\n`);
       markdown.appendMarkdown('```json\n' + JSON.stringify(agent.args, null, 2) + '\n```\n\n');
     }
 
     // Workdir
     if (agent.workdir) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Workdir')}:** \`${agent.workdir}\`\n\n`);
+      markdown.appendMarkdown(`**${t('Workdir')}:** \`${agent.workdir}\`\n\n`);
     }
 
     // Description
     if (agent.description) {
-      markdown.appendMarkdown(`**${vscode.l10n.t('Description')}:** ${agent.description}\n\n`);
+      markdown.appendMarkdown(`**${t('Description')}:** ${agent.description}\n\n`);
     }
 
     return markdown;

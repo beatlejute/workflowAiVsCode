@@ -9,6 +9,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
@@ -135,7 +136,7 @@ export class TicketService {
       templateContent = await fs.readFile(templatePath, 'utf-8');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(vscode.l10n.t('Failed to read ticket template: {0}', errorMessage));
+      throw new Error(t('Failed to read ticket template: {0}', errorMessage));
     }
 
     // Parse template
@@ -244,13 +245,13 @@ export class TicketService {
     // Get current ticket
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(vscode.l10n.t('Ticket {0} not found', id));
+      throw new Error(t('Ticket {0} not found', id));
     }
 
     // Validate transition
     if (!this.isValidTransition(ticket.status, targetStatus)) {
       throw new Error(
-        vscode.l10n.t('Invalid transition from {0} to {1}. Valid transitions: {2}', ticket.status, targetStatus, this.getValidTransitions(ticket.status).join(', '))
+        t('Invalid transition from {0} to {1}. Valid transitions: {2}', ticket.status, targetStatus, this.getValidTransitions(ticket.status).join(', '))
       );
     }
 
@@ -289,7 +290,7 @@ export class TicketService {
       content = await fs.readFile(sourcePath, 'utf-8');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(vscode.l10n.t('Failed to read ticket file: {0}', errorMessage));
+      throw new Error(t('Failed to read ticket file: {0}', errorMessage));
     }
 
     // Parse frontmatter
@@ -361,7 +362,7 @@ export class TicketService {
     // Get current ticket
     const ticket = this.getById(id);
     if (!ticket) {
-      throw new Error(vscode.l10n.t('Ticket {0} not found', id));
+      throw new Error(t('Ticket {0} not found', id));
     }
 
     // Read file content
@@ -377,7 +378,7 @@ export class TicketService {
       content = await fs.readFile(filePath, 'utf-8');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(vscode.l10n.t('Failed to read ticket file: {0}', errorMessage));
+      throw new Error(t('Failed to read ticket file: {0}', errorMessage));
     }
 
     // Parse frontmatter

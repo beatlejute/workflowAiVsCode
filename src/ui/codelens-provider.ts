@@ -16,6 +16,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as path from 'path';
 import { load as loadYaml } from 'js-yaml';
 import { WorkflowStore } from '../data/workflow-store';
@@ -146,7 +147,7 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
       .map(status => `[${status}]`)
       .join(' ');
 
-    const title = `${statusIcon} ${ticket.status} | ${vscode.l10n.t('Move')}: ${moveActions}`;
+    const title = `${statusIcon} ${ticket.status} | ${t('Move')}: ${moveActions}`;
 
     // Create command that opens QuickPick for move
     const command: vscode.Command = {
@@ -187,13 +188,13 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
     // Build title
     const parts: string[] = [];
     if (dependencies.length > 0) {
-      parts.push(`${vscode.l10n.t('Deps')}: ${depsStr}`);
+      parts.push(`${t('Deps')}: ${depsStr}`);
     }
     if (dependents.length > 0) {
-      parts.push(`${vscode.l10n.t('Blocks')}: ${blocksStr}`);
+      parts.push(`${t('Blocks')}: ${blocksStr}`);
     }
     if (planId) {
-      parts.push(`${vscode.l10n.t('Plan')}: ${planId}`);
+      parts.push(`${t('Plan')}: ${planId}`);
     }
 
     if (parts.length === 0) {
@@ -238,8 +239,17 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
       return null;
     }
 
-    const lastReview = lastReviewMatch[lastReviewMatch.length - 1];
-    const statusMatch = lastReview.match(/([✅❌])\s*(passed|failed)/);
+    // Find the review with the latest date, not just the last row
+    let latestReview = lastReviewMatch[0];
+    let latestDate = '';
+    for (const review of lastReviewMatch) {
+      const dateMatch = review.match(/\|\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\s*\|/);
+      if (dateMatch && dateMatch[1] > latestDate) {
+        latestDate = dateMatch[1];
+        latestReview = review;
+      }
+    }
+    const statusMatch = latestReview.match(/([✅❌])\s*(passed|failed)/);
     if (!statusMatch) {
       return null;
     }
@@ -249,7 +259,7 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
     const totalReviews = lastReviewMatch.length;
     const passedReviews = lastReviewMatch.filter(r => r.includes('✅')).length;
 
-    const title = `${vscode.l10n.t('Review')}: ${icon} ${status} (${passedReviews}/${totalReviews})`;
+    const title = `${t('Review')}: ${icon} ${status} (${passedReviews}/${totalReviews})`;
 
     const command: vscode.Command = {
       title,
@@ -369,12 +379,84 @@ interface ConfigYaml {
 }
 
 /**
+ * PlanCodeLensProvider - Code lenses for plan .md files
+ *
+ * Provides CodeLens implementations for plan files:
+ * - .workflow/plans/{@link *.md}: "Decompose Plan" action
+ * - plans/*.md (workspace root): "Create Workflow Plan" action
+ */
+export class PlanCodeLensProvider implements vscode.CodeLensProvider {
+  private workflowRoot: string | null = null;
+
+  /**
+   * Set workflow root directory
+   */
+  setWorkflowRoot(root: string): void {
+    this.workflowRoot = root;
+  }
+
+  /**
+   * Provide CodeLenses for a plan .md file
+   */
+  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    if (!this.workflowRoot) {
+      return [];
+    }
+
+    const fileName = document.fileName;
+    const normalizedPath = fileName.replace(/\\/g, '/');
+    const lenses: vscode.CodeLens[] = [];
+
+    // Check if it's a plan file in .workflow/plans/
+    const isWorkflowPlan = normalizedPath.includes('/.workflow/plans/') && normalizedPath.endsWith('.md');
+    
+    // Check if it's a plan file in workspace root plans/ (but NOT .workflow/plans/)
+    const isRootPlan = !normalizedPath.includes('/.workflow/') && 
+                       /\/plans\/[^/]+\.md$/.test(normalizedPath);
+
+    if (isWorkflowPlan) {
+      // Extract planId from filename (e.g., PLAN-013.md → PLAN-013)
+      const fileNameOnly = path.basename(fileName);
+      const planIdMatch = fileNameOnly.match(/^([A-Z]+-\d+)\.md$/);
+      if (planIdMatch) {
+        const planId = planIdMatch[1];
+        const range = new vscode.Range(0, 0, 0, 0);
+        const title = `$(symbol-method) ${t('Decompose Plan')}`;
+        
+        const command: vscode.Command = {
+          title,
+          command: 'workflow.decomposePlan',
+          arguments: [planId]
+        };
+        
+        lenses.push(new vscode.CodeLens(range, command));
+      }
+    } else if (isRootPlan) {
+      // Root plan file - "Create Workflow Plan" action
+      const range = new vscode.Range(0, 0, 0, 0);
+      const title = `$(add) ${t('Create Workflow Plan')}`;
+      
+      const command: vscode.Command = {
+        title,
+        command: 'workflow.createPlanFromFile',
+        arguments: [document.uri]
+      };
+      
+      lenses.push(new vscode.CodeLens(range, command));
+    }
+
+    return lenses;
+  }
+}
+
+/**
  * WorkflowCodeLensProvider - Composite provider for all workflow files
  */
 export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
   private readonly ticketProvider: TicketCodeLensProvider;
   private readonly pipelineProvider: PipelineCodeLensProvider;
   private readonly configProvider: ConfigCodeLensProvider;
+  private readonly planProvider: PlanCodeLensProvider;
 
   constructor(
     store: WorkflowStore,
@@ -388,6 +470,7 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
     );
     this.pipelineProvider = new PipelineCodeLensProvider();
     this.configProvider = new ConfigCodeLensProvider();
+    this.planProvider = new PlanCodeLensProvider();
   }
 
   /**
@@ -397,6 +480,7 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
     this.ticketProvider.setWorkflowRoot(root);
     this.pipelineProvider.setWorkflowRoot(root);
     this.configProvider.setWorkflowRoot(root);
+    this.planProvider.setWorkflowRoot(root);
   }
 
   /**
@@ -409,6 +493,13 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
     // Ticket .md files
     if (normalizedPath.includes('.workflow/tickets/') && normalizedPath.endsWith('.md')) {
       return this.ticketProvider.provideCodeLenses(document);
+    }
+
+    // Plan .md files in .workflow/plans/ or root plans/
+    if ((normalizedPath.includes('/.workflow/plans/') || 
+         (!normalizedPath.includes('/.workflow/') && /\/plans\/[^/]+\.md$/.test(normalizedPath))) && 
+        normalizedPath.endsWith('.md')) {
+      return this.planProvider.provideCodeLenses(document);
     }
 
     // pipeline.yaml

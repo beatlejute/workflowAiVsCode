@@ -2,20 +2,23 @@
  * Command handlers for configuration and navigation commands
  *
  * Includes: workflow.openPipelineConfig, workflow.openConfig, workflow.focusTicketsView,
- * workflow.focusKanban, workflow.refreshAll, workflow.copyTicketId, workflow.filterTicketsByPlan
+ * workflow.focusKanban, workflow.refreshAll, workflow.copyTicketId, workflow.filterTicketsByPlan,
+ * workflow.clearTicketFilter
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketsTreeProvider } from '../ui/sidebar-tree-provider';
+import { KanbanTreeProvider } from '../ui/kanban-tree-provider';
 
 /**
  * Execute workflow.openPipelineConfig command
  */
 export async function executeOpenPipelineConfig(workflowRoot: string | null): Promise<void> {
   if (!workflowRoot) {
-    vscode.window.showErrorMessage(vscode.l10n.t('Workflow not found'));
+    vscode.window.showErrorMessage(t('Workflow not found'));
     return;
   }
 
@@ -26,7 +29,7 @@ export async function executeOpenPipelineConfig(workflowRoot: string | null): Pr
     await vscode.commands.executeCommand('vscode.open', uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    vscode.window.showErrorMessage(vscode.l10n.t('Failed to open pipeline config: {0}', message));
+    vscode.window.showErrorMessage(t('Failed to open pipeline config: {0}', message));
   }
 }
 
@@ -35,7 +38,7 @@ export async function executeOpenPipelineConfig(workflowRoot: string | null): Pr
  */
 export async function executeOpenConfig(workflowRoot: string | null): Promise<void> {
   if (!workflowRoot) {
-    vscode.window.showErrorMessage(vscode.l10n.t('Workflow not found'));
+    vscode.window.showErrorMessage(t('Workflow not found'));
     return;
   }
 
@@ -46,7 +49,7 @@ export async function executeOpenConfig(workflowRoot: string | null): Promise<vo
     await vscode.commands.executeCommand('vscode.open', uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    vscode.window.showErrorMessage(vscode.l10n.t('Failed to open config: {0}', message));
+    vscode.window.showErrorMessage(t('Failed to open config: {0}', message));
   }
 }
 
@@ -82,7 +85,7 @@ export async function executeRefreshAll(
     refresh();
   }
 
-  vscode.window.showInformationMessage(vscode.l10n.t('Workflow data refreshed'));
+  vscode.window.showInformationMessage(t('Workflow data refreshed'));
 }
 
 /**
@@ -103,26 +106,34 @@ export async function executeCopyTicketId(ticketId?: string): Promise<void> {
   }
 
   if (!ticketId) {
-    vscode.window.showErrorMessage(vscode.l10n.t('No ticket ID provided or found'));
+    vscode.window.showErrorMessage(t('No ticket ID provided or found'));
     return;
   }
 
   await vscode.env.clipboard.writeText(ticketId);
-  vscode.window.showInformationMessage(vscode.l10n.t('Copied {0} to clipboard', ticketId));
+  vscode.window.showInformationMessage(t('Copied {0} to clipboard', ticketId));
 }
 
 /**
  * Execute workflow.filterTicketsByPlan command
- * Shows QuickPick with plans and applies filter to tickets view
+ * Shows QuickPick with plans and applies filter to tickets and kanban views
  */
 export async function executeFilterTicketsByPlan(
   store: WorkflowStore,
-  ticketsProvider: TicketsTreeProvider
+  ticketsProvider: TicketsTreeProvider,
+  kanbanProviders: {
+    backlog: KanbanTreeProvider;
+    ready: KanbanTreeProvider;
+    inProgress: KanbanTreeProvider;
+    blocked: KanbanTreeProvider;
+    review: KanbanTreeProvider;
+    done: KanbanTreeProvider;
+  }
 ): Promise<void> {
   const plans = store.getPlans();
 
   if (plans.length === 0) {
-    vscode.window.showInformationMessage(vscode.l10n.t('No plans available'));
+    vscode.window.showInformationMessage(t('No plans available'));
     return;
   }
 
@@ -142,16 +153,16 @@ export async function executeFilterTicketsByPlan(
   // Add "Clear filter" option if filter is active
   const quickPickItems = currentFilter
     ? [{
-        label: vscode.l10n.t('$(clear-all) Clear Filter'),
-        description: vscode.l10n.t('Show all tickets'),
+        label: t('$(clear-all) Clear Filter'),
+        description: t('Show all tickets'),
         planId: null,
         isCurrent: false
       }, ...planItems]
     : planItems;
 
   const selected = await vscode.window.showQuickPick(quickPickItems, {
-    placeHolder: vscode.l10n.t('Select a plan to filter tickets'),
-    title: vscode.l10n.t('Filter Tickets by Plan'),
+    placeHolder: t('Select a plan to filter tickets'),
+    title: t('Filter Tickets by Plan'),
     matchOnDescription: true
   });
 
@@ -159,12 +170,64 @@ export async function executeFilterTicketsByPlan(
     return; // User cancelled
   }
 
-  // Apply filter or clear it
-  ticketsProvider.setPlanFilter(selected.planId);
+  // Apply filter to tickets and all kanban providers
+  const planId = selected.planId;
+  ticketsProvider.setPlanFilter(planId);
+  
+  // Apply same filter to all kanban providers
+  kanbanProviders.backlog.setPlanFilter(planId);
+  kanbanProviders.ready.setPlanFilter(planId);
+  kanbanProviders.inProgress.setPlanFilter(planId);
+  kanbanProviders.blocked.setPlanFilter(planId);
+  kanbanProviders.review.setPlanFilter(planId);
+  kanbanProviders.done.setPlanFilter(planId);
 
-  if (selected.planId) {
+  // Update context key
+  await vscode.commands.executeCommand(
+    'setContext',
+    'workflow.ticketFilterActive',
+    planId !== null
+  );
+
+  if (planId) {
     vscode.window.showInformationMessage(
-      vscode.l10n.t('Filtered tickets by plan: {0}', selected.planId)
+      t('Filtered tickets by plan: {0}', planId)
     );
   }
+}
+
+/**
+ * Execute workflow.clearTicketFilter command
+ * Clears filter from tickets and kanban views
+ */
+export async function executeClearTicketFilter(
+  ticketsProvider: TicketsTreeProvider,
+  kanbanProviders: {
+    backlog: KanbanTreeProvider;
+    ready: KanbanTreeProvider;
+    inProgress: KanbanTreeProvider;
+    blocked: KanbanTreeProvider;
+    review: KanbanTreeProvider;
+    done: KanbanTreeProvider;
+  }
+): Promise<void> {
+  // Clear filter in tickets provider
+  ticketsProvider.setPlanFilter(null);
+  
+  // Clear filter in all kanban providers
+  kanbanProviders.backlog.setPlanFilter(null);
+  kanbanProviders.ready.setPlanFilter(null);
+  kanbanProviders.inProgress.setPlanFilter(null);
+  kanbanProviders.blocked.setPlanFilter(null);
+  kanbanProviders.review.setPlanFilter(null);
+  kanbanProviders.done.setPlanFilter(null);
+
+  // Update context key
+  await vscode.commands.executeCommand(
+    'setContext',
+    'workflow.ticketFilterActive',
+    false
+  );
+
+  vscode.window.showInformationMessage(t('Ticket filter cleared'));
 }

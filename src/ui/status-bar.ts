@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { PipelineService, PipelineState } from '../services/pipeline-service';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketStatus } from '../data/types';
@@ -87,7 +88,7 @@ export class StatusBar implements vscode.Disposable {
     // Build status text and tooltip based on pipeline state
     switch (pipelineState) {
       case PipelineState.Idle:
-        this.statusBarItem.text = `$(wf) ${vscode.l10n.t('WF: Idle')}`;
+        this.statusBarItem.text = `$(wf) ${t('WF: Idle')}`;
         this.statusBarItem.tooltip = this.buildIdleTooltip(readyCount, blockedCount);
         this.statusBarItem.color = undefined;
         break;
@@ -106,13 +107,13 @@ export class StatusBar implements vscode.Disposable {
         break;
 
       case PipelineState.Error:
-        this.statusBarItem.text = `$(error) ${vscode.l10n.t('WF: Error')}`;
+        this.statusBarItem.text = `$(error) ${t('WF: Error')}`;
         this.statusBarItem.tooltip = this.buildErrorTooltip(readyCount, blockedCount);
         this.statusBarItem.color = new vscode.ThemeColor('statusBarItem.errorForeground');
         break;
 
       case PipelineState.Completed:
-        this.statusBarItem.text = `$(check) ${vscode.l10n.t('WF: Completed')}`;
+        this.statusBarItem.text = `$(check) ${t('WF: Completed')}`;
         this.statusBarItem.tooltip = this.buildCompletedTooltip(readyCount, blockedCount);
         this.statusBarItem.color = undefined;
         break;
@@ -130,11 +131,11 @@ export class StatusBar implements vscode.Disposable {
     ticket: string | undefined,
     retryCount: number
   ): string {
-    const stageText = stage || vscode.l10n.t('unknown');
+    const stageText = stage || t('unknown');
     const ticketText = ticket ? `| ${ticket}` : '';
     const retryText = retryCount > 0 ? ` (retry: ${retryCount})` : '';
 
-    return `$(loading~spin) ${vscode.l10n.t('WF: Running')} | ${stageText}${ticketText}${retryText}`;
+    return `$(loading~spin) ${t('WF: Running')} | ${stageText}${ticketText}${retryText}`;
   }
 
   /**
@@ -142,12 +143,12 @@ export class StatusBar implements vscode.Disposable {
    */
   private buildIdleTooltip(readyCount: number, blockedCount: number): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Workflow AI - Idle')}**\n\n`);
+    tooltip.appendMarkdown(`**${t('Workflow AI - Idle')}**\n\n`);
     tooltip.appendMarkdown('---\n\n');
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Ticket Counters')}**\n\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Ready')}: ${readyCount}\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Blocked')}: ${blockedCount}\n\n`);
-    tooltip.appendMarkdown(vscode.l10n.t('Click to open command palette.'));
+    tooltip.appendMarkdown(`**${t('Ticket Counters')}**\n\n`);
+    tooltip.appendMarkdown(`- ${t('Ready')}: ${readyCount}\n`);
+    tooltip.appendMarkdown(`- ${t('Blocked')}: ${blockedCount}\n\n`);
+    tooltip.appendMarkdown(t('Click to open command palette.'));
 
     return tooltip;
   }
@@ -164,27 +165,27 @@ export class StatusBar implements vscode.Disposable {
     blockedCount: number
   ): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Workflow AI - Running')}**\n\n`);
+    tooltip.appendMarkdown(`**${t('Workflow AI - Running')}**\n\n`);
     tooltip.appendMarkdown('---\n\n');
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Current Execution')}**\n\n`);
+    tooltip.appendMarkdown(`**${t('Current Execution')}**\n\n`);
 
     if (stage) {
-      tooltip.appendMarkdown(`- ${vscode.l10n.t('Stage')}: \`${stage}\`\n`);
+      tooltip.appendMarkdown(`- ${t('Stage')}: \`${stage}\`\n`);
     }
     if (agent) {
-      tooltip.appendMarkdown(`- ${vscode.l10n.t('Agent')}: \`${agent}\`\n`);
+      tooltip.appendMarkdown(`- ${t('Agent')}: \`${agent}\`\n`);
     }
     if (ticket) {
-      tooltip.appendMarkdown(`- ${vscode.l10n.t('Ticket')}: \`${ticket}\`\n`);
+      tooltip.appendMarkdown(`- ${t('Ticket')}: \`${ticket}\`\n`);
     }
     if (retryCount > 0) {
-      tooltip.appendMarkdown(`- ${vscode.l10n.t('Retry')}: ${retryCount}\n`);
+      tooltip.appendMarkdown(`- ${t('Retry')}: ${retryCount}\n`);
     }
 
-    tooltip.appendMarkdown(`\n**${vscode.l10n.t('Ticket Counters')}**\n\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Ready')}: ${readyCount}\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Blocked')}: ${blockedCount}\n\n`);
-    tooltip.appendMarkdown(vscode.l10n.t('Click to open command palette.'));
+    tooltip.appendMarkdown(`\n**${t('Ticket Counters')}**\n\n`);
+    tooltip.appendMarkdown(`- ${t('Ready')}: ${readyCount}\n`);
+    tooltip.appendMarkdown(`- ${t('Blocked')}: ${blockedCount}\n\n`);
+    tooltip.appendMarkdown(t('Click to open command palette.'));
 
     return tooltip;
   }
@@ -194,13 +195,13 @@ export class StatusBar implements vscode.Disposable {
    */
   private buildErrorTooltip(readyCount: number, blockedCount: number): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Workflow AI - Error')}**\n\n`);
-    tooltip.appendMarkdown(`$(error) ${vscode.l10n.t('Pipeline execution failed')}\n\n`);
+    tooltip.appendMarkdown(`**${t('Workflow AI - Error')}**\n\n`);
+    tooltip.appendMarkdown(`$(error) ${t('Pipeline execution failed')}\n\n`);
     tooltip.appendMarkdown('---\n\n');
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Ticket Counters')}**\n\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Ready')}: ${readyCount}\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Blocked')}: ${blockedCount}\n\n`);
-    tooltip.appendMarkdown(vscode.l10n.t('Click to open command palette.'));
+    tooltip.appendMarkdown(`**${t('Ticket Counters')}**\n\n`);
+    tooltip.appendMarkdown(`- ${t('Ready')}: ${readyCount}\n`);
+    tooltip.appendMarkdown(`- ${t('Blocked')}: ${blockedCount}\n\n`);
+    tooltip.appendMarkdown(t('Click to open command palette.'));
 
     return tooltip;
   }
@@ -210,13 +211,13 @@ export class StatusBar implements vscode.Disposable {
    */
   private buildCompletedTooltip(readyCount: number, blockedCount: number): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString();
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Workflow AI - Completed')}**\n\n`);
-    tooltip.appendMarkdown(`$(check) ${vscode.l10n.t('Pipeline execution completed successfully')}\n\n`);
+    tooltip.appendMarkdown(`**${t('Workflow AI - Completed')}**\n\n`);
+    tooltip.appendMarkdown(`$(check) ${t('Pipeline execution completed successfully')}\n\n`);
     tooltip.appendMarkdown('---\n\n');
-    tooltip.appendMarkdown(`**${vscode.l10n.t('Ticket Counters')}**\n\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Ready')}: ${readyCount}\n`);
-    tooltip.appendMarkdown(`- ${vscode.l10n.t('Blocked')}: ${blockedCount}\n\n`);
-    tooltip.appendMarkdown(vscode.l10n.t('Click to open command palette.'));
+    tooltip.appendMarkdown(`**${t('Ticket Counters')}**\n\n`);
+    tooltip.appendMarkdown(`- ${t('Ready')}: ${readyCount}\n`);
+    tooltip.appendMarkdown(`- ${t('Blocked')}: ${blockedCount}\n\n`);
+    tooltip.appendMarkdown(t('Click to open command palette.'));
 
     return tooltip;
   }

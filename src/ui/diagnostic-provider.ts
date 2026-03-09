@@ -15,6 +15,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore } from '../data/workflow-store';
@@ -292,7 +293,7 @@ export class DiagnosticProvider implements vscode.Disposable {
       const diagnostics: vscode.Diagnostic[] = [
         new vscode.Diagnostic(
           new vscode.Range(0, 0, 0, 0),
-          vscode.l10n.t('Failed to parse ticket frontmatter: {0}', (error as Error).message),
+          t('Failed to parse ticket frontmatter: {0}', (error as Error).message),
           vscode.DiagnosticSeverity.Error
         )
       ];
@@ -314,7 +315,7 @@ export class DiagnosticProvider implements vscode.Disposable {
       const diagnostics: vscode.Diagnostic[] = [
         new vscode.Diagnostic(
           new vscode.Range(0, 0, 0, 0),
-          vscode.l10n.t('Failed to parse pipeline YAML: {0}', (error as Error).message),
+          t('Failed to parse pipeline YAML: {0}', (error as Error).message),
           vscode.DiagnosticSeverity.Error
         )
       ];
@@ -336,7 +337,7 @@ export class DiagnosticProvider implements vscode.Disposable {
       const diagnostics: vscode.Diagnostic[] = [
         new vscode.Diagnostic(
           new vscode.Range(0, 0, 0, 0),
-          vscode.l10n.t('Failed to parse config YAML: {0}', (error as Error).message),
+          t('Failed to parse config YAML: {0}', (error as Error).message),
           vscode.DiagnosticSeverity.Error
         )
       ];

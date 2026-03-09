@@ -11,15 +11,39 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus, Plan, Report } from '../data/types';
+import { Ticket, TicketStatus, Plan, Report, ReviewEntry } from '../data/types';
+import { getReviewBadges, extractPlanId } from './utils';
+
+/**
+ * Cache for sorted tickets in sidebar
+ * Key: `${sortMode}:${filterPlan || 'none'}`
+ */
+const sidebarTicketsCache = new Map<string, Map<TicketStatus, SidebarTreeItem[]>>();
+
+/**
+ * Cache for TreeItem objects (memoization)
+ * Maps ticket ID + updated_at to TreeItem to avoid recreation
+ */
+const sidebarTreeItemCache = new Map<string, TicketTreeItem>();
+
+/**
+ * Performance metrics for sidebar
+ */
+let sidebarPerfMetrics = {
+  cacheHits: 0,
+  cacheMisses: 0,
+  treeItemCacheHits: 0,
+  treeItemCacheMisses: 0
+};
 
 /**
  * Tree item types for sidebar navigation
  */
-export type TreeItemType = 'ticket' | 'plan' | 'report' | 'status-group' | 'plan-group' | 'skill' | 'log';
+export type TreeItemType = 'ticket' | 'plan' | 'report' | 'status-group' | 'plan-group' | 'skill' | 'log' | 'filter-info';
 
 /**
  * Base tree item for all sidebar items
@@ -45,7 +69,8 @@ export class TicketTreeItem extends SidebarTreeItem {
     workflowRoot: string
   ) {
     const label = ticket.id;
-    const description = ticket.title;
+    const reviewBadges = getReviewBadges(ticket.reviews);
+    const description = reviewBadges ? `${reviewBadges} ${ticket.title}` : ticket.title;
     super(label, vscode.TreeItemCollapsibleState.None, 'ticket', ticket.id);
 
     this.description = description;
@@ -56,9 +81,38 @@ export class TicketTreeItem extends SidebarTreeItem {
     // Inline actions for quick access
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Ticket'),
+      title: t('Open Ticket'),
       arguments: [vscode.Uri.file(getTicketPath(ticket, workflowRoot))]
     };
+  }
+}
+
+/**
+ * Create or get cached TreeItem for a ticket in sidebar
+ * Uses memoization to avoid recreating TreeItems for the same ticket
+ */
+function getOrCreateSidebarTreeItem(ticket: Ticket, workflowRoot: string): TicketTreeItem {
+  const cacheKey = `${ticket.id}:${ticket.updated_at}`;
+  
+  if (sidebarTreeItemCache.has(cacheKey)) {
+    sidebarPerfMetrics.treeItemCacheHits++;
+    return sidebarTreeItemCache.get(cacheKey)!;
+  }
+  
+  sidebarPerfMetrics.treeItemCacheMisses++;
+  const item = new TicketTreeItem(ticket, workflowRoot);
+  sidebarTreeItemCache.set(cacheKey, item);
+  return item;
+}
+
+/**
+ * Invalidate sidebar tree item cache for a specific ticket
+ */
+export function invalidateSidebarTicketCache(ticketId: string): void {
+  for (const key of sidebarTreeItemCache.keys()) {
+    if (key.startsWith(`${ticketId}:`)) {
+      sidebarTreeItemCache.delete(key);
+    }
   }
 }
 
@@ -72,8 +126,33 @@ export class StatusGroupTreeItem extends SidebarTreeItem {
   ) {
     const label = `${status} (${count})`;
     super(label, vscode.TreeItemCollapsibleState.Expanded, 'status-group', status);
-    
+
     this.contextValue = 'status-group';
+  }
+}
+
+/**
+ * Tree item representing active filter info in sidebar
+ */
+export class FilterInfoTreeItem extends SidebarTreeItem {
+  constructor(
+    public readonly planId: string,
+    public readonly planTitle: string
+  ) {
+    const label = `🔍 ${planId}: ${planTitle}`;
+    super(label, vscode.TreeItemCollapsibleState.None, 'filter-info', `filter-${planId}`);
+
+    this.description = '';
+    this.tooltip = `Active filter: ${planId}\nClick to clear filter`;
+    this.iconPath = new vscode.ThemeIcon('filter', new vscode.ThemeColor('charts.orange'));
+    this.contextValue = 'filter-info';
+
+    // Command to clear filter on click
+    this.command = {
+      command: 'workflow.clearTicketFilter',
+      title: t('Clear Filter'),
+      arguments: []
+    };
   }
 }
 
@@ -92,8 +171,9 @@ export class PlanTreeItem extends SidebarTreeItem {
     super(label, vscode.TreeItemCollapsibleState.None, 'plan', plan.id);
 
     this.description = description;
-    this.tooltip = `${plan.id}: ${plan.title}\n${vscode.l10n.t('Status')}: ${plan.status}`;
+    this.tooltip = `${plan.id}: ${plan.title}\n${t('Status')}: ${plan.status}`;
     this.iconPath = new vscode.ThemeIcon('notebook');
+    this.contextValue = isCurrent ? 'plan-current' : 'plan-archive';
 
     // Command to open plan file on click
     const planPath = path.join(
@@ -104,7 +184,7 @@ export class PlanTreeItem extends SidebarTreeItem {
     );
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Plan'),
+      title: t('Open Plan'),
       arguments: [vscode.Uri.file(planPath)]
     };
   }
@@ -118,7 +198,7 @@ export class PlanGroupTreeItem extends SidebarTreeItem {
     public readonly groupType: 'current' | 'archive',
     public readonly count: number
   ) {
-    const label = groupType === 'current' ? vscode.l10n.t('Current') : vscode.l10n.t('Archive');
+    const label = groupType === 'current' ? t('Current') : t('Archive');
     super(`${label} (${count})`, vscode.TreeItemCollapsibleState.Collapsed, 'plan-group', groupType);
 
     this.contextValue = 'plan-group';
@@ -138,7 +218,7 @@ export class ReportTreeItem extends SidebarTreeItem {
     super(label, vscode.TreeItemCollapsibleState.None, 'report', report.id);
 
     this.description = description;
-    this.tooltip = `${report.id}: ${report.title}\n${vscode.l10n.t('Type')}: ${report.type}\n${vscode.l10n.t('Created')}: ${report.created_at}`;
+    this.tooltip = `${report.id}: ${report.title}\n${t('Type')}: ${report.type}\n${t('Created')}: ${report.created_at}`;
     this.iconPath = new vscode.ThemeIcon('document');
 
     // Command to open report file on click
@@ -149,7 +229,7 @@ export class ReportTreeItem extends SidebarTreeItem {
     );
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Report'),
+      title: t('Open Report'),
       arguments: [vscode.Uri.file(reportPath)]
     };
   }
@@ -163,24 +243,24 @@ function buildTicketTooltip(ticket: Ticket): vscode.MarkdownString {
   md.isTrusted = true;
 
   md.appendMarkdown(`**${ticket.id}: ${ticket.title}**\n\n`);
-  md.appendMarkdown(`| ${vscode.l10n.t('Field')} | ${vscode.l10n.t('Value')} |\n|---|---|\n`);
-  md.appendMarkdown(`| **${vscode.l10n.t('Status')}** | ${ticket.status} |\n`);
-  md.appendMarkdown(`| **${vscode.l10n.t('Priority')}** | ${ticket.priority} |\n`);
-  md.appendMarkdown(`| **${vscode.l10n.t('Type')}** | ${ticket.type} |\n`);
+  md.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n|---|---|\n`);
+  md.appendMarkdown(`| **${t('Status')}** | ${ticket.status} |\n`);
+  md.appendMarkdown(`| **${t('Priority')}** | ${ticket.priority} |\n`);
+  md.appendMarkdown(`| **${t('Type')}** | ${ticket.type} |\n`);
 
   if (ticket.dependencies?.length) {
-    md.appendMarkdown(`| **${vscode.l10n.t('Deps')}** | ${ticket.dependencies.join(', ')} |\n`);
+    md.appendMarkdown(`| **${t('Deps')}** | ${ticket.dependencies.join(', ')} |\n`);
   }
   if (ticket.parent_plan) {
-    md.appendMarkdown(`| **${vscode.l10n.t('Plan')}** | ${ticket.parent_plan} |\n`);
+    md.appendMarkdown(`| **${t('Plan')}** | ${ticket.parent_plan} |\n`);
   }
   if (ticket.context?.notes) {
-    md.appendMarkdown(`\n**${vscode.l10n.t('Notes')}:** ${ticket.context.notes}\n`);
+    md.appendMarkdown(`\n**${t('Notes')}:** ${ticket.context.notes}\n`);
   }
 
   if (ticket.reviews?.length) {
-    md.appendMarkdown(`\n**${vscode.l10n.t('Review')}:**\n\n`);
-    md.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+    md.appendMarkdown(`\n**${t('Review')}:**\n\n`);
+    md.appendMarkdown(`| ${t('Date')} | ${t('Status')} | ${t('Summary')} |\n|---|---|---|\n`);
     for (const r of ticket.reviews) {
       const icon = r.status === 'passed' ? '✅' : '❌';
       md.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
@@ -222,12 +302,15 @@ function getTicketPath(ticket: Ticket, workflowRoot: string): string {
  * TreeDataProvider for tickets view
  * Groups tickets by status with counts in headers
  */
+export type SidebarSortMode = 'priority' | 'id' | 'title' | 'date';
+
 export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<SidebarTreeItem | undefined>();
   readonly onDidChangeTreeData: vscode.Event<SidebarTreeItem | undefined> = this._onDidChangeTreeData.event;
 
   private workflowRoot: string | null = null;
   private filterPlan: string | null = null;
+  private sortMode: SidebarSortMode = 'priority';
 
   constructor(private readonly store: WorkflowStore) {
     // Subscribe to store change events for reactive updates
@@ -263,9 +346,27 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
   }
 
   /**
+   * Set sort mode for tickets
+   * @param mode Sort mode to use
+   */
+  setSortMode(mode: SidebarSortMode): void {
+    this.sortMode = mode;
+    this.refresh();
+  }
+
+  /**
+   * Get current sort mode
+   */
+  getSortMode(): SidebarSortMode {
+    return this.sortMode;
+  }
+
+  /**
    * Refresh tree data
    */
   refresh(): void {
+    // Invalidate cache when refreshing
+    sidebarTicketsCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -306,7 +407,7 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
 
     // Apply plan filter if set
     if (this.filterPlan) {
-      tickets = tickets.filter(ticket => ticket.parent_plan === this.filterPlan);
+      tickets = tickets.filter(ticket => extractPlanId(ticket.parent_plan) === this.filterPlan);
     }
 
     // Count tickets by status
@@ -325,6 +426,14 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
 
     // Create status groups (only show groups with tickets)
     const groups: SidebarTreeItem[] = [];
+
+    // Add filter info element at the top if filter is active
+    if (this.filterPlan) {
+      const plan = this.store.getPlanById(this.filterPlan);
+      const planTitle = plan?.title || this.filterPlan;
+      groups.push(new FilterInfoTreeItem(this.filterPlan, planTitle));
+    }
+
     const statusOrder: TicketStatus[] = [
       TicketStatus.Blocked,
       TicketStatus.Backlog,
@@ -344,22 +453,57 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
   }
 
   /**
-   * Get tickets for a specific status
+   * Get tickets for a specific status with caching
    */
   private getTicketsForStatus(status: TicketStatus): Thenable<SidebarTreeItem[]> {
+    // Build cache key
+    const cacheKey = `${this.sortMode}:${this.filterPlan || 'none'}`;
+
+    // Check if we have cached results for this sort/filter combination
+    if (sidebarTicketsCache.has(cacheKey)) {
+      const statusCache = sidebarTicketsCache.get(cacheKey)!;
+      if (statusCache.has(status)) {
+        sidebarPerfMetrics.cacheHits++;
+        return Promise.resolve(statusCache.get(status)!);
+      }
+    }
+
+    sidebarPerfMetrics.cacheMisses++;
+
     let tickets = this.store.getTicketsByStatus(status);
 
     // Apply plan filter if set
     if (this.filterPlan) {
-      tickets = tickets.filter(ticket => ticket.parent_plan === this.filterPlan);
+      tickets = tickets.filter(ticket => extractPlanId(ticket.parent_plan) === this.filterPlan);
     }
 
-    // Sort by priority (ascending, 1 = highest priority first)
-    tickets.sort((a, b) => a.priority - b.priority);
+    // Sort based on current sort mode
+    switch (this.sortMode) {
+      case 'id':
+        tickets.sort((a, b) => a.id.localeCompare(b.id));
+        break;
+      case 'title':
+        tickets.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'date':
+        tickets.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+        break;
+      case 'priority':
+      default:
+        tickets.sort((a, b) => a.priority - b.priority);
+        break;
+    }
 
+    // Use cached TreeItems
     const items = tickets.map(
-      ticket => new TicketTreeItem(ticket, this.workflowRoot!)
+      ticket => getOrCreateSidebarTreeItem(ticket, this.workflowRoot!)
     );
+
+    // Cache the result
+    if (!sidebarTicketsCache.has(cacheKey)) {
+      sidebarTicketsCache.set(cacheKey, new Map());
+    }
+    sidebarTicketsCache.get(cacheKey)!.set(status, items);
 
     return Promise.resolve(items);
   }
@@ -655,7 +799,7 @@ export class SkillTreeItem extends SidebarTreeItem {
     // Command to open SKILL.md file on click
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Skill'),
+      title: t('Open Skill'),
       arguments: [vscode.Uri.file(skillPath)]
     };
   }
@@ -831,7 +975,7 @@ export class LogFileTreeItem extends SidebarTreeItem {
     // Command to open log file on click
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Log'),
+      title: t('Open Log'),
       arguments: [vscode.Uri.file(filePath)]
     };
   }
@@ -950,4 +1094,23 @@ export class LogsTreeProvider implements vscode.TreeDataProvider<SidebarTreeItem
       return [];
     }
   }
+}
+
+/**
+ * Get performance metrics for sidebar debugging
+ */
+export function getSidebarPerfMetrics(): typeof sidebarPerfMetrics {
+  return { ...sidebarPerfMetrics };
+}
+
+/**
+ * Reset performance metrics for sidebar
+ */
+export function resetSidebarPerfMetrics(): void {
+  sidebarPerfMetrics = {
+    cacheHits: 0,
+    cacheMisses: 0,
+    treeItemCacheHits: 0,
+    treeItemCacheMisses: 0
+  };
 }

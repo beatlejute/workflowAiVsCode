@@ -14,11 +14,49 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import * as path from 'path';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus } from '../data/types';
+import { Ticket, TicketStatus, ReviewEntry } from '../data/types';
+import { getReviewBadges, extractPlanId } from './utils';
 
-export type KanbanSortMode = 'priority' | 'id' | 'title';
+export type KanbanSortMode = 'priority' | 'id' | 'title' | 'date';
+
+/**
+ * Cache key for sorted tickets cache
+ */
+interface CacheKey {
+  status: TicketStatus;
+  sortMode: KanbanSortMode;
+  sortAscending: boolean;
+  filterPlan: string | null;
+}
+
+function getCacheKey(key: CacheKey): string {
+  return `${key.status}|${key.sortMode}|${key.sortAscending}|${key.filterPlan || 'none'}`;
+}
+
+/**
+ * Cache for sorted ticket lists
+ * Maps cache key to precomputed ticket arrays
+ */
+const sortedTicketsCache = new Map<string, KanbanTicketTreeItem[]>();
+
+/**
+ * Cache for TreeItem objects (memoization)
+ * Maps ticket ID to TreeItem to avoid recreation
+ */
+const treeItemCache = new Map<string, KanbanTicketTreeItem>();
+
+/**
+ * Performance metrics
+ */
+let perfMetrics = {
+  cacheHits: 0,
+  cacheMisses: 0,
+  treeItemCacheHits: 0,
+  treeItemCacheMisses: 0
+};
 
 /**
  * Tree item representing a ticket in the Kanban board
@@ -29,7 +67,8 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     workflowRoot: string
   ) {
     const label = ticket.id;
-    const description = ticket.title;
+    const reviewBadges = getReviewBadges(ticket.reviews);
+    const description = reviewBadges ? `${reviewBadges} ${ticket.title}` : ticket.title;
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.description = description;
@@ -46,9 +85,38 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     );
     this.command = {
       command: 'vscode.open',
-      title: vscode.l10n.t('Open Ticket'),
+      title: t('Open Ticket'),
       arguments: [vscode.Uri.file(ticketPath)]
     };
+  }
+}
+
+/**
+ * Create or get cached TreeItem for a ticket
+ * Uses memoization to avoid recreating TreeItems for the same ticket
+ */
+function getOrCreateTreeItem(ticket: Ticket, workflowRoot: string): KanbanTicketTreeItem {
+  const cacheKey = `${ticket.id}:${ticket.updated_at}`;
+  
+  if (treeItemCache.has(cacheKey)) {
+    perfMetrics.treeItemCacheHits++;
+    return treeItemCache.get(cacheKey)!;
+  }
+  
+  perfMetrics.treeItemCacheMisses++;
+  const item = new KanbanTicketTreeItem(ticket, workflowRoot);
+  treeItemCache.set(cacheKey, item);
+  return item;
+}
+
+/**
+ * Invalidate tree item cache for a specific ticket
+ */
+export function invalidateTicketCache(ticketId: string): void {
+  for (const key of treeItemCache.keys()) {
+    if (key.startsWith(`${ticketId}:`)) {
+      treeItemCache.delete(key);
+    }
   }
 }
 
@@ -58,37 +126,37 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
  */
 function createTicketTooltip(ticket: Ticket): vscode.MarkdownString {
   const priorityLabels: Record<number, string> = {
-    1: vscode.l10n.t('Critical'),
-    2: vscode.l10n.t('High'),
-    3: vscode.l10n.t('Medium'),
-    4: vscode.l10n.t('Low'),
-    5: vscode.l10n.t('Trivial')
+    1: t('Critical'),
+    2: t('High'),
+    3: t('Medium'),
+    4: t('Low'),
+    5: t('Trivial')
   };
 
-  const priorityLabel = priorityLabels[ticket.priority] || `${vscode.l10n.t('Priority')} ${ticket.priority}`;
+  const priorityLabel = priorityLabels[ticket.priority] || `${t('Priority')} ${ticket.priority}`;
   const deps = ticket.dependencies.length > 0
     ? ticket.dependencies.join(', ')
-    : vscode.l10n.t('None');
+    : t('None');
 
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
   markdown.supportHtml = true;
   markdown.appendMarkdown(`**${ticket.id}: ${ticket.title}**\n\n`);
-  markdown.appendMarkdown(`| ${vscode.l10n.t('Field')} | ${vscode.l10n.t('Value')} |\n`);
+  markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Status')}** | ${ticket.status} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Priority')}** | ${priorityLabel} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Type')}** | ${ticket.type} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Dependencies')}** | ${deps} |\n`);
-  markdown.appendMarkdown(`| **${vscode.l10n.t('Parent Plan')}** | ${ticket.parent_plan} |\n`);
+  markdown.appendMarkdown(`| **${t('Status')}** | ${ticket.status} |\n`);
+  markdown.appendMarkdown(`| **${t('Priority')}** | ${priorityLabel} |\n`);
+  markdown.appendMarkdown(`| **${t('Type')}** | ${ticket.type} |\n`);
+  markdown.appendMarkdown(`| **${t('Dependencies')}** | ${deps} |\n`);
+  markdown.appendMarkdown(`| **${t('Parent Plan')}** | ${ticket.parent_plan} |\n`);
 
   if (ticket.context?.notes) {
-    markdown.appendMarkdown(`\n---\n\n**${vscode.l10n.t('Notes')}:**\n${ticket.context.notes}\n`);
+    markdown.appendMarkdown(`\n---\n\n**${t('Notes')}:**\n${ticket.context.notes}\n`);
   }
 
   if (ticket.reviews?.length) {
-    markdown.appendMarkdown(`\n**${vscode.l10n.t('Review')}:**\n\n`);
-    markdown.appendMarkdown(`| ${vscode.l10n.t('Date')} | ${vscode.l10n.t('Status')} | ${vscode.l10n.t('Summary')} |\n|---|---|---|\n`);
+    markdown.appendMarkdown(`\n**${t('Review')}:**\n\n`);
+    markdown.appendMarkdown(`| ${t('Date')} | ${t('Status')} | ${t('Summary')} |\n|---|---|---|\n`);
     for (const r of ticket.reviews) {
       const icon = r.status === 'passed' ? '✅' : '❌';
       markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
@@ -124,6 +192,8 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
 
   private workflowRoot: string | null = null;
   private sortMode: KanbanSortMode = 'priority';
+  private sortAscending: boolean = false;
+  private filterPlan: string | null = null;
 
   constructor(
     private readonly store: WorkflowStore,
@@ -154,9 +224,43 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   }
 
   /**
+   * Set plan filter for kanban
+   * @param planId Plan ID to filter by, or null to clear filter
+   */
+  setPlanFilter(planId: string | null): void {
+    this.filterPlan = planId;
+    this.refresh();
+  }
+
+  /**
+   * Get current plan filter
+   */
+  getPlanFilter(): string | null {
+    return this.filterPlan;
+  }
+
+  /**
+   * Set sort direction (ascending/descending)
+   * @param ascending true for ascending, false for descending
+   */
+  setSortAscending(ascending: boolean): void {
+    this.sortAscending = ascending;
+    this.refresh();
+  }
+
+  /**
+   * Get current sort direction
+   */
+  getSortAscending(): boolean {
+    return this.sortAscending;
+  }
+
+  /**
    * Refresh tree data
    */
   refresh(): void {
+    // Invalidate cache for this status when refreshing
+    sortedTicketsCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -185,27 +289,57 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   }
 
   /**
-   * Get tickets for the configured status
+   * Get tickets for the configured status with caching
    */
   private getTicketsForStatus(): Thenable<KanbanTicketTreeItem[]> {
-    const tickets = this.store.getTicketsByStatus(this.status);
+    // Build cache key
+    const cacheKey = getCacheKey({
+      status: this.status,
+      sortMode: this.sortMode,
+      sortAscending: this.sortAscending,
+      filterPlan: this.filterPlan
+    });
+
+    // Check cache first
+    if (sortedTicketsCache.has(cacheKey)) {
+      perfMetrics.cacheHits++;
+      return Promise.resolve(sortedTicketsCache.get(cacheKey)!);
+    }
+
+    perfMetrics.cacheMisses++;
+
+    let tickets = this.store.getTicketsByStatus(this.status);
+
+    // Apply plan filter if set
+    if (this.filterPlan) {
+      tickets = tickets.filter(ticket => extractPlanId(ticket.parent_plan) === this.filterPlan);
+    }
+
+    const direction = this.sortAscending ? 1 : -1;
 
     switch (this.sortMode) {
       case 'id':
-        tickets.sort((a, b) => a.id.localeCompare(b.id));
+        tickets.sort((a, b) => direction * a.id.localeCompare(b.id));
         break;
       case 'title':
-        tickets.sort((a, b) => a.title.localeCompare(b.title));
+        tickets.sort((a, b) => direction * a.title.localeCompare(b.title));
+        break;
+      case 'date':
+        tickets.sort((a, b) => direction * a.updated_at.localeCompare(b.updated_at));
         break;
       case 'priority':
       default:
-        tickets.sort((a, b) => a.priority - b.priority);
+        tickets.sort((a, b) => direction * (a.priority - b.priority));
         break;
     }
 
+    // Use cached TreeItems
     const items = tickets.map(
-      ticket => new KanbanTicketTreeItem(ticket, this.workflowRoot!)
+      ticket => getOrCreateTreeItem(ticket, this.workflowRoot!)
     );
+
+    // Cache the result
+    sortedTicketsCache.set(cacheKey, items);
 
     return Promise.resolve(items);
   }
@@ -229,7 +363,7 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
     }
     return {
       value: count,
-      tooltip: vscode.l10n.t('{0} tickets ready', count)
+      tooltip: t('{0} tickets {1}', count, this.status)
     };
   }
 }
@@ -245,12 +379,34 @@ export function createKanbanProviders(store: WorkflowStore): {
   review: KanbanTreeProvider;
   done: KanbanTreeProvider;
 } {
+  const done = new KanbanTreeProvider(store, TicketStatus.Done);
+  done.setSortMode('date');
+
   return {
     backlog: new KanbanTreeProvider(store, TicketStatus.Backlog),
     ready: new KanbanTreeProvider(store, TicketStatus.Ready),
     inProgress: new KanbanTreeProvider(store, TicketStatus.InProgress),
     blocked: new KanbanTreeProvider(store, TicketStatus.Blocked),
     review: new KanbanTreeProvider(store, TicketStatus.Review),
-    done: new KanbanTreeProvider(store, TicketStatus.Done)
+    done
+  };
+}
+
+/**
+ * Get performance metrics for debugging
+ */
+export function getKanbanPerfMetrics(): typeof perfMetrics {
+  return { ...perfMetrics };
+}
+
+/**
+ * Reset performance metrics
+ */
+export function resetKanbanPerfMetrics(): void {
+  perfMetrics = {
+    cacheHits: 0,
+    cacheMisses: 0,
+    treeItemCacheHits: 0,
+    treeItemCacheMisses: 0
   };
 }

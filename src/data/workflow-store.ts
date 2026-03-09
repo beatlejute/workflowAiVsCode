@@ -175,7 +175,7 @@ export class WorkflowStore {
 
     const section = sectionMatch[1];
     const reviews: ReviewEntry[] = [];
-    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(?:✅|❌)\s*(passed|failed)\s*\|\s*([^|]*)\|/g;
+    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\s*\|\s*(?:✅|❌)\s*(passed|failed)\s*\|\s*([^|\n]*)\|?/g;
     let match: RegExpExecArray | null;
 
     while ((match = rowRegex.exec(section)) !== null) {
@@ -185,6 +185,9 @@ export class WorkflowStore {
         summary: match[3].trim()
       });
     }
+
+    // Сортируем по дате (хронологически), чтобы порядок строк в таблице не влиял
+    reviews.sort((a, b) => a.date.localeCompare(b.date));
 
     return reviews;
   }

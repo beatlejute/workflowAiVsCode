@@ -5,6 +5,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { TicketService } from '../services/ticket-service';
 import { TicketStatus } from '../data/types';
 
@@ -29,19 +30,19 @@ export async function executeMoveTicket(ticketService: TicketService, ticketId?:
     // Show QuickPick to select ticket
     const tickets = ticketService.getAll();
     if (tickets.length === 0) {
-      vscode.window.showInformationMessage(vscode.l10n.t('No tickets available to move'));
+      vscode.window.showInformationMessage(t('No tickets available to move'));
       return;
     }
 
     const selected = await vscode.window.showQuickPick(
-      tickets.map(t => ({
-        label: t.id,
-        description: t.title,
-        detail: vscode.l10n.t('Current: {0}', t.status)
+      tickets.map(ticket => ({
+        label: ticket.id,
+        description: ticket.title,
+        detail: t('Current: {0}', ticket.status)
       })),
       {
-        placeHolder: vscode.l10n.t('Select ticket to move'),
-        title: vscode.l10n.t('Move Ticket')
+        placeHolder: t('Select ticket to move'),
+        title: t('Move Ticket')
       }
     );
 
@@ -55,14 +56,14 @@ export async function executeMoveTicket(ticketService: TicketService, ticketId?:
   // Get current ticket
   const ticket = ticketService.getById(ticketId);
   if (!ticket) {
-    vscode.window.showErrorMessage(vscode.l10n.t('Ticket {0} not found', ticketId));
+    vscode.window.showErrorMessage(t('Ticket {0} not found', ticketId));
     return;
   }
 
   // Get valid transitions
   const validTransitions = ticketService.getValidTransitions(ticket.status);
   if (validTransitions.length === 0) {
-    vscode.window.showInformationMessage(vscode.l10n.t('No valid transitions from {0}', ticket.status));
+    vscode.window.showInformationMessage(t('No valid transitions from {0}', ticket.status));
     return;
   }
 
@@ -70,11 +71,11 @@ export async function executeMoveTicket(ticketService: TicketService, ticketId?:
   const targetStatus = await vscode.window.showQuickPick(
     validTransitions.map(status => ({
       label: status,
-      description: vscode.l10n.t('Move to {0}', status)
+      description: t('Move to {0}', status)
     })),
     {
-      placeHolder: vscode.l10n.t('Select target status for {0}', ticketId),
-      title: vscode.l10n.t('Move {0}', ticketId)
+      placeHolder: t('Select target status for {0}', ticketId),
+      title: t('Move {0}', ticketId)
     }
   );
 
@@ -84,9 +85,9 @@ export async function executeMoveTicket(ticketService: TicketService, ticketId?:
 
   try {
     await ticketService.move(ticketId, targetStatus.label as TicketStatus);
-    vscode.window.showInformationMessage(vscode.l10n.t('Moved {0} to {1}', ticketId, targetStatus.label));
+    vscode.window.showInformationMessage(t('Moved {0} to {1}', ticketId, targetStatus.label));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    vscode.window.showErrorMessage(vscode.l10n.t('Failed to move ticket: {0}', message));
+    vscode.window.showErrorMessage(t('Failed to move ticket: {0}', message));
   }
 }

@@ -11,6 +11,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { PipelineService, PipelineState } from '../services/pipeline-service';
 import { Ticket, TicketStatus } from '../data/types';
@@ -146,9 +147,9 @@ export class NotificationsManager {
    * @param _ticket - Ticket data
    */
   private showTicketCompletedNotification(ticketId: string, _ticket: Ticket): void {
-    const message = vscode.l10n.t('Ticket {0} completed', ticketId);
+    const message = t('Ticket {0} completed', ticketId);
 
-    vscode.window.showInformationMessage(message, vscode.l10n.t('Open')).then((selection) => {
+    vscode.window.showInformationMessage(message, t('Open')).then((selection) => {
       if (selection === 'Open') {
         this.openTicketFile(ticketId, TicketStatus.Done);
       }
@@ -161,9 +162,9 @@ export class NotificationsManager {
    * @param _ticket - Ticket data
    */
   private showTicketBlockedNotification(ticketId: string, _ticket: Ticket): void {
-    const message = vscode.l10n.t('Ticket {0} is blocked', ticketId);
+    const message = t('Ticket {0} is blocked', ticketId);
 
-    vscode.window.showWarningMessage(message, vscode.l10n.t('Details')).then((selection) => {
+    vscode.window.showWarningMessage(message, t('Details')).then((selection) => {
       if (selection === 'Details') {
         this.openTicketFile(ticketId, TicketStatus.Blocked);
       }
@@ -174,9 +175,9 @@ export class NotificationsManager {
    * Show pipeline error notification
    */
   private showPipelineErrorNotification(): void {
-    const message = vscode.l10n.t('Pipeline error occurred');
+    const message = t('Pipeline error occurred');
 
-    vscode.window.showErrorMessage(message, vscode.l10n.t('View Log')).then((selection) => {
+    vscode.window.showErrorMessage(message, t('View Log')).then((selection) => {
       if (selection === 'View Log') {
         this.showPipelineOutput();
       }
@@ -187,9 +188,9 @@ export class NotificationsManager {
    * Show pipeline completed notification
    */
   private showPipelineCompletedNotification(): void {
-    const message = vscode.l10n.t('Pipeline completed successfully');
+    const message = t('Pipeline completed successfully');
 
-    vscode.window.showInformationMessage(message, vscode.l10n.t('Report')).then((selection) => {
+    vscode.window.showInformationMessage(message, t('Report')).then((selection) => {
       if (selection === 'Report') {
         this.openLatestReport();
       }
@@ -201,7 +202,7 @@ export class NotificationsManager {
    */
   private async openTicketFile(ticketId: string, status: TicketStatus): Promise<void> {
     if (!this.workflowRoot) {
-      vscode.window.showErrorMessage(vscode.l10n.t('Workflow root not available'));
+      vscode.window.showErrorMessage(t('Workflow root not available'));
       return;
     }
 
@@ -217,7 +218,7 @@ export class NotificationsManager {
       await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(ticketPath));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      vscode.window.showErrorMessage(vscode.l10n.t('Failed to open ticket: {0}', message));
+      vscode.window.showErrorMessage(t('Failed to open ticket: {0}', message));
     }
   }
 
@@ -235,13 +236,13 @@ export class NotificationsManager {
    */
   private async openLatestReport(): Promise<void> {
     if (!this.workflowRoot) {
-      vscode.window.showErrorMessage(vscode.l10n.t('Workflow root not available'));
+      vscode.window.showErrorMessage(t('Workflow root not available'));
       return;
     }
 
     const reports = this.store.getReports();
     if (reports.length === 0) {
-      vscode.window.showInformationMessage(vscode.l10n.t('No reports available'));
+      vscode.window.showInformationMessage(t('No reports available'));
       return;
     }
 
@@ -255,7 +256,7 @@ export class NotificationsManager {
       })[0];
 
     if (!latestReport) {
-      vscode.window.showInformationMessage(vscode.l10n.t('No reports with date available'));
+      vscode.window.showInformationMessage(t('No reports with date available'));
       return;
     }
 
@@ -270,7 +271,7 @@ export class NotificationsManager {
       await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(reportPath));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      vscode.window.showErrorMessage(vscode.l10n.t('Failed to open report: {0}', message));
+      vscode.window.showErrorMessage(t('Failed to open report: {0}', message));
     }
   }
 

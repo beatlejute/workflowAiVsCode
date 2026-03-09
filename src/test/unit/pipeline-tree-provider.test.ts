@@ -25,7 +25,8 @@ import {
   StatisticsTreeItem,
   HistoryTreeItem,
   HistoryItemTreeItem,
-  RunHistoryEntry
+  RunHistoryEntry,
+  PersistedHistoryItem
 } from '../../ui/pipeline-tree-provider';
 import { PipelineService, PipelineState } from '../../services/pipeline-service';
 
@@ -204,30 +205,45 @@ statuses:
       const item = new CompletedStageTreeItem(
         'analyze-report',
         '1.5s',
-        true
+        true,
+        'IMPL-001',
+        'general-purpose',
+        'execute-task',
+        'todo → in_progress'
       );
 
       assert.ok((item.label as string).includes('✅'));
       assert.ok((item.label as string).includes('analyze-report'));
-      assert.strictEqual((item.description as string), 'Elapsed: 1.5s');
+      // Description should show ticket | agent | statusChange when available
+      assert.ok((item.description as string).includes('IMPL-001'));
+      assert.ok((item.description as string).includes('general-purpose'));
+      assert.ok((item.description as string).includes('todo → in_progress'));
     });
 
     test('Failure displays error icon', () => {
       const item = new CompletedStageTreeItem(
         'execute-task',
         '2.3s',
-        false
+        false,
+        'FIX-002',
+        'code-reviewer',
+        'review-result'
       );
 
       assert.ok((item.label as string).includes('❌'));
       assert.ok((item.label as string).includes('execute-task'));
+      assert.ok((item.description as string).includes('FIX-002'));
     });
 
     test('Tooltip contains result and elapsed time', () => {
       const item = new CompletedStageTreeItem(
         'create-report',
         '3.7s',
-        true
+        true,
+        'IMPL-003',
+        'general-purpose',
+        'create-report',
+        'ready → done'
       );
 
       const tooltip = item.tooltip as vscode.MarkdownString;
@@ -236,6 +252,23 @@ statuses:
       assert.ok(value.includes('**Completed Stage: create-report**'));
       assert.ok(value.includes('Success'));
       assert.ok(value.includes('Elapsed'));
+      assert.ok(value.includes('IMPL-003'));
+      assert.ok(value.includes('general-purpose'));
+      assert.ok(value.includes('create-report'));
+      assert.ok(value.includes('ready → done'));
+    });
+
+    test('Graceful degradation when optional fields missing', () => {
+      const item = new CompletedStageTreeItem(
+        'simple-stage',
+        '0.5s',
+        true
+      );
+
+      assert.ok((item.label as string).includes('✅'));
+      assert.ok((item.label as string).includes('simple-stage'));
+      // Should fall back to elapsed when no ticket/agent/statusChange
+      assert.ok((item.description as string).includes('Elapsed: 0.5s'));
     });
   });
 
@@ -490,11 +523,215 @@ statuses:
       provider.setWorkflowRoot(tempWorkflowRoot);
 
       const logEntry = 'Some random log message';
-      
+
       // Should not throw
       assert.doesNotThrow(() => {
         (provider as any).parseLogLine(logEntry);
       });
+    });
+  });
+
+  suite('History Persistence Tests', () => {
+    test('setContext stores extension context', () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      const mockContext = {
+        workspaceState: {
+          get: () => undefined,
+          update: () => Promise.resolve()
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+      // Context is set without errors
+      assert.ok(true);
+    });
+
+    test('loadHistoryFromStorage with empty storage', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      const mockContext = {
+        workspaceState: {
+          get: () => undefined,
+          update: () => Promise.resolve()
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+      await provider.loadHistoryFromStorage();
+
+      // Should not throw and history should be empty
+      const history = (provider as any).runHistory as RunHistoryEntry[];
+      assert.strictEqual(history.length, 0);
+    });
+
+    test('loadHistoryFromStorage loads persisted history', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      const persistedData: PersistedHistoryItem[] = [
+        { runNumber: 1, timestamp: 1709640000000, result: 'success', reports: [] },
+        { runNumber: 2, timestamp: 1709643600000, result: 'error', reports: [{ id: 'RPT-001', path: '/path/to/report.md' }] }
+      ];
+
+      const mockContext = {
+        workspaceState: {
+          get: () => persistedData,
+          update: () => Promise.resolve()
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+      await provider.loadHistoryFromStorage();
+
+      const history = (provider as any).runHistory as RunHistoryEntry[];
+      assert.strictEqual(history.length, 2);
+      assert.strictEqual(history[0].runNumber, 1);
+      assert.strictEqual(history[0].result, 'success');
+      assert.strictEqual(history[1].runNumber, 2);
+      assert.strictEqual(history[1].result, 'error');
+      assert.strictEqual(history[1].reports?.length, 1);
+    });
+
+    test('loadHistoryFromStorage restores run counter', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      const persistedData: PersistedHistoryItem[] = [
+        { runNumber: 5, timestamp: 1709640000000, result: 'success', reports: [] }
+      ];
+
+      const mockContext = {
+        workspaceState: {
+          get: () => persistedData,
+          update: () => Promise.resolve()
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+      await provider.loadHistoryFromStorage();
+
+      const runCounter = (provider as any).runCounter as number;
+      assert.strictEqual(runCounter, 5);
+    });
+
+    test('saveHistoryToStorage saves history correctly', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      let savedData: PersistedHistoryItem[] | undefined;
+
+      const mockContext = {
+        workspaceState: {
+          get: () => undefined,
+          update: async (key: string, value: PersistedHistoryItem[]) => {
+            savedData = value;
+          }
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+
+      // Add some history entries
+      (provider as any).runHistory = [
+        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] },
+        { runNumber: 2, date: '2026-03-05 11:00', result: 'error', reports: [{ id: 'RPT-001', path: '/path/to/report.md' }] }
+      ] as RunHistoryEntry[];
+
+      await provider.saveHistoryToStorage();
+
+      assert.ok(savedData);
+      assert.strictEqual(savedData?.length, 2);
+      assert.strictEqual(savedData?.[0].runNumber, 1);
+      assert.strictEqual(savedData?.[0].result, 'success');
+      assert.strictEqual(savedData?.[1].runNumber, 2);
+      assert.strictEqual(savedData?.[1].result, 'error');
+    });
+
+    test('saveHistoryToStorage enforces 50 item limit (FIFO)', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+      let savedData: PersistedHistoryItem[] | undefined;
+
+      const mockContext = {
+        workspaceState: {
+          get: () => undefined,
+          update: async (key: string, value: PersistedHistoryItem[]) => {
+            savedData = value;
+          }
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+
+      // Add 60 history entries
+      (provider as any).runHistory = Array.from({ length: 60 }, (_, i) => ({
+        runNumber: i + 1,
+        date: `2026-03-05 ${10 + Math.floor(i / 10)}:${i % 10}0`,
+        result: 'success' as const,
+        reports: []
+      })) as RunHistoryEntry[];
+
+      await provider.saveHistoryToStorage();
+
+      assert.ok(savedData);
+      assert.strictEqual(savedData?.length, 50);
+      // Should keep first 50 (most recent, since unshift adds to front)
+      assert.strictEqual(savedData?.[0].runNumber, 60);
+      assert.strictEqual(savedData?.[49].runNumber, 11);
+    });
+
+    test('loadHistoryFromStorage handles errors gracefully', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+
+      const mockContext = {
+        workspaceState: {
+          get: () => {
+            throw new Error('Storage error');
+          },
+          update: () => Promise.resolve()
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+
+      // Should not throw
+      await provider.loadHistoryFromStorage();
+      assert.ok(true);
+    });
+
+    test('saveHistoryToStorage handles errors gracefully', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+
+      const mockContext = {
+        workspaceState: {
+          get: () => undefined,
+          update: () => Promise.reject(new Error('Storage error'))
+        }
+      } as unknown as vscode.ExtensionContext;
+
+      provider.setContext(mockContext);
+      (provider as any).runHistory = [
+        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
+      ] as RunHistoryEntry[];
+
+      // Should not throw
+      await provider.saveHistoryToStorage();
+      assert.ok(true);
+    });
+
+    test('loadHistoryFromStorage does nothing without context', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+
+      // Don't set context
+      await provider.loadHistoryFromStorage();
+
+      const history = (provider as any).runHistory as RunHistoryEntry[];
+      assert.strictEqual(history.length, 0);
+    });
+
+    test('saveHistoryToStorage does nothing without context', async () => {
+      const provider = new PipelineTreeProvider(store, pipelineService);
+
+      // Don't set context
+      (provider as any).runHistory = [
+        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
+      ] as RunHistoryEntry[];
+
+      await provider.saveHistoryToStorage();
+      // Should not throw
+      assert.ok(true);
     });
   });
 });

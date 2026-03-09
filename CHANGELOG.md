@@ -5,212 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-03-09
+
+### Changed
+
+- Version bump to 1.0.0 stable release
+
+## [0.1.0] - 2026-03-08
 
 ### Added
 
-#### Internationalization (Phase 3)
-- **10 language packs** — Full i18n support for en, ru, zh-cn, zh-tw, ja, ko, de, fr, es, pt-br
-- **package.nls.*.json** — Localized strings for all UI elements (66 keys in base package.nls.json)
-- **l10n/bundle.l10n.json** — Extension bundle translations (179 keys)
-- **Locale detection** — Automatic language selection based on VS Code locale
-- **scripts/check-i18n.js** — Lint script for translation completeness validation
+- i18n wrapper `t()` with locale selection via `workflow.locale` setting (auto + 10 locales: en, ru, de, fr, es, ja, ko, zh-cn, zh-tw, pt-br)
+- Config.yaml button (`$(tools)`) in Pipeline view title bar
+- Review badges (✅/❌) on tickets in kanban and sidebar views (max 4 +N indicator)
+- Date sort mode for tickets by `updated_at` in kanban and sidebar
+- Sort direction toggle (asc/desc) with visual indication via `workflow.sortAscending` context key
+- Plan filter sync between sidebar and kanban with visual indication (`workflow.ticketFilterActive`)
+- Filter info element in sidebar (`🔍 PLAN-001: Title`) when filter is active
+- Plan name prefix in kanban column headers when filtered
+- Context menu for plans: Decompose, Run Pipeline, Archive/Unarchive
+- Ticket, agent, skill, and status change display in completed pipeline steps
+- Hover tooltip with output (max 20 lines) for pipeline steps
+- Expandable reports in run history with `CREATE_REPORT` log parsing
+- Run history persistence via `workspaceState` (limit: 50 entries, FIFO)
+- i18n support for 10 locales with full translation coverage
 
-#### Documentation (Phase 3)
-- **README.md** — Comprehensive extension documentation with installation, configuration, commands, and usage examples
+### Changed
 
-#### Testing (Phase 3)
-- **E2E test framework** — Integration tests using @vscode/test-electron
-- **17 test cases** — Comprehensive test suite covering core functionality
-- **Test fixtures** — Sample workflow files in `src/test/fixtures/.workflow/`
-- **CI/CD ready** — Test execution pipeline configuration
+- All `vscode.l10n.t()` calls replaced with custom `t()` wrapper from `src/i18n.ts`
+- `getReviewBadges()` extracted to shared utility module `src/ui/utils.ts` (DRY)
+- TypeScript strict-mode: `shell` type corrected to `'cmd.exe' | undefined`
 
 ### Fixed
 
-#### Kanban Board (FIX-002)
-- **Column header counters** — Fixed ticket counts in createTreeView implementation
+- TypeScript error TS2367 (redundant comparison) in `src/i18n.ts`
+- Missing i18n keys in 9 locale files (`package.nls.*.json`) and 8 bundle files (`l10n/bundle.l10n.*.json`)
+- Duplicate `getReviewBadges()` function in `kanban-tree-provider.ts` and `sidebar-tree-provider.ts`
+- Pre-existing TypeScript strict-mode warning in `src/extension.ts`
 
-#### Ticket Metadata (FIX-003)
-- **IMPL-016, IMPL-021** — Fixed metadata validation for ticket frontmatter
-
-#### E2E Tests (FIX-004)
-- **Test path compilation** — Fixed relative paths in E2E test runner for Windows compatibility
-- **check-i18n test** — Fixed path handling in translation validation tests
-
-### Changed
-- None (initial release)
-
----
-
-## [0.1.0] - 2026-03-05
-
-Initial release with comprehensive workflow management features for VS Code.
-
-### Added
-
-#### Data Layer (Phase 1)
-- **WorkflowStore** — Central data store for tickets, plans, and reports with file system watching
-- **TicketStatus type** — Type-safe status management (backlog, ready, in-progress, blocked, review, done)
-- **Ticket, Plan, Report interfaces** — TypeScript type definitions for workflow entities
-- **File system watcher** — Automatic refresh on file changes with debouncing
-
-#### Core Services (Phase 1)
-- **TicketService** — Create, read, update, move tickets with validation
-- **DependencyService** — Track and validate ticket dependencies
-- **PipelineService** — Pipeline execution with state management and event emission
-- **Workflow validation** — Frontmatter schema validation using Ajv
-
-#### UI Layer — Sidebar (Phase 2)
-- **TicketsTreeProvider** — Tree view of tickets organized by status
-- **PlansTreeProvider** — Tree view of plans (current/archive)
-- **ReportsTreeProvider** — Tree view of reports
-- **PipelineTreeProvider** — Pipeline configuration and status view
-- **Context menu actions** — Move, edit, show dependencies, copy ID
-- **Welcome view** — Guided setup when CLI or workflow not found
-
-#### UI Layer — Kanban Board (Phase 2)
-- **6 Kanban columns** — Backlog, Ready, In Progress, Blocked, Review, Done
-- **Ticket cards** — Display ID, title, and priority with icons
-- **Sorting options** — Sort by priority, ID, or title
-- **Drag-and-drop ready** — Architecture supports future DnD implementation
-- **Live counters** — Column headers show ticket counts
-
-#### UI Layer — Pipeline Monitor (Phase 2)
-- **Real-time status** — Current stage and progress indication
-- **Start/Stop controls** — Direct pipeline execution control
-- **Output viewer access** — Quick link to pipeline output
-- **History management** — Clear execution history
-
-#### UI Layer — StatusBar (Phase 2)
-- **Status indicator** — Shows "WF: Idle" or "WF: Running"
-- **Pipeline state** — Visual feedback for pipeline execution
-- **Quick access** — Click to view pipeline status
-
-#### UI Layer — CodeLens (Phase 2)
-- **Inline actions** — Move ticket, view dependencies directly in editor
-- **Ticket metadata** — Display status and priority inline
-- **Context-aware** — Shows relevant actions based on ticket state
-
-#### UI Layer — Hover Provider (Phase 2)
-- **Ticket previews** — Show ticket details on hover over ID references
-- **Quick navigation** — See status and priority without opening file
-- **Cross-file support** — Works in tickets, plans, and reports
-
-#### UI Layer — Completion Provider (Phase 2)
-- **Ticket ID completions** — Autocomplete ticket references
-- **Smart suggestions** — Context-aware completion items
-- **Trigger characters** — Supports `-`, ` `, and `:` triggers
-
-#### UI Layer — Diagnostic Provider (Phase 2)
-- **Real-time validation** — Validate ticket frontmatter on edit
-- **Error highlighting** — Inline squiggles for invalid fields
-- **Problems panel integration** — Shows in VS Code Problems view
-- **Dependency validation** — Detect broken dependency references
-
-#### UI Layer — Document Link Provider (Phase 2)
-- **Clickable references** — Click ticket IDs to open files
-- **Pipeline config links** — Navigate stages and steps
-- **Cross-file navigation** — Jump between related documents
-
-#### UI Layer — Notifications (Phase 2)
-- **Pipeline events** — Notify on pipeline start/complete/fail
-- **Ticket changes** — Notify on ticket moves and updates
-- **Configurable** — Control notification types
-
-#### Commands (Phase 2)
-- **workflow.installCli** — Install wf CLI globally
-- **workflow.init** — Initialize workflow in workspace
-- **workflow.newTicket** — Create new ticket with interactive prompts
-- **workflow.createTicket** — Create ticket via icon action
-- **workflow.openTicket** — Open ticket file in editor
-- **workflow.moveTicket** — Move ticket to different status
-- **workflow.moveTicketNext** — Move ticket to next status in workflow
-- **workflow.moveTicketFromMenu** — Move via context menu
-- **workflow.editTicket** — Open ticket for editing
-- **workflow.showTicketDependencies** — Show dependencies view
-- **workflow.showDependencies** — Show full dependency graph
-- **workflow.copyTicketId** — Copy ticket ID to clipboard
-- **workflow.refreshTickets** — Refresh tickets tree view
-- **workflow.sortKanbanByPriority** — Sort Kanban by priority
-- **workflow.sortKanbanById** — Sort Kanban by ID
-- **workflow.sortKanbanByTitle** — Sort Kanban by title
-- **workflow.runPipeline** — Start pipeline execution
-- **workflow.stopPipeline** — Stop running pipeline
-- **workflow.showPipelineOutput** — Show pipeline output
-- **workflow.clearPipelineHistory** — Clear execution history
-- **workflow.openPipelineConfig** — Open pipeline.yaml
-- **workflow.openConfig** — Open extension settings
-- **workflow.focusTicketsView** — Focus tickets sidebar
-- **workflow.focusKanban** — Focus Kanban panel
-- **workflow.refreshAll** — Refresh all workflow views
-- **workflow.newPlan** — Create new plan document
-- **workflow.showStatistics** — Show workflow statistics
-
-#### Keyboard Shortcuts (Phase 2)
-- **Ctrl+Shift+W R** — Run pipeline
-- **Ctrl+Shift+W N** — New ticket
-- **Ctrl+Shift+W M** — Move ticket
-
-#### Configuration (Phase 2)
-- **workflow.cliPath** — Custom CLI executable path
-- **Context keys** — `workflow.cliInstalled`, `workflow.workflowFound`, `workflow.pipelineRunning`
-
-#### Developer Experience
-- **TypeScript** — Full type safety with strict mode
-- **ESLint** — Code quality enforcement
-- **esbuild** — Fast bundling for production
-- **Debug configuration** — VS Code launch configurations for extension development
-
-### Changed
-- None (initial release)
-
-### Fixed
-- None (initial release)
-
-### Removed
-- None (initial release)
-
-### Deprecated
-- None (initial release)
-
-### Security
-- No API keys or secrets exposed in code
-- File system access limited to workspace directory
-- No external network calls
-
----
-
-## Version History Summary
-
-| Version | Date | Key Features |
-|---------|------|--------------|
-| 0.1.0 | 2026-03-05 | Initial release with full workflow management |
-
----
-
-## Upcoming Releases
-
-### 0.2.0 (In Progress)
-- Internationalization (i18n) — 10 language packs
-- E2E test suite with @vscode/test-electron (17 test cases)
-- Translation lint script (scripts/check-i18n.js)
-- Test fixtures for workflow validation
-- Bug fixes: FIX-002 (Kanban counters), FIX-003 (ticket metadata), FIX-004 (E2E test paths)
-
-### Future Considerations
-- Drag-and-drop ticket movement in Kanban
-- Custom workflow definitions
-- Integration with external project management tools
-- AI-powered ticket suggestions
-- Timeline/Gantt chart view
-
----
-
-*For more information, see the [README.md](README.md) and [documentation](.workflow/).*
-
----
-
-## Links
-
-- [Unreleased]: https://github.com/your-org/workflow-ai-vscode/compare/v0.1.0...HEAD
-- [0.1.0]: https://github.com/your-org/workflow-ai-vscode/releases/tag/v0.1.0
+[1.0.0]: https://github.com/workflow-ai/wf-vscode/releases/tag/v1.0.0
+[0.1.0]: https://github.com/workflow-ai/wf-vscode/releases/tag/v0.1.0

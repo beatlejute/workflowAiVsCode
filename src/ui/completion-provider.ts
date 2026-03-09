@@ -15,6 +15,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
 
@@ -90,7 +91,7 @@ export class TicketCompletionProvider implements vscode.CompletionItemProvider {
       const item = new vscode.CompletionItem(ticket.id, vscode.CompletionItemKind.Reference);
       item.detail = `${ticket.title} (${ticket.status})`;
       item.documentation = new vscode.MarkdownString(
-        `**${ticket.title}**\n\n${vscode.l10n.t('Status')}: ${STATUS_ICONS[ticket.status]} ${ticket.status}\n\n${vscode.l10n.t('Priority')}: ${ticket.priority}`
+        `**${ticket.title}**\n\n${t('Status')}: ${STATUS_ICONS[ticket.status]} ${ticket.status}\n\n${t('Priority')}: ${ticket.priority}`
       );
       item.sortText = ticket.id; // Ensure proper sorting by ID
 
@@ -190,7 +191,7 @@ export class PipelineCompletionProvider implements vscode.CompletionItemProvider
       const stages = Object.entries(pipeline.pipeline.stages || {});
       for (const [stageId, stageConfig] of stages) {
         const item = new vscode.CompletionItem(stageId, vscode.CompletionItemKind.Class);
-        item.detail = typeof stageConfig === 'string' ? stageConfig : (stageConfig.description || vscode.l10n.t('Stage'));
+        item.detail = typeof stageConfig === 'string' ? stageConfig : (stageConfig.description || t('Stage'));
         item.documentation = this.createStageDocumentation(stageId, stageConfig);
         item.sortText = `1_${stageId}`; // Priority 1 for stages
         items.push(item);
@@ -211,9 +212,9 @@ export class PipelineCompletionProvider implements vscode.CompletionItemProvider
       const skills = this.extractSkillsFromPipeline(pipeline);
       for (const skillId of skills) {
         const item = new vscode.CompletionItem(skillId, vscode.CompletionItemKind.Method);
-        item.detail = `${vscode.l10n.t('Skill')}: ${skillId}`;
+        item.detail = `${t('Skill')}: ${skillId}`;
         item.documentation = new vscode.MarkdownString(
-          `**${vscode.l10n.t('Skill')}: ${skillId}**\n\n${vscode.l10n.t('Located at')}: \`.workflow/src/skills/${skillId}/SKILL.md\``
+          `**${t('Skill')}: ${skillId}**\n\n${t('Located at')}: \`.workflow/src/skills/${skillId}/SKILL.md\``
         );
         item.sortText = `3_${skillId}`; // Priority 3 for skills
         items.push(item);
@@ -248,22 +249,22 @@ export class PipelineCompletionProvider implements vscode.CompletionItemProvider
   private createStageDocumentation(stageId: string, stageConfig: any): vscode.MarkdownString {
     const description = typeof stageConfig === 'string'
       ? stageConfig
-      : (stageConfig.description || vscode.l10n.t('No description'));
+      : (stageConfig.description || t('No description'));
 
-    const doc = new vscode.MarkdownString(`**${vscode.l10n.t('Stage')}: ${stageId}**\n\n${description}`);
+    const doc = new vscode.MarkdownString(`**${t('Stage')}: ${stageId}**\n\n${description}`);
 
     if (typeof stageConfig === 'object' && stageConfig !== null) {
       if (stageConfig.agent) {
-        doc.appendMarkdown(`\n\n**${vscode.l10n.t('Agent')}:** \`${stageConfig.agent}\``);
+        doc.appendMarkdown(`\n\n**${t('Agent')}:** \`${stageConfig.agent}\``);
       }
       if (stageConfig.skill) {
-        doc.appendMarkdown(`\n\n**${vscode.l10n.t('Skill')}:** \`${stageConfig.skill}\``);
+        doc.appendMarkdown(`\n\n**${t('Skill')}:** \`${stageConfig.skill}\``);
       }
       if (stageConfig.type) {
-        doc.appendMarkdown(`\n\n**${vscode.l10n.t('Type')}:** \`${stageConfig.type}\``);
+        doc.appendMarkdown(`\n\n**${t('Type')}:** \`${stageConfig.type}\``);
       }
       if (stageConfig.goto) {
-        doc.appendMarkdown(`\n\n**${vscode.l10n.t('Transitions')}:**`);
+        doc.appendMarkdown(`\n\n**${t('Transitions')}:**`);
         for (const [trigger, target] of Object.entries(stageConfig.goto)) {
           const targetStage = typeof target === 'string' ? target : (target as any).stage;
           doc.appendMarkdown(`\n- \`${trigger}\` → \`${targetStage}\``);
@@ -282,14 +283,14 @@ export class PipelineCompletionProvider implements vscode.CompletionItemProvider
     const args = typeof agentConfig === 'object' && agentConfig !== null ? agentConfig.args || [] : [];
     const description = typeof agentConfig === 'object' && agentConfig !== null ? agentConfig.description : undefined;
 
-    const doc = new vscode.MarkdownString(`**${vscode.l10n.t('Agent')}: ${agentId}**\n\n\`\`\`bash\n${command} ${args.join(' ')}\n\`\`\``);
+    const doc = new vscode.MarkdownString(`**${t('Agent')}: ${agentId}**\n\n\`\`\`bash\n${command} ${args.join(' ')}\n\`\`\``);
 
     if (description) {
       doc.appendMarkdown(`\n\n${description}`);
     }
 
     if (typeof agentConfig === 'object' && agentConfig !== null && agentConfig.workdir) {
-      doc.appendMarkdown(`\n\n**${vscode.l10n.t('Working Directory')}:** \`${agentConfig.workdir}\``);
+      doc.appendMarkdown(`\n\n**${t('Working Directory')}:** \`${agentConfig.workdir}\``);
     }
 
     return doc;

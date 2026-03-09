@@ -216,5 +216,12 @@
   "wf move failed with code {0}: {1}": "wf move 失败，代码 {0}：{1}",
   "wf move failed: {0}": "wf move 失败：{0}",
   "Failed to read ticket file: {0}": "读取工单文件失败：{0}",
-  "Ticket {0} not found in dependency check": "依赖检查中未找到工单 {0}"
+  "Ticket {0} not found in dependency check": "依赖检查中未找到工单 {0}",
+  "Using VS Code locale": "使用 VS Code 区域设置",
+  "Using locale: {0}": "使用区域设置：{0}",
+  "Reload window to apply changes?": "重新加载窗口以应用更改？",
+  "Reload": "重新加载",
+  "No current plans available": "没有当前计划可用",
+  "Select plan to decompose": "选择要分解的计划",
+  "Decomposing plan {0}...": "正在分解计划 {0}..."
 }

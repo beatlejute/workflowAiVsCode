@@ -6,6 +6,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { t } from '../i18n';
 import { TicketService } from '../services/ticket-service';
 
 /**
@@ -15,16 +16,16 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
   // Get ticket type
   const type = await vscode.window.showQuickPick(
     [
-      { label: 'IMPL', description: vscode.l10n.t('Implementation task') },
-      { label: 'FIX', description: vscode.l10n.t('Bug fix') },
-      { label: 'DOCS', description: vscode.l10n.t('Documentation') },
-      { label: 'REVIEW', description: vscode.l10n.t('Code review') },
-      { label: 'ARCH', description: vscode.l10n.t('Architecture task') },
-      { label: 'ADMIN', description: vscode.l10n.t('Administrative task') }
+      { label: 'IMPL', description: t('Implementation task') },
+      { label: 'FIX', description: t('Bug fix') },
+      { label: 'DOCS', description: t('Documentation') },
+      { label: 'REVIEW', description: t('Code review') },
+      { label: 'ARCH', description: t('Architecture task') },
+      { label: 'ADMIN', description: t('Administrative task') }
     ],
     {
-      placeHolder: vscode.l10n.t('Select ticket type'),
-      title: vscode.l10n.t('Create New Ticket')
+      placeHolder: t('Select ticket type'),
+      title: t('Create New Ticket')
     }
   );
 
@@ -34,12 +35,12 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
 
   // Get title
   const title = await vscode.window.showInputBox({
-    prompt: vscode.l10n.t('Enter ticket title'),
-    placeHolder: vscode.l10n.t('e.g., Add feature X'),
-    title: vscode.l10n.t('Create New Ticket'),
+    prompt: t('Enter ticket title'),
+    placeHolder: t('e.g., Add feature X'),
+    title: t('Create New Ticket'),
     validateInput: (value) => {
       if (!value || value.trim().length === 0) {
-        return vscode.l10n.t('Title is required');
+        return t('Title is required');
       }
       return undefined;
     }
@@ -51,7 +52,7 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
 
   try {
     const ticket = await ticketService.create(type.label, title);
-    vscode.window.showInformationMessage(vscode.l10n.t('Created ticket {0}: {1}', ticket.id, ticket.title));
+    vscode.window.showInformationMessage(t('Created ticket {0}: {1}', ticket.id, ticket.title));
 
     // Open the created ticket
     const workflowRoot = ticketService.getWorkflowRoot();
@@ -63,6 +64,6 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    vscode.window.showErrorMessage(vscode.l10n.t('Failed to create ticket: {0}', message));
+    vscode.window.showErrorMessage(t('Failed to create ticket: {0}', message));
   }
 }

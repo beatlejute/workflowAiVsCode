@@ -5,6 +5,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketStatus } from '../data/types';
 
@@ -15,7 +16,7 @@ export async function executeShowStatistics(store: WorkflowStore): Promise<void>
   const tickets = store.getTickets();
 
   if (tickets.length === 0) {
-    vscode.window.showInformationMessage(vscode.l10n.t('No tickets to analyze'));
+    vscode.window.showInformationMessage(t('No tickets to analyze'));
     return;
   }
 
@@ -36,45 +37,45 @@ export async function executeShowStatistics(store: WorkflowStore): Promise<void>
 
   // Build summary
   const summary = [
-    vscode.l10n.t('📊 Workflow Statistics'),
+    t('📊 Workflow Statistics'),
     ``,
-    vscode.l10n.t('Total Tickets: {0}', tickets.length),
+    t('Total Tickets: {0}', tickets.length),
     ``,
-    vscode.l10n.t('━━━ By Status ━━━'),
+    t('━━━ By Status ━━━'),
     ...statusBars,
     ``,
-    vscode.l10n.t('━━━ By Type ━━━'),
+    t('━━━ By Type ━━━'),
     ...typeBars,
     ``,
-    vscode.l10n.t('━━━ By Priority ━━━'),
+    t('━━━ By Priority ━━━'),
     ...priorityBars
   ].join('\n');
 
-  // Show in QuickPick with copy option
+  // Build QuickPick items
   const items: vscode.QuickPickItem[] = [
     {
-      label: `$(graph) ${vscode.l10n.t('Statistics Summary')}`,
+      label: `$(graph) ${t('Statistics Summary')}`,
       description: '',
       detail: summary
     }
   ];
 
   await vscode.window.showQuickPick(items, {
-    placeHolder: vscode.l10n.t('Statistics'),
-    title: vscode.l10n.t('Statistics'),
+    placeHolder: t('Statistics'),
+    title: t('Statistics'),
     matchOnDescription: false,
     matchOnDetail: false
   });
 
   // Offer to copy to clipboard
   const copyAction = await vscode.window.showInformationMessage(
-    vscode.l10n.t('Copy statistics to clipboard?'),
-    vscode.l10n.t('Copy')
+    t('Copy statistics to clipboard?'),
+    t('Copy')
   );
 
   if (copyAction === 'Copy') {
     await vscode.env.clipboard.writeText(summary);
-    vscode.window.showInformationMessage(vscode.l10n.t('Statistics copied to clipboard'));
+    vscode.window.showInformationMessage(t('Statistics copied to clipboard'));
   }
 }
 

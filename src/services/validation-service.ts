@@ -9,6 +9,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
 import { Ticket, TicketStatus, WorkflowConfig, PipelineConfig } from '../data/types';
 import { WorkflowStore } from '../data/workflow-store';
@@ -97,7 +98,7 @@ const PIPELINE_SCHEMA = {
   properties: {
     pipeline: {
       type: 'object',
-      required: ['agents', 'stages', 'entry_point'],
+      required: ['agents', 'stages'],
       properties: {
         name: { type: 'string' },
         version: { type: 'string' },
@@ -131,12 +132,17 @@ const PIPELINE_SCHEMA = {
               goto: {
                 type: 'object',
                 additionalProperties: {
-                  type: 'object',
-                  required: ['stage'],
-                  properties: {
-                    stage: { type: 'string' },
-                    params: { type: 'object' }
-                  }
+                  oneOf: [
+                    { type: 'string' },
+                    {
+                      type: 'object',
+                      required: ['stage'],
+                      properties: {
+                        stage: { type: 'string' },
+                        params: { type: 'object' }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -215,7 +221,7 @@ export class ValidationService {
     if (!ticket) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        vscode.l10n.t('Ticket is undefined or could not be parsed'),
+        t('Ticket is undefined or could not be parsed'),
         vscode.DiagnosticSeverity.Error,
         'ticket'
       ));
@@ -236,7 +242,7 @@ export class ValidationService {
     if (config && config.task_types && !(ticket.type in config.task_types)) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        vscode.l10n.t('Unknown task type "{0}". Valid types: {1}', ticket.type, Object.keys(config.task_types).join(', ')),
+        t('Unknown task type "{0}". Valid types: {1}', ticket.type, Object.keys(config.task_types).join(', ')),
         vscode.DiagnosticSeverity.Warning,
         'type'
       ));
@@ -279,7 +285,7 @@ export class ValidationService {
       if (!depTicket) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          vscode.l10n.t('Dependency "{0}" does not exist', depId),
+          t('Dependency "{0}" does not exist', depId),
           vscode.DiagnosticSeverity.Error,
           'dependencies'
         ));
@@ -301,7 +307,7 @@ export class ValidationService {
         const cycleStr = cycle.cycle.join(' → ');
         diagnostics.push(this.createDiagnostic(
           uri,
-          vscode.l10n.t('Cyclic dependency detected: {0}', cycleStr),
+          t('Cyclic dependency detected: {0}', cycleStr),
           vscode.DiagnosticSeverity.Error,
           'dependencies'
         ));
@@ -353,7 +359,7 @@ export class ValidationService {
       if (!(entryPoint in pipeline.stages)) {
         diagnostics.push(this.createDiagnostic(
           uri,
-          vscode.l10n.t('Entry point "{0}" does not exist in stages', entryPoint),
+          t('Entry point "{0}" does not exist in stages', entryPoint),
           vscode.DiagnosticSeverity.Error,
           'entry_point'
         ));
@@ -365,10 +371,11 @@ export class ValidationService {
       for (const [stageName, stage] of Object.entries(pipeline.stages)) {
         if (stage.goto) {
           for (const [gotoName, goto] of Object.entries(stage.goto)) {
-            if (goto.stage && !(goto.stage in pipeline.stages)) {
+            const targetStage = typeof goto === 'string' ? goto : goto.stage;
+            if (targetStage && targetStage !== 'end' && !(targetStage in pipeline.stages)) {
               diagnostics.push(this.createDiagnostic(
                 uri,
-                vscode.l10n.t('Stage "{0}" goto "{1}" references non-existent stage "{2}"', stageName, gotoName, goto.stage),
+                t('Stage "{0}" goto "{1}" references non-existent stage "{2}"', stageName, gotoName, targetStage),
                 vscode.DiagnosticSeverity.Error,
                 `stages.${stageName}.goto.${gotoName}`
               ));
@@ -380,7 +387,7 @@ export class ValidationService {
         if (stage.agent && pipeline.agents && !(stage.agent in pipeline.agents)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            vscode.l10n.t('Stage "{0}" references non-existent agent "{1}"', stageName, stage.agent),
+            t('Stage "{0}" references non-existent agent "{1}"', stageName, stage.agent),
             vscode.DiagnosticSeverity.Error,
             `stages.${stageName}.agent`
           ));
@@ -407,7 +414,7 @@ export class ValidationService {
     if (!config.version) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        vscode.l10n.t('Missing required field "{0}"', 'version'),
+        t('Missing required field "{0}"', 'version'),
         vscode.DiagnosticSeverity.Error,
         'version'
       ));
@@ -416,7 +423,7 @@ export class ValidationService {
     if (!config.paths) {
       diagnostics.push(this.createDiagnostic(
         uri,
-        vscode.l10n.t('Missing required field "{0}"', 'paths'),
+        t('Missing required field "{0}"', 'paths'),
         vscode.DiagnosticSeverity.Error,
         'paths'
       ));
@@ -426,7 +433,7 @@ export class ValidationService {
         if (!(pathField in config.paths)) {
           diagnostics.push(this.createDiagnostic(
             uri,
-            vscode.l10n.t('Missing required path "{0}"', pathField),
+            t('Missing required path "{0}"', pathField),
             vscode.DiagnosticSeverity.Error,
             `paths.${pathField}`
           ));
@@ -528,21 +535,21 @@ export class ValidationService {
 
     switch (keyword) {
       case 'required':
-        return vscode.l10n.t('Missing required field "{0}"', (params as any).missingProperty);
+        return t('Missing required field "{0}"', (params as any).missingProperty);
       case 'type':
-        return vscode.l10n.t('Field "{0}" must be of type {1}', field, (params as any).type);
+        return t('Field "{0}" must be of type {1}', field, (params as any).type);
       case 'pattern':
-        return vscode.l10n.t('Field "{0}" does not match required pattern', field);
+        return t('Field "{0}" does not match required pattern', field);
       case 'enum':
-        return vscode.l10n.t('Field "{0}" must be one of: {1}', field, (params as any).allowedValues?.join(', '));
+        return t('Field "{0}" must be one of: {1}', field, (params as any).allowedValues?.join(', '));
       case 'minimum':
-        return vscode.l10n.t('Field "{0}" must be >= {1}', field, (params as any).limit);
+        return t('Field "{0}" must be >= {1}', field, (params as any).limit);
       case 'maximum':
-        return vscode.l10n.t('Field "{0}" must be <= {1}', field, (params as any).limit);
+        return t('Field "{0}" must be <= {1}', field, (params as any).limit);
       case 'minLength':
-        return vscode.l10n.t('Field "{0}" cannot be empty', field);
+        return t('Field "{0}" cannot be empty', field);
       default:
-        return vscode.l10n.t('Validation error: {0}', keyword);
+        return t('Validation error: {0}', keyword);
     }
   }
 

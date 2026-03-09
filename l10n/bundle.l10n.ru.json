@@ -216,5 +216,12 @@
   "wf move failed with code {0}: {1}": "wf move не удался с кодом {0}: {1}",
   "wf move failed: {0}": "wf move не удался: {0}",
   "Failed to read ticket file: {0}": "Не удалось прочитать файл тикета: {0}",
-  "Ticket {0} not found in dependency check": "Тикет {0} не найден при проверке зависимостей"
+  "Ticket {0} not found in dependency check": "Тикет {0} не найден при проверке зависимостей",
+  "Using VS Code locale": "Используется язык VS Code",
+  "Using locale: {0}": "Используется язык: {0}",
+  "Reload window to apply changes?": "Перезагрузить окно для применения изменений?",
+  "Reload": "Перезагрузить",
+  "No current plans available": "Нет текущих планов",
+  "Select plan to decompose": "Выберите план для декомпозиции",
+  "Decomposing plan {0}...": "Декомпозиция плана {0}..."
 }

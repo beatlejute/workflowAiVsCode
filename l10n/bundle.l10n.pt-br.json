@@ -216,5 +216,12 @@
   "wf move failed with code {0}: {1}": "wf move falhou com código {0}: {1}",
   "wf move failed: {0}": "wf move falhou: {0}",
   "Failed to read ticket file: {0}": "Falha ao ler arquivo do ticket: {0}",
-  "Ticket {0} not found in dependency check": "Ticket {0} não encontrado na verificação de dependências"
+  "Ticket {0} not found in dependency check": "Ticket {0} não encontrado na verificação de dependências",
+  "Using VS Code locale": "Usando localidade do VS Code",
+  "Using locale: {0}": "Usando localidade: {0}",
+  "Reload window to apply changes?": "Recarregar janela para aplicar alterações?",
+  "Reload": "Recarregar",
+  "No current plans available": "Nenhum plano atual disponível",
+  "Select plan to decompose": "Selecionar plano para decompor",
+  "Decomposing plan {0}...": "Decompondo plano {0}..."
 }
