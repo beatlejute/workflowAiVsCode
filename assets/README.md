@@ -2,25 +2,16 @@
 
 This directory contains visual assets for the extension.
 
-## Required: icon-128.png
+## Files
 
-**File:** `icon-128.png`
-**Size:** 128×128 pixels
-**Format:** PNG with transparency support
+### logo-final.svg
+**Source SVG** — master vector logo (kanban board + AI sparkles on dark gradient background).
+Used as the source for generating `icon-128.png`.
 
-This icon is displayed in the VS Code Marketplace for the extension.
+### icon-128.png
+**Marketplace icon** — 128×128 PNG, referenced in `package.json` → `"icon"`.
+Displayed in VS Code Marketplace and extension details.
 
-### Design Guidelines
-
-- Simple, recognizable symbol related to workflow/kanban
-- Works well at small sizes (also scales down to 16×16 for activity bar)
-- Contrasts well against light and dark backgrounds
-- Follows VS Code extension icon best practices
-
-### Placeholder
-
-Currently using a placeholder. Replace with a proper designed icon before publishing to VS Code Marketplace.
-
----
-
-**Note:** The icon path is referenced in `package.json` as `"icon": "assets/icon-128.png"`.
+### sidebar-icon.svg
+**Activity Bar icon** — monochrome SVG using `currentColor`, referenced in `package.json` → `viewsContainers.activitybar[0].icon`.
+Adapts to light/dark VS Code themes automatically.

@@ -2,7 +2,7 @@
   "name": "workflow-vscode",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "publisher": "workflow-ai",
   "license": "MIT",
   "icon": "assets/icon-128.png",
@@ -36,7 +36,7 @@
         {
           "id": "workflow-sidebar",
           "title": "%views.activitybar.workflow.title%",
-          "icon": "$(tasklist)"
+          "icon": "assets/sidebar-icon.svg"
         }
       ],
       "panel": [
@@ -381,37 +381,37 @@
       },
       {
         "command": "workflow.openHistoryLog",
-        "title": "Open Log",
+        "title": "%command.openHistoryLog.title%",
         "category": "%category.workflow%",
         "icon": "$(output)"
       },
       {
         "command": "workflow.openHistoryPlan",
-        "title": "Open Plan",
+        "title": "%command.openHistoryPlan.title%",
         "category": "%category.workflow%",
         "icon": "$(file)"
       },
       {
         "command": "workflow.openStageTicket",
-        "title": "Open Ticket",
+        "title": "%command.openStageTicket.title%",
         "category": "%category.workflow%",
         "icon": "$(file)"
       },
       {
         "command": "workflow.openStageLog",
-        "title": "Open Stage Log",
+        "title": "%command.openStageLog.title%",
         "category": "%category.workflow%",
         "icon": "$(output)"
       },
       {
         "command": "workflow.openStageReport",
-        "title": "Open Report",
+        "title": "%command.openStageReport.title%",
         "category": "%category.workflow%",
         "icon": "$(file)"
       },
       {
         "command": "workflow.createPlanFromFile",
-        "title": "Create Workflow Plan",
+        "title": "%command.createPlanFromFile.title%",
         "category": "%category.workflow%",
         "icon": "$(add)"
       }
@@ -796,15 +796,20 @@
     "pretest": "npm run test:compile",
     "test": "node ./src/test/runTests.mjs",
     "test:compile": "tsc -p tsconfig.test.json",
-    "test:unit": "mocha --require ts-node/register --ui tdd src/test/unit/**/*.test.ts",
+    "test:compile-tests": "tsc -p tsconfig.unit-test.json",
+    "test:unit": "npx c8 --check-coverage --clean npx mocha --ui tdd \"dist/unit-test/src/test/unit/**/*.test.js\" \"dist/unit-test/src/test/commands/**/*.test.js\" \"dist/unit-test/src/test/suite/**/*.test.js\"",
     "test:e2e": "node ./dist/test/test/e2e/runTests.js",
-    "test:coverage": "c8 --reporter=text --reporter=lcov npm run test:unit",
+    "test:coverage": "npm run test:compile-tests && c8 --clean npx mocha --ui tdd \"dist/unit-test/src/test/unit/**/*.test.js\" \"dist/unit-test/src/test/commands/**/*.test.js\"",
+    "compile-new-tests": "node compile-new-tests.mjs",
+    "coverage:run": "c8 --clean npx mocha --ui tdd \"dist/unit-test/src/test/unit/**/*.test.js\" \"dist/unit-test/src/test/commands/**/*.test.js\"",
+    "coverage:npx": "npx c8 npx mocha --ui tdd \"dist/unit-test/src/test/unit/**/*.test.js\" \"dist/unit-test/src/test/commands/**/*.test.js\"",
     "prepare": "husky"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.3.5",
+    "@types/sinon": "^21.0.0",
     "@types/vscode": "^1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
@@ -816,9 +821,11 @@
     "husky": "^9.1.7",
     "mocha": "^11.7.5",
     "pngjs": "^7.0.0",
+    "sinon": "^21.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.56.1"
+    "typescript-eslint": "^8.56.1",
+    "vscode": "file:./src/test/__mocks__/vscode-mock"
   },
   "dependencies": {
     "ajv": "^8.18.0",

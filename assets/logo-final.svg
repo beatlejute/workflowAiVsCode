@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A1A2E"/>
+      <stop offset="100%" style="stop-color:#16213E"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E040FB"/>
+      <stop offset="100%" style="stop-color:#536DFE"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="url(#bg)"/>
+  <!-- Kanban columns -->
+  <!-- Column 1 (Backlog) -->
+  <rect x="18" y="30" width="24" height="68" rx="1" fill="rgba(224,64,251,0.12)"/>
+  <rect x="22" y="38" width="16" height="10" rx="1" fill="#CE93D8"/>
+  <rect x="22" y="52" width="16" height="10" rx="1" fill="#CE93D8" opacity="0.6"/>
+  <rect x="22" y="66" width="16" height="10" rx="1" fill="#CE93D8" opacity="0.35"/>
+  <!-- Column 2 (In Progress, highlighted) -->
+  <rect x="52" y="30" width="24" height="68" rx="1" fill="rgba(224,64,251,0.18)"/>
+  <rect x="56" y="38" width="16" height="10" rx="1" fill="#E040FB"/>
+  <rect x="56" y="52" width="16" height="10" rx="1" fill="#AB47BC" opacity="0.8"/>
+  <!-- Column 3 (Done) -->
+  <rect x="86" y="30" width="24" height="68" rx="1" fill="rgba(83,109,254,0.12)"/>
+  <rect x="90" y="38" width="16" height="10" rx="1" fill="#536DFE"/>
+  <!-- Flow arrows between columns -->
+  <path d="M43 48 L51 48" stroke="url(#accent)" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <polygon points="51,46 55,48 51,50" fill="#E040FB" opacity="0.7"/>
+  <path d="M77 43 L85 43" stroke="url(#accent)" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <polygon points="85,41 89,43 85,45" fill="#536DFE" opacity="0.7"/>
+  <!-- AI sparkle (main) -->
+  <g transform="translate(64, 82)">
+    <path d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="white"/>
+  </g>
+  <!-- Small sparkles -->
+  <g transform="translate(98, 78)">
+    <path d="M0 -4 L1 -1 L4 0 L1 1 L0 4 L-1 1 L-4 0 L-1 -1 Z" fill="#CE93D8" opacity="0.7"/>
+  </g>
+  <g transform="translate(30, 85)">
+    <path d="M0 -3 L0.8 -0.8 L3 0 L0.8 0.8 L0 3 L-0.8 0.8 L-3 0 L-0.8 -0.8 Z" fill="#7C4DFF" opacity="0.6"/>
+  </g>
+</svg>

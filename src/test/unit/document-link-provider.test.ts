@@ -27,7 +27,7 @@ suite('DocumentLinkProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-links');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-links');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -128,6 +128,7 @@ reporting:
           stage: "done"
     done:
       description: "Done"
+  entry: analyze
   entry_point: "analyze"
   execution:
     max_steps: 100

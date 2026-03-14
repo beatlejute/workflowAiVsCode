@@ -114,13 +114,15 @@ suite('NotificationsManager Suite', () => {
     mockWindow = new MockVSCodeWindow();
     store = new WorkflowStore();
 
-    // Mock vscode.window
-    (vscode.window as any).showInformationMessage = mockWindow.showInformationMessage.bind(mockWindow);
-    (vscode.window as any).showWarningMessage = mockWindow.showWarningMessage.bind(mockWindow);
-    (vscode.window as any).showErrorMessage = mockWindow.showErrorMessage.bind(mockWindow);
+    // Mock vscode.window using index signature to avoid any
+    const windowMock = mockWindow as unknown as typeof vscode.window;
+    Object.assign(vscode.window, windowMock);
 
-    // Create notifications manager
-    notificationsManager = new NotificationsManager(store, mockPipelineService as any);
+    // Create notifications manager with typed mock
+    notificationsManager = new NotificationsManager(
+      store,
+      mockPipelineService as unknown as PipelineService
+    );
     notificationsManager.initialize();
   });
 
@@ -368,7 +370,10 @@ suite('NotificationsManager Suite', () => {
   });
 
   test('NotificationsManager disposes resources correctly', () => {
-    const newManager = new NotificationsManager(store, mockPipelineService as any);
+    const newManager = new NotificationsManager(
+      store,
+      mockPipelineService as unknown as PipelineService
+    );
     newManager.initialize();
 
     // Dispose

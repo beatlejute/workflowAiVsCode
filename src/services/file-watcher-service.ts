@@ -10,7 +10,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkflowStore } from '../data/workflow-store';
-import { Ticket, Plan, Report, WorkflowConfig, PipelineConfig, TicketStatus } from '../data/types';
+import { TicketStatus } from '../data/types';
+import { IFileWatcher } from '../interfaces/IFileWatcher';
 
 /**
  * Change classification result
@@ -27,22 +28,25 @@ interface ClassifiedChange {
  * Monitors .workflow directory for changes and updates store incrementally.
  * Implements debounce to prevent cascading updates from rapid file changes.
  */
-export class FileWatcherService implements vscode.Disposable {
+export class FileWatcherService implements vscode.Disposable, IFileWatcher {
   private readonly store: WorkflowStore;
   private readonly workflowRoot: string;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private debounceTimer: NodeJS.Timeout | undefined;
   private isOwnWrite = false;
-  private readonly debounceDelay = 100; // ms
+  private readonly debounceDelayChange = 300; // ms for change events
+  private readonly debounceDelayCreateDelete = 100; // ms for create/delete events
+  private readonly incrementalRefresh: boolean = true;
 
   /**
    * Create FileWatcherService
    * @param store - WorkflowStore to update on file changes
    * @param workflowRoot - Root directory of the workflow project
    */
-  constructor(store: WorkflowStore, workflowRoot: string) {
+  constructor(store: WorkflowStore, workflowRoot: string, incrementalRefresh: boolean = true) {
     this.store = store;
     this.workflowRoot = workflowRoot;
+    this.incrementalRefresh = incrementalRefresh;
     this.createWatcher();
   }
 
@@ -71,16 +75,16 @@ export class FileWatcherService implements vscode.Disposable {
 
   /**
    * Schedule a debounced refresh
-   * Resets timer on each call, executes after debounceDelay
+   * Resets timer on each call, executes after specified delay
    */
-  private scheduleRefresh(): void {
+  private scheduleRefresh(delay: number): void {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
 
     this.debounceTimer = setTimeout(() => {
       this.performRefresh();
-    }, this.debounceDelay);
+    }, delay);
   }
 
   /**
@@ -141,88 +145,67 @@ export class FileWatcherService implements vscode.Disposable {
   /**
    * Handle file creation event
    */
-  private handleFileCreate(uri: vscode.Uri): void {
+  private async handleFileCreate(uri: vscode.Uri): Promise<void> {
     if (this.isOwnWrite) {
       return;
     }
 
     const classification = this.classifyChange(uri);
 
-    switch (classification.entityType) {
-      case 'ticket':
-        this.scheduleRefresh();
-        break;
-      case 'plan':
-        this.scheduleRefresh();
-        break;
-      case 'report':
-        this.scheduleRefresh();
-        break;
-      case 'config':
-        this.scheduleRefresh();
-        break;
+    if (this.incrementalRefresh && classification.id) {
+      // Use incremental update for known entity types
+      if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
+        await this.store.updateFile(uri.fsPath, 'create');
+        return;
+      }
     }
+
+    // Fallback to full refresh
+    this.scheduleRefresh(this.debounceDelayCreateDelete);
   }
 
   /**
    * Handle file change event
    */
-  private handleFileChange(uri: vscode.Uri): void {
+  private async handleFileChange(uri: vscode.Uri): Promise<void> {
     if (this.isOwnWrite) {
       return;
     }
 
     const classification = this.classifyChange(uri);
 
-    switch (classification.entityType) {
-      case 'ticket':
-        if (classification.id) {
-          // Try incremental update first
-          this.scheduleRefresh();
-        } else {
-          this.scheduleRefresh();
-        }
-        break;
-      case 'plan':
-      case 'report':
-      case 'config':
-        this.scheduleRefresh();
-        break;
+    if (this.incrementalRefresh && classification.id) {
+      // Use incremental update for known entity types
+      if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
+        await this.store.updateFile(uri.fsPath, 'change');
+        return;
+      }
     }
+
+    // Fallback to full refresh
+    this.scheduleRefresh(this.debounceDelayChange);
   }
 
   /**
    * Handle file deletion event
    */
-  private handleFileDelete(uri: vscode.Uri): void {
+  private async handleFileDelete(uri: vscode.Uri): Promise<void> {
     if (this.isOwnWrite) {
       return;
     }
 
     const classification = this.classifyChange(uri);
 
-    switch (classification.entityType) {
-      case 'ticket':
-        if (classification.id) {
-          this.store.removeTicket(classification.id);
-        } else {
-          this.scheduleRefresh();
-        }
-        break;
-      case 'plan':
-        if (classification.id) {
-          this.store.removePlan(classification.id);
-        } else {
-          this.scheduleRefresh();
-        }
-        break;
-      case 'report':
-        this.scheduleRefresh();
-        break;
-      case 'config':
-        this.scheduleRefresh();
-        break;
+    if (this.incrementalRefresh && classification.id) {
+      // Use incremental update for known entity types
+      if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
+        await this.store.updateFile(uri.fsPath, 'delete');
+        return;
+      }
     }
+
+    // Fallback to full refresh
+    this.scheduleRefresh(this.debounceDelayCreateDelete);
   }
 
   /**
@@ -237,7 +220,7 @@ export class FileWatcherService implements vscode.Disposable {
       // Small delay to ensure file system events are processed
       setTimeout(() => {
         this.isOwnWrite = false;
-      }, this.debounceDelay * 2);
+      }, this.debounceDelayCreateDelete * 2);
     }
   }
 

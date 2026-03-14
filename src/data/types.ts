@@ -48,7 +48,8 @@ export interface TicketContext {
  */
 export interface ReviewEntry {
   date: string;
-  status: 'passed' | 'failed';
+  status: string;
+  icon: string;
   summary: string;
 }
 

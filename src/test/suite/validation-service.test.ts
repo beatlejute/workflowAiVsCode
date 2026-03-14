@@ -16,7 +16,7 @@ import * as yaml from 'js-yaml';
 import * as vscode from 'vscode';
 import { WorkflowStore } from '../../data/workflow-store';
 import { ValidationService } from '../../services/validation-service';
-import { Ticket, TicketStatus, WorkflowConfig, PipelineConfig } from '../../data/types';
+import { Ticket, WorkflowConfig, PipelineConfig } from '../../data/types';
 
 suite('ValidationService Suite', () => {
 
@@ -151,7 +151,7 @@ reporting:
   /**
    * Helper to load tickets into store from files
    */
-  async function loadTickets(dir: string) {
+  async function loadTickets(_dir: string) {
     createConfigFiles(path.join(testDir, '.workflow', 'config'));
     await store.refresh(path.join(testDir, '.workflow'));
   }
@@ -240,7 +240,7 @@ reporting:
         'ready',
         'Test Ticket',
         [],
-        { id: 'INVALID' } as any
+        { id: 'INVALID' } as Partial<Ticket>
       );
 
       await loadTickets(testDir);
@@ -318,7 +318,7 @@ reporting:
         'ready',
         'Test Ticket',
         [],
-        { priority: 10 } as any // Priority must be 1-5
+        { priority: 10 } as Partial<Ticket> // Priority must be 1-5
       );
 
       await loadTickets(testDir);
@@ -450,8 +450,7 @@ reporting:
               agent: 'default'
             }
           },
-          entry: 'entry',
-          // Missing entry_point
+          // Missing both entry_point and entry
           execution: {
             max_steps: 100,
             delay_between_stages: 0,
@@ -459,7 +458,7 @@ reporting:
             log_file: ''
           }
         }
-      } as any;
+      } as Partial<PipelineConfig>;
 
       const uri = vscode.Uri.file(path.join(testDir, 'pipeline.yaml'));
       const diagnostics = validationService.validatePipeline(uri, invalidPipeline);
@@ -606,7 +605,7 @@ reporting:
           reports: '.workflow/reports',
           archive: '.workflow/archive'
         }
-      } as any;
+      } as Partial<WorkflowConfig>;
 
       const uri = vscode.Uri.file(path.join(testDir, 'config.yaml'));
       const diagnostics = validationService.validateConfig(uri, invalidConfig);
@@ -629,7 +628,7 @@ reporting:
         paths: {
           tickets: '.workflow/tickets'
           // Missing plans, reports, archive
-        } as any,
+        } as Partial<WorkflowConfig['paths']>,
         reporting: {
           enabled: true,
           auto_generate: true
@@ -682,7 +681,7 @@ reporting:
       assert.ok(result.size > 0, 'Should have validation errors');
       // Check that at least one URI has diagnostics
       let foundError = false;
-      for (const [uri, diagnostics] of result.entries()) {
+      for (const [, diagnostics] of result.entries()) {
         if (diagnostics.length > 0) {
           foundError = true;
           break;
@@ -727,7 +726,7 @@ reporting:
         'ready',
         'Ticket A',
         [],
-        { type: 'UNKNOWN_TYPE' } as any
+        { type: 'UNKNOWN_TYPE' } as Partial<Ticket>
       );
 
       await loadTickets(testDir);

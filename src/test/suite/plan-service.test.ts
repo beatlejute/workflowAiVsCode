@@ -10,10 +10,9 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as yaml from 'js-yaml';
 import { WorkflowStore } from '../../data/workflow-store';
-import { PlanService, PlanProgress } from '../../services/plan-service';
-import { Plan, Ticket, TicketStatus } from '../../data/types';
+import { PlanService } from '../../services/plan-service';
+import { Plan, Ticket } from '../../data/types';
 
 suite('PlanService Suite', () => {
 
@@ -211,7 +210,7 @@ related_reports: []
   suite('getById()', () => {
 
     test('should return plan by ID', () => {
-      const plan = createPlanInStore('PLAN-001', 'Test Plan');
+      createPlanInStore('PLAN-001', 'Test Plan');
 
       const found = planService.getById('PLAN-001');
 
@@ -366,7 +365,7 @@ related_reports: []
 
     test('should update plan status to archived', async () => {
       createTestStructure(testDir);
-      const plan = createPlanInStore('PLAN-001', 'Test Plan', false);
+      createPlanInStore('PLAN-001', 'Test Plan', false);
 
       await planService.archive('PLAN-001');
 
@@ -376,7 +375,7 @@ related_reports: []
 
     test('should set completed_at date', async () => {
       createTestStructure(testDir);
-      const plan = createPlanInStore('PLAN-001', 'Test Plan', false);
+      createPlanInStore('PLAN-001', 'Test Plan', false);
 
       await planService.archive('PLAN-001');
 
@@ -465,6 +464,99 @@ related_reports: []
 
       assert.strictEqual(current.length, 0, 'getCurrent should return empty');
       assert.strictEqual(archivedPlans.length, 1, 'getArchived should return 1 plan');
+    });
+  });
+
+  suite('getWorkflowRoot()', () => {
+
+    test('should return workflow root path', () => {
+      const root = planService.getWorkflowRoot();
+      assert.strictEqual(root, path.join(testDir, '.workflow'));
+    });
+  });
+
+  suite('create() - Edge Cases', () => {
+
+    test('should use default template when template file not found', async () => {
+      // Don't create template file
+      const workflowDir = path.join(testDir, '.workflow');
+      const plansDir = path.join(workflowDir, 'plans');
+      fs.mkdirSync(plansDir, { recursive: true });
+
+      const plan = await planService.create('Test Plan');
+
+      assert.strictEqual(plan.id, 'PLAN-001', 'Should generate ID');
+      assert.strictEqual(plan.title, 'Test Plan', 'Should set title');
+      
+      // Verify file was created with default template
+      const filePath = path.join(testDir, '.workflow', 'plans', 'current', `${plan.id}.md`);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      assert.ok(content.includes('# Plan:'), 'Should include default plan header');
+    });
+
+    test('should handle non-PLAN IDs when generating next ID', async () => {
+      createTestStructure(testDir);
+      // Add a plan with non-standard ID
+      const nonStandardPlan = createPlanInStore('CUSTOM-001', 'Custom Plan');
+      store.addPlan(nonStandardPlan);
+
+      const plan = await planService.create('New Plan');
+
+      assert.strictEqual(plan.id, 'PLAN-001', 'Should start PLAN sequence at 001');
+    });
+
+    test('should handle gaps in plan numbering', async () => {
+      createTestStructure(testDir);
+      createPlanInStore('PLAN-001', 'Plan 1');
+      createPlanInStore('PLAN-005', 'Plan 5');
+      createPlanInStore('PLAN-010', 'Plan 10');
+
+      const plan = await planService.create('New Plan');
+
+      assert.strictEqual(plan.id, 'PLAN-011', 'Should generate next number after max');
+    });
+
+    test('should handle empty related_reports array', async () => {
+      createTestStructure(testDir);
+
+      const plan = await planService.create('Test Plan', {
+        related_reports: []
+      });
+
+      const filePath = path.join(testDir, '.workflow', 'plans', 'current', `${plan.id}.md`);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      assert.ok(content.includes('related_reports: []'), 'Should include empty related_reports');
+    });
+
+    test('should handle multiple related_reports', async () => {
+      createTestStructure(testDir);
+
+      const plan = await planService.create('Test Plan', {
+        related_reports: ['REPORT-001', 'REPORT-002', 'REPORT-003']
+      });
+
+      const filePath = path.join(testDir, '.workflow', 'plans', 'current', `${plan.id}.md`);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      assert.ok(content.includes('related_reports:'), 'Should include related_reports');
+      assert.ok(content.includes('- REPORT-001'), 'Should include first report');
+      assert.ok(content.includes('- REPORT-002'), 'Should include second report');
+      assert.ok(content.includes('- REPORT-003'), 'Should include third report');
+    });
+  });
+
+  suite('archive() - Edge Cases', () => {
+
+    test('should handle missing current file gracefully', async () => {
+      createTestStructure(testDir);
+      // Add plan to store but don't create file
+      const plan = createPlanInStore('PLAN-001', 'Test Plan');
+      store.addPlan(plan);
+
+      // Should not throw, should still update store
+      await planService.archive('PLAN-001');
+
+      const archived = store.getPlanById('PLAN-001');
+      assert.strictEqual(archived?.status, 'archived', 'Should update status in store');
     });
   });
 });

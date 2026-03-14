@@ -223,5 +223,6 @@
   "Reload": "Reload",
   "No current plans available": "No current plans available",
   "Select plan to decompose": "Select plan to decompose",
-  "Decomposing plan {0}...": "Decomposing plan {0}..."
+  "Decomposing plan {0}...": "Decomposing plan {0}...",
+  "Pipeline is running": "Pipeline is running"
 }

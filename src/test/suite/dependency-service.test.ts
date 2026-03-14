@@ -13,8 +13,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { WorkflowStore } from '../../data/workflow-store';
-import { DependencyService, CyclicDependency } from '../../services/dependency-service';
-import { Ticket, TicketStatus } from '../../data/types';
+import { DependencyService } from '../../services/dependency-service';
+import { Ticket } from '../../data/types';
 
 suite('DependencyService Suite', () => {
 
@@ -141,7 +141,7 @@ reporting:
   /**
    * Helper to load tickets into store from files
    */
-  async function loadTickets(dir: string) {
+  async function loadTickets(_dir: string) {
     createConfigFiles(path.join(testDir, '.workflow', 'config'));
     await store.refresh(path.join(testDir, '.workflow'));
   }

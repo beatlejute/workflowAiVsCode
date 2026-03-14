@@ -13,7 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 suite('I18n Completeness Tests', () => {
-  const projectRoot = path.join(__dirname, '../../../');
+  const projectRoot = path.join(__dirname, '../../../../../');
 
   test('package.nls.json should exist', () => {
     const packageNlsPath = path.join(projectRoot, 'package.nls.json');
@@ -216,9 +216,6 @@ suite('I18n Completeness Tests', () => {
     const packageJson = JSON.parse(
       fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8')
     );
-    const packageNls = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, 'package.nls.json'), 'utf-8')
-    );
 
     const hardcodedStrings: string[] = [];
 
@@ -236,7 +233,7 @@ suite('I18n Completeness Tests', () => {
 
     // Check views
     if (packageJson.contributes?.views) {
-      for (const [viewContainer, views] of Object.entries(packageJson.contributes.views)) {
+      for (const [, views] of Object.entries(packageJson.contributes.views)) {
         if (Array.isArray(views)) {
           for (const view of views) {
             if (view.name && !view.name.startsWith('%')) {
@@ -255,8 +252,8 @@ suite('I18n Completeness Tests', () => {
       }
       if (config.properties) {
         for (const [propKey, propValue] of Object.entries(config.properties)) {
-          const prop = propValue as any;
-          if (prop.description && !prop.description.startsWith('%')) {
+          const prop = propValue as Record<string, unknown>;
+          if (prop.description && typeof prop.description === 'string' && !prop.description.startsWith('%')) {
             hardcodedStrings.push(`property description: ${propKey}`);
           }
         }

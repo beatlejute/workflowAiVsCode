@@ -152,7 +152,7 @@ Ticket for testing movement between statuses.
       await vscode.commands.executeCommand('workflow.moveTicket', ticketId);
       // If we get here, command executed (QuickPick was shown or cancelled)
       assert.ok(true, 'workflow.moveTicket command should be executable');
-    } catch (error) {
+    } catch {
       // Command may fail if QuickPick is cancelled, which is expected
       assert.ok(true, 'workflow.moveTicket command was invoked');
     }

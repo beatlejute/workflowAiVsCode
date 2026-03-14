@@ -28,7 +28,7 @@ suite('KanbanTreeProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-kanban');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-kanban');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -89,14 +89,19 @@ paths:
     // Create pipeline.yaml
     fs.writeFileSync(
       path.join(tempDir, '.workflow', 'config', 'pipeline.yaml'),
-      `version: "1.0"
-stages:
-  - id: analyze
-    agent: claude
-    skill: analyze-report
-  - id: plan
-    agent: claude
-    skill: create-plan
+      `pipeline:
+  agents:
+    test-agent:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
+  stages:
+    execute:
+      description: "Execute task"
+      agent: test-agent
+      goto:
+        default: end
+  entry: execute
 `
     );
 
@@ -110,7 +115,7 @@ stages:
   suiteTeardown(() => {
     // Cleanup
     try {
-      fs.rmSync(path.join(__dirname, '../../../tmp/test-workflow-kanban'), {
+      fs.rmSync(path.join(__dirname, '../../../../../tmp/test-workflow-kanban'), {
         recursive: true,
         force: true
       });
@@ -340,8 +345,8 @@ stages:
         updated_at: '2026-03-05T00:00:00Z',
         completed_at: '',
         reviews: [
-          { date: '2026-03-06', status: 'passed', summary: 'Good work' },
-          { date: '2026-03-07', status: 'failed', summary: 'Needs fixes' }
+          { date: '2026-03-06', status: 'passed', icon: '✅', summary: 'Good work' },
+          { date: '2026-03-07', status: 'failed', icon: '❌', summary: 'Needs fixes' }
         ]
       };
 
@@ -380,12 +385,12 @@ stages:
         updated_at: '2026-03-05T00:00:00Z',
         completed_at: '',
         reviews: [
-          { date: '2026-03-06', status: 'passed', summary: 'Good' },
-          { date: '2026-03-07', status: 'passed', summary: 'Good' },
-          { date: '2026-03-08', status: 'passed', summary: 'Good' },
-          { date: '2026-03-09', status: 'passed', summary: 'Good' },
-          { date: '2026-03-10', status: 'failed', summary: 'Bad' },
-          { date: '2026-03-11', status: 'passed', summary: 'Good' }
+          { date: '2026-03-06', status: 'passed', icon: '✅', summary: 'Good' },
+          { date: '2026-03-07', status: 'passed', icon: '✅', summary: 'Good' },
+          { date: '2026-03-08', status: 'passed', icon: '✅', summary: 'Good' },
+          { date: '2026-03-09', status: 'passed', icon: '✅', summary: 'Good' },
+          { date: '2026-03-10', status: 'failed', icon: '❌', summary: 'Bad' },
+          { date: '2026-03-11', status: 'passed', icon: '✅', summary: 'Good' }
         ]
       };
 
@@ -395,7 +400,7 @@ stages:
       const badgeCount = (description.match(/✅/g) || []).length + (description.match(/❌/g) || []).length;
       
       assert.strictEqual(badgeCount, 4, 'Should show max 4 badges');
-      assert.ok(description.includes('+2'), 'Should show +2 for additional reviews');
+      assert.ok(description.includes('…'), 'Should show … for additional reviews');
     });
 
     test('does not show badges for tickets without reviews', () => {
@@ -429,7 +434,7 @@ stages:
   suite('KanbanTreeProvider', () => {
     let provider: KanbanTreeProvider;
 
-    beforeEach(() => {
+    setup(() => {
       store.clear();
     });
 
@@ -590,10 +595,11 @@ type: FIX
       const children = await provider.getChildren();
 
       assert.strictEqual(children.length, 3, 'Should have 3 tickets');
+      // Default sort is descending (sortAscending=false), so highest priority number first
       assert.strictEqual(
         children[0].ticket.priority,
-        1,
-        'First ticket should have priority 1'
+        3,
+        'First ticket should have priority 3 (descending sort)'
       );
       assert.strictEqual(
         children[1].ticket.priority,
@@ -602,8 +608,8 @@ type: FIX
       );
       assert.strictEqual(
         children[2].ticket.priority,
-        3,
-        'Third ticket should have priority 3'
+        1,
+        'Third ticket should have priority 1'
       );
     });
 
@@ -813,7 +819,7 @@ type: FIX
   });
 
   suite('KanbanTreeProvider with different statuses', () => {
-    beforeEach(() => {
+    setup(() => {
       store.clear();
     });
 
@@ -887,7 +893,7 @@ type: FIX
   });
 
   suite('KanbanTreeProvider Plan Filter Tests', () => {
-    beforeEach(() => {
+    setup(() => {
       store.clear();
     });
 
@@ -1015,6 +1021,122 @@ type: FIX
       provider.setPlanFilter('PLAN-999');
       const children = await provider.getChildren();
       assert.strictEqual(children.length, 0, 'Should show no tickets when plan does not match');
+    });
+  });
+
+  suite('KanbanTreeProvider handleTicketChange Tests', () => {
+    let provider: KanbanTreeProvider;
+    let store: WorkflowStore;
+
+    setup(() => {
+      store = new WorkflowStore();
+      provider = new KanbanTreeProvider(store, TicketStatus.InProgress);
+    });
+
+    teardown(() => {
+      provider.dispose();
+      store.clear();
+    });
+
+    test('incremental refresh updates only specific ticket when status matches', async () => {
+      const ticket: Ticket = {
+        id: 'INCR-001',
+        title: 'Incremental Test',
+        status: TicketStatus.InProgress,
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-001',
+        parent_task: '',
+        created_at: '2026-03-13T00:00:00Z',
+        updated_at: '2026-03-13T00:00:00Z',
+        completed_at: ''
+      };
+
+      provider.setWorkflowRoot(tempWorkflowRoot);
+      store.addTicket(ticket);
+
+      const childrenBefore = await provider.getChildren();
+      assert.strictEqual(childrenBefore.length, 1, 'Should have 1 ticket');
+
+      const updatedTicket: Ticket = {
+        ...ticket,
+        title: 'Updated Title'
+      };
+      store.updateTicket('INCR-001', updatedTicket);
+
+      const childrenAfter = await provider.getChildren();
+      assert.strictEqual(childrenAfter.length, 1, 'Should still have 1 ticket');
+    });
+
+    test('full refresh when ticket status changes to different column', async () => {
+      const ticket: Ticket = {
+        id: 'INCR-002',
+        title: 'Status Change Test',
+        status: TicketStatus.InProgress,
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-001',
+        parent_task: '',
+        created_at: '2026-03-13T00:00:00Z',
+        updated_at: '2026-03-13T00:00:00Z',
+        completed_at: ''
+      };
+
+      provider.setWorkflowRoot(tempWorkflowRoot);
+      store.addTicket(ticket);
+
+      const childrenBefore = await provider.getChildren();
+      assert.strictEqual(childrenBefore.length, 1, 'Should have 1 ticket');
+
+      const updatedTicket: Ticket = {
+        ...ticket,
+        status: TicketStatus.Done
+      };
+      store.updateTicket('INCR-002', updatedTicket);
+
+      const childrenAfter = await provider.getChildren();
+      assert.strictEqual(childrenAfter.length, 0, 'Should have 0 tickets after status change');
+    });
+
+    test('full refresh when ticket is removed', async () => {
+      const ticket: Ticket = {
+        id: 'INCR-003',
+        title: 'Remove Test',
+        status: TicketStatus.InProgress,
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: 'PLAN-001',
+        parent_task: '',
+        created_at: '2026-03-13T00:00:00Z',
+        updated_at: '2026-03-13T00:00:00Z',
+        completed_at: ''
+      };
+
+      provider.setWorkflowRoot(tempWorkflowRoot);
+      store.addTicket(ticket);
+
+      const childrenBefore = await provider.getChildren();
+      assert.strictEqual(childrenBefore.length, 1, 'Should have 1 ticket');
+
+      store.removeTicket('INCR-003');
+
+      const childrenAfter = await provider.getChildren();
+      assert.strictEqual(childrenAfter.length, 0, 'Should have 0 tickets after removal');
     });
   });
 });

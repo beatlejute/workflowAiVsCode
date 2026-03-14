@@ -8,23 +8,16 @@
  * ADR-005: Event-driven architecture for reactive UI updates
  */
 
-import * as vscode from 'vscode';
 import { t } from '../i18n';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
+import { SpawnFunction } from '../types/process-types';
 import { WorkflowStore } from '../data/workflow-store';
-import { Ticket, TicketStatus, FrontmatterResult } from '../data/types';
-import { parse as parseFrontmatter, serialize, updateFrontmatter } from '../data/frontmatter-parser';
+import { Ticket, TicketStatus } from '../data/types';
+import { parse as parseFrontmatter, serialize } from '../data/frontmatter-parser';
+import { ITicketService } from '../interfaces/ITicketService';
 
-/**
- * Spawn function type for dependency injection (testing)
- */
-export type SpawnFunction = (
-  command: string,
-  args: readonly string[],
-  options?: any
-) => ChildProcess;
 
 /**
  * Valid state machine transitions for tickets
@@ -44,7 +37,7 @@ const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
  *
  * Provides CRUD operations, state machine transitions, and wf CLI integration.
  */
-export class TicketService {
+export class TicketService implements ITicketService {
   private readonly store: WorkflowStore;
   private readonly workflowRoot: string;
   private readonly spawnFn: SpawnFunction;
@@ -134,13 +127,13 @@ export class TicketService {
     let templateContent: string;
     try {
       templateContent = await fs.readFile(templatePath, 'utf-8');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error);
       throw new Error(t('Failed to read ticket template: {0}', errorMessage));
     }
 
     // Parse template
-    const { frontmatter: templateFrontmatter, body } = parseFrontmatter<Record<string, unknown>>(templateContent);
+    const { body } = parseFrontmatter<Record<string, unknown>>(templateContent);
 
     // Build frontmatter
     const now = new Date().toISOString();
@@ -192,8 +185,8 @@ export class TicketService {
       priority: frontmatter.priority as number || 3,
       type: frontmatter.type as string || type.toLowerCase(),
       dependencies: frontmatter.dependencies as string[] || [],
-      conditions: frontmatter.conditions as any[] || [],
-      context: frontmatter.context as any || {},
+      conditions: frontmatter.conditions as any[] || [], // eslint-disable-line @typescript-eslint/no-explicit-any
+      context: frontmatter.context as any || {}, // eslint-disable-line @typescript-eslint/no-explicit-any
       tags: frontmatter.tags as string[] || [],
       complexity: frontmatter.complexity as string || 'medium',
       parent_plan: frontmatter.parent_plan as string || '',
@@ -288,8 +281,8 @@ export class TicketService {
     let content: string;
     try {
       content = await fs.readFile(sourcePath, 'utf-8');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error);
       throw new Error(t('Failed to read ticket file: {0}', errorMessage));
     }
 
@@ -376,8 +369,8 @@ export class TicketService {
     let content: string;
     try {
       content = await fs.readFile(filePath, 'utf-8');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error);
       throw new Error(t('Failed to read ticket file: {0}', errorMessage));
     }
 

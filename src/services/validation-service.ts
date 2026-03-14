@@ -11,10 +11,12 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
-import { Ticket, TicketStatus, WorkflowConfig, PipelineConfig } from '../data/types';
+import { join } from 'path';
+import { Ticket, WorkflowConfig, PipelineConfig } from '../data/types';
 import { WorkflowStore } from '../data/workflow-store';
 import { DependencyService } from './dependency-service';
 import { ConfigManager } from '../data/config-manager';
+import { PIPELINE_SCHEMA } from '../schemas/index';
 
 /**
  * Validation error with severity level
@@ -85,84 +87,6 @@ const TICKET_SCHEMA = {
     },
     completed_at: {
       type: 'string'
-    }
-  }
-};
-
-/**
- * Pipeline JSON Schema for AJV validation
- */
-const PIPELINE_SCHEMA = {
-  type: 'object',
-  required: ['pipeline'],
-  properties: {
-    pipeline: {
-      type: 'object',
-      required: ['agents', 'stages'],
-      properties: {
-        name: { type: 'string' },
-        version: { type: 'string' },
-        agents: {
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            required: ['command', 'args'],
-            properties: {
-              command: { type: 'string' },
-              args: { type: 'array', items: { type: 'string' } },
-              workdir: { type: 'string' },
-              description: { type: 'string' }
-            }
-          }
-        },
-        stages: {
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            required: ['description'],
-            properties: {
-              description: { type: 'string' },
-              agent: { type: 'string' },
-              fallback_agent: { type: 'string' },
-              skill: { type: 'string' },
-              type: { type: 'string' },
-              counter: { type: 'string' },
-              max: { type: 'number' },
-              timeout: { type: 'number' },
-              goto: {
-                type: 'object',
-                additionalProperties: {
-                  oneOf: [
-                    { type: 'string' },
-                    {
-                      type: 'object',
-                      required: ['stage'],
-                      properties: {
-                        stage: { type: 'string' },
-                        params: { type: 'object' }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        entry: { type: 'string' },
-        entry_point: { type: 'string' },
-        context: { type: 'object' },
-        execution: {
-          type: 'object',
-          required: ['max_steps', 'delay_between_stages', 'timeout_per_stage', 'log_file'],
-          properties: {
-            max_steps: { type: 'number' },
-            delay_between_stages: { type: 'number' },
-            timeout_per_stage: { type: 'number' },
-            log_file: { type: 'string' }
-          }
-        },
-        protected_files: { type: 'array', items: { type: 'string' } }
-      }
     }
   }
 };
@@ -280,7 +204,7 @@ export class ValidationService {
   private validateDependencyRefs(ticket: Ticket, uri: vscode.Uri): vscode.Diagnostic[] {
     const diagnostics: vscode.Diagnostic[] = [];
 
-    for (const depId of ticket.dependencies) {
+    for (const depId of (ticket.dependencies || [])) {
       const depTicket = this.store.getTicketById(depId);
       if (!depTicket) {
         diagnostics.push(this.createDiagnostic(
@@ -353,9 +277,16 @@ export class ValidationService {
     const diagnostics: vscode.Diagnostic[] = [];
     const pipeline = config.pipeline;
 
-    // Validate entry_point exists in stages
+    // Validate entry_point or entry is present and exists in stages
     const entryPoint = pipeline.entry_point || pipeline.entry;
-    if (entryPoint && pipeline.stages) {
+    if (!entryPoint) {
+      diagnostics.push(this.createDiagnostic(
+        uri,
+        t('Pipeline must have "entry_point" or "entry" field'),
+        vscode.DiagnosticSeverity.Error,
+        'entry_point'
+      ));
+    } else if (pipeline.stages) {
       if (!(entryPoint in pipeline.stages)) {
         diagnostics.push(this.createDiagnostic(
           uri,
@@ -463,7 +394,7 @@ export class ValidationService {
     const tickets = this.store.getTickets();
     for (const ticket of tickets) {
       const uri = vscode.Uri.file(
-        require('path').join(workflowRoot, '.workflow', 'tickets', ticket.status, `${ticket.id}.md`)
+        join(workflowRoot, '.workflow', 'tickets', ticket.status, `${ticket.id}.md`)
       );
       const diagnostics = this.validateTicket(uri, ticket);
       if (diagnostics.length > 0) {
@@ -475,14 +406,14 @@ export class ValidationService {
     try {
       const pipeline = this.store.getPipeline();
       if (pipeline) {
-        const pipelinePath = require('path').join(workflowRoot, '.workflow', 'config', 'pipeline.yaml');
+        const pipelinePath = join(workflowRoot, '.workflow', 'config', 'pipeline.yaml');
         const uri = vscode.Uri.file(pipelinePath);
         const diagnostics = this.validatePipeline(uri, pipeline);
         if (diagnostics.length > 0) {
           result.set(uri.toString(), diagnostics);
         }
       }
-    } catch (error) {
+    } catch {
       // Pipeline may not exist or be invalid
     }
 
@@ -490,14 +421,14 @@ export class ValidationService {
     try {
       const config = this.store.getConfig();
       if (config) {
-        const configPath = require('path').join(workflowRoot, '.workflow', 'config', 'config.yaml');
+        const configPath = join(workflowRoot, '.workflow', 'config', 'config.yaml');
         const uri = vscode.Uri.file(configPath);
         const diagnostics = this.validateConfig(uri, config);
         if (diagnostics.length > 0) {
           result.set(uri.toString(), diagnostics);
         }
       }
-    } catch (error) {
+    } catch {
       // Config may not exist or be invalid
     }
 
@@ -530,22 +461,23 @@ export class ValidationService {
    * Format a single AJV error into human-readable message
    */
   private formatAjvError(error: ErrorObject): string {
-    const { keyword, params, message } = error;
+    const { keyword, params } = error;
     const field = error.instancePath.slice(1) || 'root';
+    const paramsRecord = params as Record<string, unknown>;
 
     switch (keyword) {
       case 'required':
-        return t('Missing required field "{0}"', (params as any).missingProperty);
+        return t('Missing required field "{0}"', paramsRecord.missingProperty as string);
       case 'type':
-        return t('Field "{0}" must be of type {1}', field, (params as any).type);
+        return t('Field "{0}" must be of type {1}', field, paramsRecord.type as string);
       case 'pattern':
         return t('Field "{0}" does not match required pattern', field);
       case 'enum':
-        return t('Field "{0}" must be one of: {1}', field, (params as any).allowedValues?.join(', '));
+        return t('Field "{0}" must be one of: {1}', field, (paramsRecord.allowedValues as string[])?.join(', '));
       case 'minimum':
-        return t('Field "{0}" must be >= {1}', field, (params as any).limit);
+        return t('Field "{0}" must be >= {1}', field, paramsRecord.limit as number);
       case 'maximum':
-        return t('Field "{0}" must be <= {1}', field, (params as any).limit);
+        return t('Field "{0}" must be <= {1}', field, paramsRecord.limit as number);
       case 'minLength':
         return t('Field "{0}" cannot be empty', field);
       default:

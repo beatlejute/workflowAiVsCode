@@ -6,98 +6,10 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { safeLoad } from '../utils/yaml-utils';
 import { WorkflowConfig, PipelineConfig, ValidationError } from './types';
 import { EventEmitter } from 'events';
-
-/**
- * JSON Schema for config.yaml validation
- */
-const CONFIG_SCHEMA = {
-  type: 'object',
-  required: ['version', 'paths'],
-  properties: {
-    version: { type: 'string' },
-    project: { type: 'object' },
-    task_types: { type: 'object' },
-    priorities: { type: 'object' },
-    statuses: { type: 'object' },
-    condition_types: { type: 'object' },
-    paths: {
-      type: 'object',
-      required: ['tickets', 'plans', 'reports', 'archive'],
-      properties: {
-        tickets: { type: 'string' },
-        plans: { type: 'string' },
-        reports: { type: 'string' },
-        archive: { type: 'string' },
-        templates: { type: 'string' }
-      }
-    },
-    reporting: { type: 'object' }
-  }
-};
-
-/**
- * JSON Schema for pipeline.yaml validation
- */
-const PIPELINE_SCHEMA = {
-  type: 'object',
-  required: ['pipeline'],
-  properties: {
-    pipeline: {
-      type: 'object',
-      required: ['agents', 'stages', 'entry'],
-      properties: {
-        name: { type: 'string' },
-        version: { type: 'string' },
-        agents: { 
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            required: ['command', 'args'],
-            properties: {
-              command: { type: 'string' },
-              args: { type: 'array', items: { type: 'string' } },
-              workdir: { type: 'string' },
-              description: { type: 'string' }
-            }
-          }
-        },
-        stages: { 
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            required: ['description'],
-            properties: {
-              description: { type: 'string' },
-              agent: { type: 'string' },
-              fallback_agent: { type: 'string' },
-              skill: { type: 'string' },
-              type: { type: 'string' },
-              counter: { type: 'string' },
-              max: { type: 'number' },
-              timeout: { type: 'number' },
-              goto: { type: 'object' }
-            }
-          }
-        },
-        entry: { type: 'string' },
-        entry_point: { type: 'string' },
-        context: { type: 'object' },
-        execution: { 
-          type: 'object',
-          properties: {
-            max_steps: { type: 'number' },
-            delay_between_stages: { type: 'number' },
-            timeout_per_stage: { type: 'number' },
-            log_file: { type: 'string' }
-          }
-        },
-        protected_files: { type: 'array', items: { type: 'string' } }
-      }
-    }
-  }
-};
+import { CONFIG_SCHEMA, PIPELINE_SCHEMA } from '../schemas/index';
 
 /**
  * Validates data against a JSON schema
@@ -130,7 +42,6 @@ function validateSchema(data: unknown, schema: Record<string, unknown>, fieldPre
       if (key in obj && propSchema.type) {
         const value = obj[key];
         const expectedType = propSchema.type;
-        const actualType = Array.isArray(value) ? 'array' : typeof value;
 
         if (expectedType === 'array' && !Array.isArray(value)) {
           errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}` : key, message: `Field "${key}" must be an array` });
@@ -181,13 +92,12 @@ function validateSchema(data: unknown, schema: Record<string, unknown>, fieldPre
                 for (const [propKey, propSchema] of Object.entries(nestedProps)) {
                   if (propKey in nestedObj && propSchema.type) {
                     const propValue = nestedObj[propKey];
-                    const expectedPropType = propSchema.type;
-                    const actualPropType = Array.isArray(propValue) ? 'array' : typeof propValue;
+                    const _expectedPropType = propSchema.type;
 
-                    if (expectedPropType === 'array' && !Array.isArray(propValue)) {
+                    if (_expectedPropType === 'array' && !Array.isArray(propValue)) {
                       errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be an array` });
-                    } else if (expectedPropType !== 'array' && typeof propValue !== expectedPropType) {
-                      errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be of type ${expectedPropType}` });
+                    } else if (typeof propValue !== _expectedPropType) {
+                      errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be of type ${_expectedPropType}` });
                     }
                   }
                 }
@@ -230,7 +140,7 @@ export class ConfigManager {
   private async readYamlFile(filePath: string): Promise<unknown> {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      return yaml.load(content) as unknown;
+      return safeLoad(content) as unknown;
     } catch (error) {
       if (error instanceof Error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -334,6 +244,14 @@ export class ConfigManager {
   clearCache(): void {
     this.workflowConfig = null;
     this.pipelineConfig = null;
+  }
+
+  /**
+   * Dispose of the config manager and clean up resources
+   * Removes all event listeners to prevent memory leaks
+   */
+  dispose(): void {
+    this.eventEmitter.removeAllListeners();
   }
 }
 

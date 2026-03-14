@@ -95,7 +95,7 @@ export class PlanService {
 
     try {
       templateContent = await fs.readFile(templatePath, 'utf-8');
-    } catch (error) {
+    } catch {
       // Use default template if file not found
       templateContent = this.getDefaultTemplate();
     }
@@ -368,7 +368,7 @@ export class PlanService {
       const content = await fs.readFile(currentPath, 'utf-8');
       const { body: parsedBody } = parseFrontmatter<Plan>(content);
       body = parsedBody;
-    } catch (error) {
+    } catch {
       // If file not found, use empty body
       body = '';
     }
@@ -385,9 +385,9 @@ export class PlanService {
     // Remove from current location (atomic rename not possible across operations)
     try {
       await fs.unlink(currentPath);
-    } catch (error) {
+    } catch (_error) {
       // Ignore if file doesn't exist
-      console.error('Failed to remove current plan file ' + currentPath + ':', error);
+      console.error('Failed to remove current plan file ' + currentPath + ':', _error);
     }
 
     // Update store

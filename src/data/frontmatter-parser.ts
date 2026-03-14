@@ -1,11 +1,12 @@
 /**
  * Frontmatter Parser Module
- * 
+ *
  * Provides parsing and serialization of YAML frontmatter from markdown files.
  * Uses js-yaml for YAML operations with settings identical to wf CLI for roundtrip compatibility.
  */
 
 import * as yaml from 'js-yaml';
+import { safeLoad } from '../utils/yaml-utils';
 import { FrontmatterResult } from './types';
 
 /**
@@ -34,13 +35,10 @@ export function parse<T>(content: string): FrontmatterResult<T> {
   
   const frontmatterYaml = match[1];
   const body = content.slice(match[0].length);
-  
-  // Parse YAML using js-yaml with settings compatible with wf CLI
-  const frontmatter = yaml.load(frontmatterYaml, {
-    schema: yaml.DEFAULT_SCHEMA,
-    json: true
-  }) as T;
-  
+
+  // Parse YAML using safeLoad with JSON_SCHEMA for security
+  const frontmatter = safeLoad(frontmatterYaml) as T;
+
   return {
     frontmatter,
     body

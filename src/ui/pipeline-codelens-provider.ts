@@ -170,11 +170,11 @@ export class PipelineCodeLensProvider implements vscode.CodeLensProvider {
    * Create entry point CodeLens above the "entry:" line
    * Format: Entry Point -> {stage-id}
    */
-  private createEntryLens(
-    content: string,
-    pipeline: PipelineFullConfig,
-    totalStages: number
-  ): vscode.CodeLens | null {
+   private createEntryLens(
+     content: string,
+     pipeline: PipelineFullConfig,
+     _totalStages: number
+   ): vscode.CodeLens | null {
     if (!pipeline.entry) {
       return null;
     }

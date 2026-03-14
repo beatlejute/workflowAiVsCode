@@ -11,8 +11,8 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore } from '../../data/workflow-store';
-import { ReportService, ReportSummary, WorkflowStats } from '../../services/report-service';
-import { Report, Ticket, TicketStatus, TicketPriority } from '../../data/types';
+import { ReportService } from '../../services/report-service';
+import { Report, Ticket, TicketStatus } from '../../data/types';
 
 suite('ReportService Suite', () => {
 
@@ -126,7 +126,7 @@ suite('ReportService Suite', () => {
   suite('getById()', () => {
 
     test('should return report by ID', () => {
-      const report = createReportInStore('REPORT-001', 'Test Report', '2026-03-04T00:00:00Z');
+      createReportInStore('REPORT-001', 'Test Report', '2026-03-04T00:00:00Z');
 
       const found = reportService.getById('REPORT-001');
 
@@ -427,6 +427,97 @@ byPriority:
       const parsed = reportService.parseSummary(report!);
       assert.strictEqual(parsed.completed, 2, 'Should parse completed from report');
       assert.strictEqual(parsed.byType.IMPL, 3, 'Should parse IMPL count from report');
+    });
+  });
+
+  suite('parseSummary() - Edge Cases', () => {
+
+    test('should handle summary with only byType', () => {
+      const summaryYaml = `byType:
+  IMPL: 5
+  FIX: 3`;
+
+      const report = createReportInStore('REPORT-001', 'Test Report', '2026-03-04T00:00:00Z', summaryYaml);
+      const parsed = reportService.parseSummary(report);
+
+      assert.strictEqual(parsed.completed, 0, 'Should have 0 completed');
+      assert.strictEqual(parsed.failed, 0, 'Should have 0 failed');
+      assert.strictEqual(parsed.byType.IMPL, 5, 'Should parse IMPL');
+      assert.strictEqual(parsed.byType.FIX, 3, 'Should parse FIX');
+    });
+
+    test('should handle summary with only byPriority', () => {
+      const summaryYaml = `byPriority:
+  1: 2
+  2: 5`;
+
+      const report = createReportInStore('REPORT-001', 'Test Report', '2026-03-04T00:00:00Z', summaryYaml);
+      const parsed = reportService.parseSummary(report);
+
+      assert.strictEqual(parsed.byPriority[1], 2, 'Should parse priority 1');
+      assert.strictEqual(parsed.byPriority[2], 5, 'Should parse priority 2');
+    });
+
+    test('should handle invalid dates in tickets gracefully', () => {
+      const ticket: Ticket = {
+        id: 'TKT-001',
+        title: 'Ticket with invalid date',
+        status: TicketStatus.Done,
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: 'invalid-date',
+        updated_at: 'invalid-date',
+        completed_at: 'also-invalid'
+      };
+      store.addTicket(ticket);
+
+      const stats = reportService.getStatistics();
+      assert.strictEqual(stats.avgCompletionDays, 0, 'Should return 0 for invalid dates');
+    });
+  });
+
+  suite('getStatistics() - Edge Cases', () => {
+
+    test('should handle tickets with negative priority', () => {
+      createTicketInStore('TKT-001', 'Ticket 1', TicketStatus.Done, 'IMPL', -1);
+      createTicketInStore('TKT-002', 'Ticket 2', TicketStatus.Done, 'FIX', 0);
+
+      const stats = reportService.getStatistics();
+      assert.strictEqual(stats.byPriority[-1], 1, 'Should count negative priority');
+      assert.strictEqual(stats.byPriority[0], 1, 'Should count zero priority');
+    });
+
+    test('should handle single done ticket for avgCompletionDays', () => {
+      createTicketInStore(
+        'TKT-001',
+        'Ticket 1',
+        TicketStatus.Done,
+        'IMPL',
+        2,
+        '2026-03-01T00:00:00Z',
+        '2026-03-05T00:00:00Z'
+      );
+
+      const stats = reportService.getStatistics();
+      assert.strictEqual(stats.avgCompletionDays, 4, 'Should return 4 days for single ticket');
+    });
+
+    test('should initialize all status keys to 0', () => {
+      const stats = reportService.getStatistics();
+
+      assert.strictEqual(stats.byStatus[TicketStatus.Backlog], 0);
+      assert.strictEqual(stats.byStatus[TicketStatus.Ready], 0);
+      assert.strictEqual(stats.byStatus[TicketStatus.InProgress], 0);
+      assert.strictEqual(stats.byStatus[TicketStatus.Blocked], 0);
+      assert.strictEqual(stats.byStatus[TicketStatus.Review], 0);
+      assert.strictEqual(stats.byStatus[TicketStatus.Done], 0);
     });
   });
 });

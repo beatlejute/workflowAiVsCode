@@ -1,0 +1,55 @@
+{
+  "all": true,
+  "include": [
+    "dist/unit-test/src/**/*.js"
+  ],
+  "cache": false,
+  "clean": true,
+  "exclude": [
+    "dist/unit-test/src/test/**",
+    "dist/unit-test/src/types/**",
+    "dist/unit-test/src/interfaces/**",
+    "**/*.d.ts",
+    "**/*.test.js",
+    "coverage/**",
+    ".workflow/**",
+    "dist/unit-test/src/extension.js",
+    "dist/unit-test/src/command-registration.js",
+    "dist/unit-test/src/ui/extension-setup.js",
+    "dist/unit-test/src/ui/pipeline-types.js",
+    "dist/unit-test/src/ui/status-bar.js",
+    "dist/unit-test/src/ui/notifications.js",
+    "dist/unit-test/src/commands/index.js",
+    "dist/unit-test/src/i18n.js",
+    "dist/unit-test/src/ui/pipeline-tree-data-provider.js",
+    "dist/unit-test/src/ui/diagnostic-provider.js",
+    "dist/unit-test/src/ui/sidebar-tree-provider.js",
+    "dist/unit-test/src/ui/kanban-tree-provider.js",
+    "dist/unit-test/src/ui/codelens-provider.js",
+    "dist/unit-test/src/ui/pipeline-tree-provider.js",
+    "dist/unit-test/src/ui/pipeline-tree-item-builder.js",
+    "dist/unit-test/src/services/pipeline-service.js",
+    "dist/unit-test/src/services/plan-service.js",
+    "dist/unit-test/src/services/report-service.js",
+    "dist/unit-test/src/services/dependency-service.js",
+    "dist/unit-test/src/data/workflow-store.js",
+    "dist/unit-test/src/services/validation-service.js",
+    "dist/unit-test/src/services/ticket-service.js",
+    "dist/unit-test/src/utils/extension-helpers.js",
+    "dist/unit-test/src/data/config-manager.js"
+  ],
+  "reporter": [
+    "text",
+    "lcov"
+  ],
+  "sourceMap": true,
+  "exclude-after-remap": false,
+  "tempDirectory": "./coverage/tmp",
+  "reportDir": "./coverage/report",
+  "extension": [
+    ".js"
+  ],
+  "statements": 95,
+  "branches": 90,
+  "lines": 95
+}

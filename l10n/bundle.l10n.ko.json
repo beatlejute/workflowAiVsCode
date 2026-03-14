@@ -223,5 +223,6 @@
   "Reload": "다시 로드",
   "No current plans available": "현재 계획을 사용할 수 없음",
   "Select plan to decompose": "분해할 계획 선택",
-  "Decomposing plan {0}...": "계획 {0} 분해 중..."
+  "Decomposing plan {0}...": "계획 {0} 분해 중...",
+  "Pipeline is running": "파이프라인 실행 중"
 }

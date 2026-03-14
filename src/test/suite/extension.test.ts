@@ -32,14 +32,15 @@ suite('Extension Activation Suite', () => {
     } as unknown as vscode.ExtensionContext;
   }
 
-  suiteSetup(async () => {
-    // Activate once for all tests in this suite
+  setup(async () => {
+    // Activate for each test to ensure clean state
     context = createMockContext();
     await activate(context);
   });
 
-  suiteTeardown(async () => {
-    // Cleanup
+  teardown(async () => {
+    // Deactivate and cleanup after each test
+    deactivate();
     for (const d of disposables) {
       try {
         d.dispose();
@@ -47,10 +48,11 @@ suite('Extension Activation Suite', () => {
         // Ignore disposal errors
       }
     }
+    disposables = [];
   });
 
   test('activate() should not throw exceptions', async () => {
-    // Already activated in suiteSetup, just verify it succeeded
+    // Already activated in setup, just verify it succeeded
     const commands = await vscode.commands.getCommands();
     assert.ok(commands.length > 0, 'Extension should be activated');
   });
@@ -66,6 +68,29 @@ suite('Extension Activation Suite', () => {
 
     assert.ok(commands.includes('workflow.installCli'), 'workflow.installCli command should be registered');
     assert.ok(commands.includes('workflow.init'), 'workflow.init command should be registered');
+  });
+
+  test('activate then deactivate cleans up all resources', async () => {
+    // Activate extension (already done in setup)
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.length > 0, 'Extension should be activated');
+
+    // Deactivate extension
+    deactivate();
+
+    // Verify that no active watchers or registered commands remain
+    // This is a simple check that deactivate does not throw and container is disposed
+    // Since container is private, we can only verify that deactivate is idempotent
+    assert.doesNotThrow(() => {
+      deactivate(); // second call should not throw
+    });
+
+    // Verify that we can activate again (no leftover state)
+    const newContext = createMockContext();
+    await activate(newContext);
+    const newCommands = await vscode.commands.getCommands();
+    assert.ok(newCommands.length > 0, 'Extension should be activatable again');
+    deactivate(); // cleanup
   });
 });
 

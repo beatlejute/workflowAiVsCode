@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "./dist/unit-test",
+    "rootDir": ".",
+    "allowJs": true
+  },
+  "include": [
+    "src/test/**/*.ts",
+    "src/extension.ts",
+    "src/**/*.ts",
+    "scripts/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "ts-node": {
+    "transpileOnly": true
+  }
+}

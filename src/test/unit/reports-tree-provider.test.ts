@@ -21,7 +21,7 @@ suite('ReportsTreeProvider Sorting Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-reports');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-reports');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -70,7 +70,7 @@ statuses:
   suiteTeardown(() => {
     // Clean up temporary directory
     try {
-      fs.rmSync(path.join(__dirname, '../../../tmp/test-workflow-reports'), {
+      fs.rmSync(path.join(__dirname, '../../../../../tmp/test-workflow-reports'), {
         recursive: true,
         force: true
       });

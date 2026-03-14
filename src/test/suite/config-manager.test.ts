@@ -8,7 +8,6 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ConfigManager, ConfigValidationError } from '../../data/config-manager';
-import { WorkflowConfig, PipelineConfig } from '../../data/types';
 
 suite('ConfigManager Suite', () => {
 
@@ -25,9 +24,8 @@ suite('ConfigManager Suite', () => {
   suite('loadConfig() - Workflow Configuration', () => {
 
     test('should load valid config.yaml from real file', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
-      // workflowRoot is the .workflow directory
-      const workflowRoot = path.dirname(path.dirname(configPath));
+      // workflowRoot is the .workflow directory (use cwd() to work regardless of compilation depth)
+      const workflowRoot = path.join(process.cwd(), '.workflow');
 
       const config = await configManager.loadConfig(workflowRoot);
 
@@ -46,7 +44,7 @@ suite('ConfigManager Suite', () => {
 
     test('should throw ConfigValidationError for missing required fields', async () => {
       // Create a temp file with invalid config
-      const tempDir = path.join(__dirname, '../../../../tmp/test-config-' + Date.now());
+      const tempDir = path.join(process.cwd(), 'tmp/test-config-' + Date.now());
       const tempConfigDir = path.join(tempDir, '.workflow', 'config');
       const tempConfigPath = path.join(tempConfigDir, 'config.yaml');
       
@@ -69,7 +67,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should throw error for invalid YAML syntax', async () => {
-      const tempDir = path.join(__dirname, '../../../../tmp/test-config-' + Date.now());
+      const tempDir = path.join(process.cwd(), 'tmp/test-config-' + Date.now());
       const tempConfigDir = path.join(tempDir, '.workflow', 'config');
       const tempConfigPath = path.join(tempConfigDir, 'config.yaml');
       
@@ -94,7 +92,7 @@ suite('ConfigManager Suite', () => {
   suite('loadPipeline() - Pipeline Configuration', () => {
 
     test('should load valid pipeline.yaml from real file', async () => {
-      const pipelinePath = path.join(__dirname, '../../../../.workflow/config/pipeline.yaml');
+      const pipelinePath = path.join(process.cwd(), '.workflow/config/pipeline.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(pipelinePath));
 
@@ -115,7 +113,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should throw ConfigValidationError for missing required fields', async () => {
-      const tempDir = path.join(__dirname, '../../../../tmp/test-pipeline-' + Date.now());
+      const tempDir = path.join(process.cwd(), 'tmp/test-pipeline-' + Date.now());
       const tempConfigDir = path.join(tempDir, '.workflow', 'config');
       const tempPipelinePath = path.join(tempConfigDir, 'pipeline.yaml');
       
@@ -140,7 +138,7 @@ suite('ConfigManager Suite', () => {
   suite('Caching', () => {
 
     test('should return cached config on subsequent calls', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -155,7 +153,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should return cached pipeline on subsequent calls', async () => {
-      const pipelinePath = path.join(__dirname, '../../../../.workflow/config/pipeline.yaml');
+      const pipelinePath = path.join(process.cwd(), '.workflow/config/pipeline.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(pipelinePath));
 
@@ -166,7 +164,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should clear cache when reload() is called', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -194,7 +192,7 @@ suite('ConfigManager Suite', () => {
   suite('onDidChange Event', () => {
 
     test('should fire onDidChange event when reload() is called', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -214,7 +212,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should fire onDidChange event for each reload call', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -248,7 +246,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should return cached config after loadConfig', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -261,7 +259,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should return cached pipeline after loadPipeline', async () => {
-      const pipelinePath = path.join(__dirname, '../../../../.workflow/config/pipeline.yaml');
+      const pipelinePath = path.join(process.cwd(), '.workflow/config/pipeline.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(pipelinePath));
 
@@ -277,7 +275,7 @@ suite('ConfigManager Suite', () => {
   suite('clearCache()', () => {
 
     test('should clear cached config', async () => {
-      const configPath = path.join(__dirname, '../../../../.workflow/config/config.yaml');
+      const configPath = path.join(process.cwd(), '.workflow/config/config.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(configPath));
 
@@ -290,7 +288,7 @@ suite('ConfigManager Suite', () => {
     });
 
     test('should clear cached pipeline', async () => {
-      const pipelinePath = path.join(__dirname, '../../../../.workflow/config/pipeline.yaml');
+      const pipelinePath = path.join(process.cwd(), '.workflow/config/pipeline.yaml');
       // workflowRoot is the .workflow directory
       const workflowRoot = path.dirname(path.dirname(pipelinePath));
 

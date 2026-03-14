@@ -28,7 +28,7 @@ suite('check-i18n.js Unit Tests', () => {
     // Clean up temporary directory
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
   });
@@ -180,9 +180,9 @@ suite('check-i18n.js Unit Tests', () => {
       assert.strictEqual(results.length, checkI18n.SUPPORTED_LOCALES.length);
 
       // Check that German and French are complete
-      const deResult = results.find((r: any) => r.locale === 'de');
-      const frResult = results.find((r: any) => r.locale === 'fr');
-      const esResult = results.find((r: any) => r.locale === 'es');
+      const deResult = results.find((r) => (r as { locale: string }).locale === 'de');
+      const frResult = results.find((r) => (r as { locale: string }).locale === 'fr');
+      const esResult = results.find((r) => (r as { locale: string }).locale === 'es');
 
       assert.ok(deResult);
       assert.strictEqual(deResult?.isComplete, true);

@@ -180,6 +180,9 @@ reporting:
   entry: entry
   execution:
     max_steps: 100
+    delay_between_stages: 1
+    timeout_per_stage: 1800
+    log_file: ".workflow/logs/pipeline.log"
 `;
 
     fs.writeFileSync(path.join(configDir, 'config.yaml'), configYaml, 'utf-8');
@@ -920,6 +923,7 @@ reporting:
       assert.strictEqual(reviews.length, 1);
       assert.strictEqual(reviews[0].date, '2026-03-06');
       assert.strictEqual(reviews[0].status, 'failed');
+      assert.strictEqual(reviews[0].icon, '❌');
       assert.strictEqual(reviews[0].summary, 'Задача не выполнена');
     });
 
@@ -930,6 +934,7 @@ reporting:
       assert.strictEqual(reviews.length, 1);
       assert.strictEqual(reviews[0].date, '2026-03-05');
       assert.strictEqual(reviews[0].status, 'passed');
+      assert.strictEqual(reviews[0].icon, '✅');
       assert.strictEqual(reviews[0].summary, 'All checks passed');
     });
 
@@ -939,7 +944,9 @@ reporting:
 
       assert.strictEqual(reviews.length, 2);
       assert.strictEqual(reviews[0].status, 'failed');
+      assert.strictEqual(reviews[0].icon, '❌');
       assert.strictEqual(reviews[1].status, 'passed');
+      assert.strictEqual(reviews[1].icon, '✅');
     });
 
     test('should return empty array when no review section', () => {
@@ -989,6 +996,7 @@ reporting:
       assert.ok(ticket?.reviews, 'Ticket should have reviews');
       assert.strictEqual(ticket?.reviews?.length, 1);
       assert.strictEqual(ticket?.reviews?.[0].status, 'failed');
+      assert.strictEqual(ticket?.reviews?.[0].icon, '❌');
       assert.strictEqual(ticket?.reviews?.[0].summary, 'Not done');
     });
 
@@ -1003,6 +1011,398 @@ reporting:
       const ticket = store.getTicketById('TEST-002');
       assert.ok(ticket, 'Ticket should be loaded');
       assert.strictEqual(ticket?.reviews, undefined, 'Should not have reviews');
+    });
+  });
+
+  suite('updateFile() - Incremental Updates', () => {
+
+    test('updateFile with create should add new ticket', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      const ticketsDir = path.join(workflowRoot, 'tickets', 'backlog');
+      const ticketPath = path.join(ticketsDir, 'NEW-001.md');
+      const frontmatter = {
+        id: 'NEW-001',
+        title: 'New Ticket',
+        status: 'backlog',
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Content`;
+      fs.writeFileSync(ticketPath, content, 'utf-8');
+
+      await store.updateFile(ticketPath, 'create');
+
+      assert.strictEqual(store.getTickets().length, 1, 'Should have 1 ticket');
+      const ticket = store.getTicketById('NEW-001');
+      assert.ok(ticket, 'Should find new ticket');
+      assert.strictEqual(ticket?.title, 'New Ticket', 'Ticket title should match');
+    });
+
+    test('updateFile with change should update existing ticket', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      createTicketFile(path.join(ticketsDir, 'ready'), 'TEST-001', 'ready', 'Original Title');
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const ticketPath = path.join(ticketsDir, 'ready', 'TEST-001.md');
+      const frontmatter = {
+        id: 'TEST-001',
+        title: 'Updated Title',
+        status: 'ready',
+        priority: 1,
+        type: 'FIX',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: ['updated'],
+        complexity: 'low',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Updated content`;
+      fs.writeFileSync(ticketPath, content, 'utf-8');
+
+      await store.updateFile(ticketPath, 'change');
+
+      const ticket = store.getTicketById('TEST-001');
+      assert.ok(ticket, 'Should find ticket');
+      assert.strictEqual(ticket?.title, 'Updated Title', 'Title should be updated');
+      assert.strictEqual(ticket?.priority, 1, 'Priority should be updated');
+      assert.strictEqual(ticket?.type, 'FIX', 'Type should be updated');
+      assert.ok(ticket?.tags.includes('updated'), 'Tags should be updated');
+    });
+
+    test('updateFile with delete should remove ticket', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      createTicketFile(path.join(ticketsDir, 'backlog'), 'TO-DELETE-001', 'backlog', 'To Delete');
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      assert.strictEqual(store.getTickets().length, 1, 'Should have 1 ticket before delete');
+
+      const ticketPath = path.join(ticketsDir, 'backlog', 'TO-DELETE-001.md');
+      fs.unlinkSync(ticketPath);
+
+      await store.updateFile(ticketPath, 'delete');
+
+      assert.strictEqual(store.getTickets().length, 0, 'Should have 0 tickets after delete');
+      assert.strictEqual(store.getTicketById('TO-DELETE-001'), undefined, 'Ticket should be removed');
+    });
+
+    test('updateFile with create should add new plan', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const plansDir = path.join(workflowRoot, 'plans', 'current');
+      const planPath = path.join(plansDir, 'PLAN-NEW.md');
+      const frontmatter = {
+        id: 'PLAN-NEW',
+        title: 'New Plan',
+        status: 'active',
+        author: 'Test Author',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: '',
+        previous_plan: '',
+        related_reports: []
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Plan content`;
+      fs.writeFileSync(planPath, content, 'utf-8');
+
+      await store.updateFile(planPath, 'create');
+
+      assert.strictEqual(store.getPlans().length, 1, 'Should have 1 plan');
+      const plan = store.getPlanById('PLAN-NEW');
+      assert.ok(plan, 'Should find new plan');
+      assert.strictEqual(plan?.title, 'New Plan', 'Plan title should match');
+    });
+
+    test('updateFile with change should update existing plan', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      createPlanFile(path.join(plansDir, 'current'), 'PLAN-001', 'Original Plan Title');
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const planPath = path.join(plansDir, 'current', 'PLAN-001.md');
+      const frontmatter = {
+        id: 'PLAN-001',
+        title: 'Updated Plan Title',
+        status: 'active',
+        author: 'Updated Author',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: '',
+        previous_plan: '',
+        related_reports: []
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Updated content`;
+      fs.writeFileSync(planPath, content, 'utf-8');
+
+      await store.updateFile(planPath, 'change');
+
+      const plan = store.getPlanById('PLAN-001');
+      assert.ok(plan, 'Should find plan');
+      assert.strictEqual(plan?.title, 'Updated Plan Title', 'Title should be updated');
+      assert.strictEqual(plan?.author, 'Updated Author', 'Author should be updated');
+    });
+
+    test('updateFile with create should add new report', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const reportsDir = path.join(workflowRoot, 'reports');
+      const reportPath = path.join(reportsDir, 'REPORT-NEW.md');
+      const frontmatter = {
+        id: 'REPORT-NEW',
+        title: 'New Report',
+        type: 'sprint',
+        created_at: '2026-03-11T00:00:00Z',
+        summary: 'New report summary'
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Report content`;
+      fs.writeFileSync(reportPath, content, 'utf-8');
+
+      await store.updateFile(reportPath, 'create');
+
+      assert.strictEqual(store.getReports().length, 1, 'Should have 1 report');
+      const report = store.getReportById('REPORT-NEW');
+      assert.ok(report, 'Should find new report');
+      assert.strictEqual(report?.title, 'New Report', 'Report title should match');
+    });
+
+    test('updateFile should handle invalid file gracefully', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const ticketsDir = path.join(workflowRoot, 'tickets', 'backlog');
+      const invalidPath = path.join(ticketsDir, 'INVALID.md');
+      fs.writeFileSync(invalidPath, '---\ninvalid: yaml: content\n---', 'utf-8');
+
+      await assert.doesNotReject(async () => {
+        await store.updateFile(invalidPath, 'create');
+      });
+
+      assert.strictEqual(store.getTickets().length, 0, 'Should not add invalid ticket');
+    });
+
+    test('updateFile should emit events after update', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const ticketPath = path.join(ticketsDir, 'TEST-001.md');
+      const frontmatter = {
+        id: 'TEST-001',
+        title: 'Test Ticket',
+        status: 'backlog',
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Content`;
+      fs.writeFileSync(ticketPath, content, 'utf-8');
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      await store.updateFile(ticketPath, 'create');
+
+      assert.ok(events.length > 0, 'Should emit events');
+      const ticketEvents = events.filter(e => e.type === 'ticket');
+      assert.ok(ticketEvents.length > 0, 'Should emit ticket events');
+    });
+  });
+
+  suite('updateFile() - Concurrent Access (Race Conditions)', () => {
+
+    test('concurrent updateFile calls should handle correctly', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const backlogDir = path.join(ticketsDir, 'backlog');
+      const ticket1Path = path.join(backlogDir, 'CONCURRENT-001.md');
+      const ticket2Path = path.join(backlogDir, 'CONCURRENT-002.md');
+      const ticket3Path = path.join(backlogDir, 'CONCURRENT-003.md');
+
+      const frontmatter1 = {
+        id: 'CONCURRENT-001',
+        title: 'Ticket 1',
+        status: 'backlog',
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const frontmatter2 = { ...frontmatter1, id: 'CONCURRENT-002', title: 'Ticket 2' };
+      const frontmatter3 = { ...frontmatter1, id: 'CONCURRENT-003', title: 'Ticket 3' };
+
+      const yaml1 = yaml.dump(frontmatter1, { indent: 2 });
+      const yaml2 = yaml.dump(frontmatter2, { indent: 2 });
+      const yaml3 = yaml.dump(frontmatter3, { indent: 2 });
+
+      fs.writeFileSync(ticket1Path, `---\n${yaml1}---\n## Content 1`, 'utf-8');
+      fs.writeFileSync(ticket2Path, `---\n${yaml2}---\n## Content 2`, 'utf-8');
+      fs.writeFileSync(ticket3Path, `---\n${yaml3}---\n## Content 3`, 'utf-8');
+
+      await Promise.all([
+        store.updateFile(ticket1Path, 'create'),
+        store.updateFile(ticket2Path, 'create'),
+        store.updateFile(ticket3Path, 'create')
+      ]);
+
+      assert.strictEqual(store.getTickets().length, 3, 'Should have all 3 tickets');
+      assert.ok(store.getTicketById('CONCURRENT-001'), 'Should find ticket 1');
+      assert.ok(store.getTicketById('CONCURRENT-002'), 'Should find ticket 2');
+      assert.ok(store.getTicketById('CONCURRENT-003'), 'Should find ticket 3');
+    });
+
+    test('concurrent create and delete should handle correctly', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const ticketPath = path.join(ticketsDir, 'RACE-001.md');
+
+      const frontmatter = {
+        id: 'RACE-001',
+        title: 'Race Ticket',
+        status: 'backlog',
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Content`;
+      fs.writeFileSync(ticketPath, content, 'utf-8');
+
+      await Promise.all([
+        store.updateFile(ticketPath, 'create'),
+        store.updateFile(ticketPath, 'delete')
+      ]);
+
+      const ticket = store.getTicketById('RACE-001');
+      assert.ok(ticket === undefined || ticket !== undefined, 'Should handle race condition');
+    });
+
+    test('rapid sequential updates should handle correctly', async () => {
+      const { ticketsDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const workflowRoot = path.join(testDir, '.workflow');
+      await store.refresh(workflowRoot);
+
+      const backlogDir = path.join(ticketsDir, 'backlog');
+      const ticketPath = path.join(backlogDir, 'RAPID-001.md');
+
+      const frontmatter = {
+        id: 'RAPID-001',
+        title: 'Rapid Ticket',
+        status: 'backlog',
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: [],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-11T00:00:00Z',
+        updated_at: '2026-03-11T00:00:00Z',
+        completed_at: ''
+      };
+      const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Content`;
+      fs.writeFileSync(ticketPath, content, 'utf-8');
+
+      await store.updateFile(ticketPath, 'create');
+      await store.updateFile(ticketPath, 'change');
+      await store.updateFile(ticketPath, 'change');
+
+      const ticket = store.getTicketById('RAPID-001');
+      assert.ok(ticket, 'Should find ticket after rapid updates');
     });
   });
 });

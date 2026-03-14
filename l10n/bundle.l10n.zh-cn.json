@@ -223,5 +223,6 @@
   "Reload": "重新加载",
   "No current plans available": "没有当前计划可用",
   "Select plan to decompose": "选择要分解的计划",
-  "Decomposing plan {0}...": "正在分解计划 {0}..."
+  "Decomposing plan {0}...": "正在分解计划 {0}...",
+  "Pipeline is running": "流水线正在运行"
 }

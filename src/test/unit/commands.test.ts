@@ -25,7 +25,7 @@ suite('Command Handlers Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-commands');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-commands');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -37,6 +37,7 @@ suite('Command Handlers Tests', () => {
     fs.mkdirSync(path.join(tempDir, '.workflow', 'tickets', 'done'), { recursive: true });
     fs.mkdirSync(path.join(tempDir, '.workflow', 'plans', 'current'), { recursive: true });
     fs.mkdirSync(path.join(tempDir, '.workflow', 'config'), { recursive: true });
+    fs.mkdirSync(path.join(tempDir, '.workflow', 'templates'), { recursive: true });
 
     // Create minimal config.yaml
     fs.writeFileSync(
@@ -73,10 +74,19 @@ statuses:
     // Create pipeline.yaml
     fs.writeFileSync(
       path.join(tempDir, '.workflow', 'config', 'pipeline.yaml'),
-      `version: "1.0"
-stages:
-  - name: "Execute Task"
-    type: "task"
+      `pipeline:
+  agents:
+    test-agent:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
+  stages:
+    execute:
+      description: "Execute task"
+      agent: test-agent
+      goto:
+        default: end
+  entry: execute
 `
     );
 

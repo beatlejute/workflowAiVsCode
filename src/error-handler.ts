@@ -347,6 +347,45 @@ export function getErrorHandler(): ErrorHandler {
 }
 
 /**
+ * Universal error handling wrapper for async operations.
+ * Eliminates duplicated try/catch blocks by providing a single, consistent
+ * error handling pattern with logging and user notifications.
+ *
+ * @template T - The return type of the wrapped function
+ * @param fn - The async function to wrap
+ * @param onError - Optional custom error handler. If not provided, shows a default error message
+ * @returns Promise resolving to T on success, undefined on error
+ *
+ * @example
+ * ```typescript
+ * const result = await withErrorHandling(
+ *   async () => await someAsyncOperation(),
+ *   (error) => {
+ *     console.error('Custom handling:', error.message);
+ *   }
+ * );
+ * ```
+ */
+export async function withErrorHandling<T>(
+  fn: () => Promise<T>,
+  onError?: (error: Error) => void
+): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    const handler = getErrorHandler();
+    handler.handleError(err, 'withErrorHandling', {
+      showMessage: !onError
+    });
+    if (onError) {
+      onError(err);
+    }
+    return undefined;
+  }
+}
+
+/**
  * Initialize the global error handler with default settings.
  * Call this during extension activation.
  */

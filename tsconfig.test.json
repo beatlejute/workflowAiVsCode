@@ -13,13 +13,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node", "mocha"]
+    "types": ["node", "mocha", "sinon"]
   },
   "include": ["src/test/**/*.ts", "src/extension.ts"],
   "exclude": [
     "node_modules",
-    "dist",
-    "src/test/unit/hover-provider.test.ts",
-    "src/test/unit/completion-provider.test.ts"
+    "dist"
   ]
 }

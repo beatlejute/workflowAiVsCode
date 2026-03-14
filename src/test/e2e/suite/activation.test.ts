@@ -10,17 +10,14 @@
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import * as path from 'path';
 
 suite('Extension Activation Tests', () => {
-  let workflowRoot: string;
 
   suiteSetup(async () => {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
       throw new Error('No workspace folders found');
     }
-    workflowRoot = workspaceFolders[0].uri.fsPath;
 
     // Extension activates automatically on startup, wait for it to be ready
     await new Promise(resolve => setTimeout(resolve, 1000));

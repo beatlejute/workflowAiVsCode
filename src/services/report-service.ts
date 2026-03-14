@@ -9,12 +9,9 @@
  * ADR-002: Files are source of truth, WorkflowStore provides in-memory cache
  */
 
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { WorkflowStore } from '../data/workflow-store';
-import { Report, Ticket, TicketStatus } from '../data/types';
-import { parse as parseFrontmatter } from '../data/frontmatter-parser';
-import * as yaml from 'js-yaml';
+import { Report, TicketStatus } from '../data/types';
+import { safeLoad } from '../utils/yaml-utils';
 
 /**
  * Report summary data parsed from frontmatter
@@ -108,8 +105,8 @@ export class ReportService {
     }
 
     try {
-      // Parse the summary field as YAML
-      const parsedSummary = yaml.load(report.summary) as Record<string, unknown>;
+      // Parse the summary field as YAML using safeLoad
+      const parsedSummary = safeLoad(report.summary) as Record<string, unknown>;
 
       if (!parsedSummary) {
         return summary;

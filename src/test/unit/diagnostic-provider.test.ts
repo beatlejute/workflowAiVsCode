@@ -16,6 +16,12 @@ import { WorkflowStore } from '../../data/workflow-store';
 import { DiagnosticProvider } from '../../ui/diagnostic-provider';
 import { Ticket, TicketStatus } from '../../data/types';
 
+// Mock TextDocument interface for testing
+interface MockTextDocument {
+  uri: vscode.Uri;
+  getText: () => string;
+}
+
 suite('DiagnosticProvider Tests', () => {
   let store: WorkflowStore;
   let diagnosticProvider: DiagnosticProvider;
@@ -26,7 +32,7 @@ suite('DiagnosticProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow');
     
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -104,6 +110,7 @@ reporting:
           stage: "done"
     done:
       description: "Done"
+  entry: analyze
   entry_point: "analyze"
   execution:
     max_steps: 100
@@ -174,8 +181,9 @@ Test ticket content.
 `
       );
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Explicitly trigger validation (mock file watchers don't fire)
+      const doc = await vscode.workspace.openTextDocument(ticketPath);
+      diagnosticProvider.validateDocument(doc);
 
       // Validate - should have no errors
       const diagnostics = diagnosticProvider.diagnosticCollection.get(testTicketUri);
@@ -197,8 +205,9 @@ Missing required fields.
 `
       );
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Explicitly trigger validation
+      const doc = await vscode.workspace.openTextDocument(invalidTicketPath);
+      diagnosticProvider.validateDocument(doc);
 
       const diagnostics = diagnosticProvider.diagnosticCollection.get(invalidTicketUri);
       assert.ok(diagnostics && diagnostics.length > 0, 'Invalid ticket should produce diagnostics');
@@ -254,12 +263,13 @@ This ticket depends on non-existent ticket.
 `
       );
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Explicitly trigger validation
+      const doc = await vscode.workspace.openTextDocument(ticketPath);
+      diagnosticProvider.validateDocument(doc);
 
       const diagnostics = diagnosticProvider.diagnosticCollection.get(ticketUri);
       assert.ok(diagnostics && diagnostics.length > 0, 'Ticket with non-existent dep should produce diagnostics');
-      
+
       // Check for dependency error
       const hasDepError = diagnostics.some(d => d.message.includes('NONEXISTENT-999') || d.message.includes('dependency'));
       assert.ok(hasDepError, 'Should have error for non-existent dependency');
@@ -268,19 +278,17 @@ This ticket depends on non-existent ticket.
 
   suite('Pipeline Validation', () => {
     test('Valid pipeline produces empty diagnostics', async () => {
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Explicitly trigger validation
+      const pipelinePath = path.join(tempWorkflowRoot, '.workflow', 'config', 'pipeline.yaml');
+      const doc = await vscode.workspace.openTextDocument(pipelinePath);
+      diagnosticProvider.validateDocument(doc);
 
       const diagnostics = diagnosticProvider.diagnosticCollection.get(testPipelineUri);
       assert.strictEqual(diagnostics?.length, 0, 'Valid pipeline should produce no diagnostics');
     });
 
     test('Pipeline with non-existent agent reference produces diagnostics', async () => {
-      const invalidPipelinePath = path.join(tempWorkflowRoot, '.workflow', 'config', 'pipeline-invalid.yaml');
-      const invalidPipelineUri = vscode.Uri.file(invalidPipelinePath);
-      fs.writeFileSync(
-        invalidPipelinePath,
-        `pipeline:
+      const invalidContent = `pipeline:
   name: "Invalid Pipeline"
   version: "1.0"
   agents:
@@ -298,26 +306,22 @@ This ticket depends on non-existent ticket.
     delay_between_stages: 0
     timeout_per_stage: 300
     log_file: "pipeline.log"
-`
-      );
+`;
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Create mock document with pipeline.yaml URI (to match routing) but invalid content
+      const mockDoc: MockTextDocument = { uri: testPipelineUri, getText: () => invalidContent };
+      diagnosticProvider.validateDocument(mockDoc as unknown as vscode.TextDocument);
 
-      const diagnostics = diagnosticProvider.diagnosticCollection.get(invalidPipelineUri);
+      const diagnostics = diagnosticProvider.diagnosticCollection.get(testPipelineUri);
       assert.ok(diagnostics && diagnostics.length > 0, 'Pipeline with non-existent agent should produce diagnostics');
-      
+
       // Check for agent error
-      const hasAgentError = diagnostics.some(d => d.message.includes('NONEXISTENT_AGENT') || d.message.includes('agent'));
+      const hasAgentError = diagnostics!.some(d => d.message.includes('NONEXISTENT_AGENT') || d.message.includes('agent'));
       assert.ok(hasAgentError, 'Should have error for non-existent agent');
     });
 
     test('Pipeline with non-existent goto stage produces diagnostics', async () => {
-      const invalidGotoPath = path.join(tempWorkflowRoot, '.workflow', 'config', 'pipeline-goto-invalid.yaml');
-      const invalidGotoUri = vscode.Uri.file(invalidGotoPath);
-      fs.writeFileSync(
-        invalidGotoPath,
-        `pipeline:
+      const invalidContent = `pipeline:
   name: "Invalid Goto Pipeline"
   version: "1.0"
   agents:
@@ -340,44 +344,42 @@ This ticket depends on non-existent ticket.
     delay_between_stages: 0
     timeout_per_stage: 300
     log_file: "pipeline.log"
-`
-      );
+`;
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Create mock document with pipeline.yaml URI (to match routing) but invalid content
+      const mockDoc: MockTextDocument = { uri: testPipelineUri, getText: () => invalidContent };
+      diagnosticProvider.validateDocument(mockDoc as unknown as vscode.TextDocument);
 
-      const diagnostics = diagnosticProvider.diagnosticCollection.get(invalidGotoUri);
+      const diagnostics = diagnosticProvider.diagnosticCollection.get(testPipelineUri);
       assert.ok(diagnostics && diagnostics.length > 0, 'Pipeline with non-existent goto stage should produce diagnostics');
-      
+
       // Check for stage error
-      const hasStageError = diagnostics.some(d => d.message.includes('NONEXISTENT_STAGE') || d.message.includes('stage'));
+      const hasStageError = diagnostics!.some(d => d.message.includes('NONEXISTENT_STAGE') || d.message.includes('stage'));
       assert.ok(hasStageError, 'Should have error for non-existent stage');
     });
   });
 
   suite('Config Validation', () => {
     test('Valid config produces empty diagnostics', async () => {
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Explicitly trigger validation
+      const configPath = path.join(tempWorkflowRoot, '.workflow', 'config', 'config.yaml');
+      const doc = await vscode.workspace.openTextDocument(configPath);
+      diagnosticProvider.validateDocument(doc);
 
       const diagnostics = diagnosticProvider.diagnosticCollection.get(testConfigUri);
       assert.strictEqual(diagnostics?.length, 0, 'Valid config should produce no diagnostics');
     });
 
     test('Config with missing required fields produces diagnostics', async () => {
-      const invalidConfigPath = path.join(tempWorkflowRoot, '.workflow', 'config', 'config-invalid.yaml');
-      const invalidConfigUri = vscode.Uri.file(invalidConfigPath);
-      fs.writeFileSync(
-        invalidConfigPath,
-        `version: "1.0"
+      const invalidContent = `version: "1.0"
 # Missing required fields
-`
-      );
+`;
 
-      // Wait for file watcher to process
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Create mock document with config.yaml URI (to match routing) but invalid content
+      const mockDoc: MockTextDocument = { uri: testConfigUri, getText: () => invalidContent };
+      diagnosticProvider.validateDocument(mockDoc as unknown as vscode.TextDocument);
 
-      const diagnostics = diagnosticProvider.diagnosticCollection.get(invalidConfigUri);
+      const diagnostics = diagnosticProvider.diagnosticCollection.get(testConfigUri);
       assert.ok(diagnostics && diagnostics.length > 0, 'Config with missing fields should produce diagnostics');
     });
   });

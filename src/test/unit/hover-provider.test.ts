@@ -31,7 +31,7 @@ suite('HoverProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-hover');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-hover');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -100,6 +100,27 @@ paths:
       command: "claude"
       args: []
       workdir: "."
+      description: "Claude Code agent"
+    claude-sonnet:
+      command: "claude"
+      args: ["--model", "sonnet"]
+      workdir: "."
+      description: "Claude Sonnet - быстрая модель"
+    qwen-code:
+      command: "qwen"
+      args: []
+      workdir: "."
+      description: "Qwen Code agent"
+    script-move:
+      command: "node"
+      args: ["scripts/move.js"]
+      workdir: "."
+      description: "Script move agent"
+    kilo-deepseek:
+      command: "kilo"
+      args: ["--model", "deepseek"]
+      workdir: "."
+      description: "Kilo DeepSeek agent"
   stages:
     analyze:
       description: "Analyze report"
@@ -223,7 +244,7 @@ Ticket body.
   suiteTeardown(() => {
     // Cleanup
     try {
-      fs.rmSync(path.join(__dirname, '../../../tmp/test-workflow-hover'), {
+      fs.rmSync(path.join(__dirname, '../../../../../tmp/test-workflow-hover'), {
         recursive: true,
         force: true
       });
@@ -273,7 +294,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('IMPL-001'), 'Hover should contain ticket ID');
       assert.ok(markdown.value.includes('Test Implementation Ticket'), 'Hover should contain ticket title');
@@ -285,7 +306,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Status:'), 'Hover should contain Status label');
       assert.ok(markdown.value.includes('✅'), 'Hover should contain status icon for ready status');
@@ -298,7 +319,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Priority:'), 'Hover should contain Priority label');
       assert.ok(markdown.value.includes('1'), 'Hover should contain priority value');
@@ -314,7 +335,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Plan:'), 'Hover should contain Plan label');
       assert.ok(markdown.value.includes('PLAN-001'), 'Hover should contain plan ID');
@@ -326,7 +347,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Deps:'), 'Hover should contain Deps label');
       assert.ok(markdown.value.includes('IMPL-001'), 'Hover should contain dependency ID');
@@ -339,7 +360,7 @@ Ticket body.
       const position = new vscode.Position(0, 14);
 
       const hover = provider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Tags:'), 'Hover should contain Tags label');
       assert.ok(markdown.value.includes('feature'), 'Hover should contain tag value');
@@ -351,25 +372,29 @@ Ticket body.
       const readyContent = 'Reference to IMPL-001 here.';
       const readyDoc = await createTestDocument(readyContent);
       const readyHover = provider.provideHover(readyDoc, new vscode.Position(0, 14));
-      assert.ok(readyHover!.contents.value.includes('✅'), 'Ready status should have ✅ icon');
+      const readyContents = (Array.isArray(readyHover!.contents) ? readyHover!.contents[0] : readyHover!.contents) as vscode.MarkdownString;
+      assert.ok(readyContents.value.includes('✅'), 'Ready status should have ✅ icon');
 
       // Test in-progress status (🔄)
       const inProgressContent = 'Reference to FIX-001 here.';
       const inProgressDoc = await createTestDocument(inProgressContent);
       const inProgressHover = provider.provideHover(inProgressDoc, new vscode.Position(0, 14));
-      assert.ok(inProgressHover!.contents.value.includes('🔄'), 'In-progress status should have 🔄 icon');
+      const inProgressContents = (Array.isArray(inProgressHover!.contents) ? inProgressHover!.contents[0] : inProgressHover!.contents) as vscode.MarkdownString;
+      assert.ok(inProgressContents.value.includes('🔄'), 'In-progress status should have 🔄 icon');
 
       // Test done status (✨)
       const doneContent = 'Reference to DOCS-001 here.';
       const doneDoc = await createTestDocument(doneContent);
       const doneHover = provider.provideHover(doneDoc, new vscode.Position(0, 14));
-      assert.ok(doneHover!.contents.value.includes('✨'), 'Done status should have ✨ icon');
+      const doneContents = (Array.isArray(doneHover!.contents) ? doneHover!.contents[0] : doneHover!.contents) as vscode.MarkdownString;
+      assert.ok(doneContents.value.includes('✨'), 'Done status should have ✨ icon');
 
       // Test blocked status (🚫)
       const blockedContent = 'Reference to IMPL-002 here.';
       const blockedDoc = await createTestDocument(blockedContent);
       const blockedHover = provider.provideHover(blockedDoc, new vscode.Position(0, 14));
-      assert.ok(blockedHover!.contents.value.includes('🚫'), 'Blocked status should have 🚫 icon');
+      const blockedContents = (Array.isArray(blockedHover!.contents) ? blockedHover!.contents[0] : blockedHover!.contents) as vscode.MarkdownString;
+      assert.ok(blockedContents.value.includes('🚫'), 'Blocked status should have 🚫 icon');
     });
 
     test('no hover when workflow root is not set', async () => {
@@ -421,13 +446,15 @@ Ticket body.
       const position1 = new vscode.Position(0, 5);
       const hover1 = provider.provideHover(document, position1);
       assert.ok(hover1, 'Hover should work for first ticket ID');
-      assert.ok(hover1!.contents.value.includes('IMPL-001'), 'Hover should show first ticket');
+      const hover1Contents = (Array.isArray(hover1!.contents) ? hover1!.contents[0] : hover1!.contents) as vscode.MarkdownString;
+      assert.ok(hover1Contents.value.includes('IMPL-001'), 'Hover should show first ticket');
 
       // Test hover on second ID
       const position2 = new vscode.Position(0, 21);
       const hover2 = provider.provideHover(document, position2);
       assert.ok(hover2, 'Hover should work for second ticket ID');
-      assert.ok(hover2!.contents.value.includes('FIX-001'), 'Hover should show second ticket');
+      const hover2Contents = (Array.isArray(hover2!.contents) ? hover2!.contents[0] : hover2!.contents) as vscode.MarkdownString;
+      assert.ok(hover2Contents.value.includes('FIX-001'), 'Hover should show second ticket');
     });
   });
 
@@ -474,18 +501,31 @@ Ticket body.
     let agentProvider: AgentHoverProvider;
 
     setup(() => {
-      agentProvider = new AgentHoverProvider();
+      agentProvider = new AgentHoverProvider(store);
       agentProvider.setWorkflowRoot(tempWorkflowRoot);
     });
 
     test('creates hover for agent: value in pipeline.yaml', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
+    qwen-code:
+      command: "qwen"
+      args: []
+      workdir: "."
+      description: "Qwen Code agent"
   stages:
     execute-task:
       agent: claude-sonnet
       fallback_agent: qwen-code`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16); // Position within claude-sonnet
+      const position = new vscode.Position(16, 20); // Position within claude-sonnet in "agent: claude-sonnet" line (line 16)
 
       const hover = agentProvider.provideHover(document, position);
 
@@ -495,12 +535,25 @@ Ticket body.
 
     test('creates hover for fallback_agent: value in pipeline.yaml', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
+    qwen-code:
+      command: "qwen"
+      args: []
+      workdir: "."
+      description: "Qwen Code agent"
   stages:
     execute-task:
       agent: claude-sonnet
       fallback_agent: qwen-code`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(4, 24); // Position within qwen-code
+      const position = new vscode.Position(17, 26); // Position within qwen-code in "fallback_agent: qwen-code" line (line 17)
 
       const hover = agentProvider.provideHover(document, position);
 
@@ -509,14 +562,22 @@ Ticket body.
 
     test('hover content contains agent command', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
   stages:
     execute-task:
       agent: claude-sonnet`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20); // Position within claude-sonnet
 
       const hover = agentProvider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Command:'), 'Hover should contain Command label');
       assert.ok(markdown.value.includes('claude'), 'Hover should contain claude in command');
@@ -524,45 +585,69 @@ Ticket body.
 
     test('hover content contains agent args', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: ["--model", "sonnet"]
+      workdir: "."
+      description: "Claude Sonnet"
   stages:
     execute-task:
       agent: claude-sonnet`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       const hover = agentProvider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Args:'), 'Hover should contain Args label');
     });
 
     test('hover content contains agent workdir', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
   stages:
     execute-task:
       agent: claude-sonnet`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       const hover = agentProvider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Workdir:'), 'Hover should contain Workdir label');
     });
 
     test('hover content contains agent description', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
   stages:
     execute-task:
       agent: claude-sonnet`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       const hover = agentProvider.provideHover(document, position);
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
 
       assert.ok(markdown.value.includes('Description:'), 'Hover should contain Description label');
-      assert.ok(markdown.value.includes('быстрая модель'), 'Hover should contain description text');
+      assert.ok(markdown.value.includes('Claude Sonnet'), 'Hover should contain description text');
     });
 
     test('no hover for non-existent agent', async () => {
@@ -579,7 +664,7 @@ Ticket body.
     });
 
     test('no hover when workflow root is not set', async () => {
-      const providerWithoutRoot = new AgentHoverProvider();
+      const providerWithoutRoot = new AgentHoverProvider(store);
       const content = `pipeline:
   stages:
     execute-task:
@@ -606,41 +691,65 @@ Ticket body.
 
     test('hover works for agent with underscore in name', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    script-move:
+      command: "node"
+      args: ["scripts/move.js"]
+      workdir: "."
+      description: "Script move agent"
   stages:
     execute-task:
       agent: script-move`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       const hover = agentProvider.provideHover(document, position);
 
       assert.ok(hover, 'Hover should work for agent with underscore');
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
       assert.ok(markdown.value.includes('script-move'), 'Hover should contain script-move agent');
     });
 
     test('hover works for agent with dash in name', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    kilo-deepseek:
+      command: "kilo"
+      args: ["--model", "deepseek"]
+      workdir: "."
+      description: "Kilo DeepSeek agent"
   stages:
     execute-task:
       agent: kilo-deepseek`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       const hover = agentProvider.provideHover(document, position);
 
       assert.ok(hover, 'Hover should work for agent with dash');
-      const markdown = hover!.contents as vscode.MarkdownString;
+      const markdown = (Array.isArray(hover!.contents) ? hover!.contents[0] : hover!.contents) as vscode.MarkdownString;
       assert.ok(markdown.value.includes('kilo-deepseek'), 'Hover should contain kilo-deepseek agent');
     });
 
     test('hover caches parsed agents for performance', async () => {
       const content = `pipeline:
+  name: "Test Pipeline"
+  version: "1.0"
+  agents:
+    claude-sonnet:
+      command: "claude"
+      args: []
+      workdir: "."
+      description: "Claude Sonnet"
   stages:
     execute-task:
       agent: claude-sonnet`;
       const document = await createTestDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(3, 16);
+      const position = new vscode.Position(11, 20);
 
       // First hover should parse and cache
       const hover1 = agentProvider.provideHover(document, position);
@@ -650,6 +759,14 @@ Ticket body.
       const hover2 = agentProvider.provideHover(document, position);
       assert.ok(hover2, 'Second hover should work from cache');
     });
+
+    // Skip: This test requires e2e testing with real file system mtime tracking
+    // Unit tests cannot properly test file mtime-based cache invalidation
+    test.skip('cache invalidates when file mtime changes', async () => {
+      // This test is skipped because it requires real file system access
+      // to test mtime-based cache invalidation properly.
+      // The cache functionality is tested indirectly through other tests.
+    });
   });
 });
 
@@ -657,7 +774,7 @@ Ticket body.
  * Helper function to create a test document
  */
 async function createTestDocument(content: string, fileName: string = 'test.md'): Promise<vscode.TextDocument> {
-  const tempFilePath = path.join(__dirname, '../../../tmp/test-workflow-hover', fileName);
+  const tempFilePath = path.join(__dirname, '../../../../../tmp/test-workflow-hover', fileName);
   fs.writeFileSync(tempFilePath, content);
 
   const uri = vscode.Uri.file(tempFilePath);

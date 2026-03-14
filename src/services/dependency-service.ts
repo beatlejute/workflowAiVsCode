@@ -11,7 +11,6 @@
  * and transition condition checking.
  */
 
-import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
@@ -72,7 +71,7 @@ export class DependencyService {
     }
 
     const dependencies: Ticket[] = [];
-    for (const depId of ticket.dependencies) {
+    for (const depId of (ticket.dependencies || [])) {
       const depTicket = this.store.getTicketById(depId);
       if (depTicket) {
         dependencies.push(depTicket);
@@ -92,7 +91,7 @@ export class DependencyService {
   getDependents(id: string): Ticket[] {
     const allTickets = this.store.getTickets();
     return allTickets.filter(ticket =>
-      ticket.dependencies.includes(id)
+      (ticket.dependencies || []).includes(id)
     );
   }
 
@@ -259,7 +258,7 @@ export class DependencyService {
     }
 
     // Visit all dependencies
-    for (const depId of ticket.dependencies) {
+    for (const depId of (ticket.dependencies || [])) {
       const depColor = colors.get(depId) ?? Color.White;
 
       if (depColor === Color.Gray) {
@@ -329,7 +328,7 @@ export class DependencyService {
 
     const blockers: string[] = [];
 
-    for (const depId of ticket.dependencies) {
+    for (const depId of (ticket.dependencies || [])) {
       const depTicket = this.store.getTicketById(depId);
       if (!depTicket) {
         blockers.push(t('Dependency "{0}" does not exist', depId));

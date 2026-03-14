@@ -223,5 +223,6 @@
   "Reload": "Recarregar",
   "No current plans available": "Nenhum plano atual disponível",
   "Select plan to decompose": "Selecionar plano para decompor",
-  "Decomposing plan {0}...": "Decompondo plano {0}..."
+  "Decomposing plan {0}...": "Decompondo plano {0}...",
+  "Pipeline is running": "O pipeline está em execução"
 }

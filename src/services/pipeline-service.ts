@@ -11,6 +11,7 @@
 import { spawn, ChildProcess, execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import * as vscode from 'vscode';
+import { SpawnFunction } from '../types/process-types';
 
 /**
  * Pipeline execution state
@@ -49,14 +50,6 @@ export type StateChangeListener = (state: PipelineState) => void;
  */
 export type LogListener = (log: string) => void;
 
-/**
- * Spawn function type for dependency injection (testing)
- */
-export type SpawnFunction = (
-  command: string,
-  args: readonly string[],
-  options?: any
-) => ChildProcess;
 
 /**
  * PipelineService - Manages workflow run execution

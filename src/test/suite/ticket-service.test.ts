@@ -218,7 +218,7 @@ tags: []
   suite('getById()', () => {
 
     test('should return ticket by ID', () => {
-      const ticket = createTicketInStore('IMPL-001', 'Test Ticket', TicketStatus.Backlog);
+      createTicketInStore('IMPL-001', 'Test Ticket', TicketStatus.Backlog);
 
       const found = ticketService.getById('IMPL-001');
 

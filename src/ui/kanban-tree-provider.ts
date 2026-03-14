@@ -17,8 +17,11 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import * as path from 'path';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus, ReviewEntry } from '../data/types';
+import { Ticket, TicketStatus } from '../data/types';
 import { getReviewBadges, extractPlanId } from './utils';
+import { TreeItemCache } from '../utils/tree-item-cache';
+import { getTicketIcon } from '../utils/ticket-utils';
+import { buildTicketTooltip } from '../utils/tooltip-utils';
 
 export type KanbanSortMode = 'priority' | 'id' | 'title' | 'date';
 
@@ -40,23 +43,13 @@ function getCacheKey(key: CacheKey): string {
  * Cache for sorted ticket lists
  * Maps cache key to precomputed ticket arrays
  */
-const sortedTicketsCache = new Map<string, KanbanTicketTreeItem[]>();
+const sortedTicketsCache = new TreeItemCache<KanbanTicketTreeItem[]>();
 
 /**
  * Cache for TreeItem objects (memoization)
  * Maps ticket ID to TreeItem to avoid recreation
  */
-const treeItemCache = new Map<string, KanbanTicketTreeItem>();
-
-/**
- * Performance metrics
- */
-let perfMetrics = {
-  cacheHits: 0,
-  cacheMisses: 0,
-  treeItemCacheHits: 0,
-  treeItemCacheMisses: 0
-};
+const treeItemCache = new TreeItemCache<KanbanTicketTreeItem>();
 
 /**
  * Tree item representing a ticket in the Kanban board
@@ -72,7 +65,7 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.description = description;
-    this.tooltip = createTicketTooltip(ticket);
+    this.tooltip = buildTicketTooltip(ticket);
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'kanban-ticket';
 
@@ -96,14 +89,13 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
  * Uses memoization to avoid recreating TreeItems for the same ticket
  */
 function getOrCreateTreeItem(ticket: Ticket, workflowRoot: string): KanbanTicketTreeItem {
-  const cacheKey = `${ticket.id}:${ticket.updated_at}`;
-  
+  const reviewKey = ticket.reviews?.map(r => r.status[0]).join('') || '';
+  const cacheKey = `${ticket.id}:${ticket.updated_at}:${reviewKey}`;
+
   if (treeItemCache.has(cacheKey)) {
-    perfMetrics.treeItemCacheHits++;
     return treeItemCache.get(cacheKey)!;
   }
-  
-  perfMetrics.treeItemCacheMisses++;
+
   const item = new KanbanTicketTreeItem(ticket, workflowRoot);
   treeItemCache.set(cacheKey, item);
   return item;
@@ -113,72 +105,56 @@ function getOrCreateTreeItem(ticket: Ticket, workflowRoot: string): KanbanTicket
  * Invalidate tree item cache for a specific ticket
  */
 export function invalidateTicketCache(ticketId: string): void {
-  for (const key of treeItemCache.keys()) {
-    if (key.startsWith(`${ticketId}:`)) {
-      treeItemCache.delete(key);
-    }
-  }
+  treeItemCache.invalidateByPrefix(`${ticketId}:`);
 }
 
 /**
- * Create tooltip for a ticket using MarkdownString
- * Shows: status, priority, type, dependencies, parent plan
+ * Get dimmed icon for pulse animation (pipeline active ticket)
  */
-function createTicketTooltip(ticket: Ticket): vscode.MarkdownString {
-  const priorityLabels: Record<number, string> = {
-    1: t('Critical'),
-    2: t('High'),
-    3: t('Medium'),
-    4: t('Low'),
-    5: t('Trivial')
-  };
+function getTicketIconDimmed(): vscode.ThemeIcon {
+  return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('disabledForeground'));
+}
 
-  const priorityLabel = priorityLabels[ticket.priority] || `${t('Priority')} ${ticket.priority}`;
-  const deps = ticket.dependencies.length > 0
-    ? ticket.dependencies.join(', ')
-    : t('None');
+/** Shared pulse state across all kanban providers */
+let pulseTicketId: string | undefined;
+let pulseOn = true;
+let pulseTimer: ReturnType<typeof setInterval> | null = null;
+const pulseSubscribers = new Set<KanbanTreeProvider>();
 
-  const markdown = new vscode.MarkdownString();
-  markdown.isTrusted = true;
-  markdown.supportHtml = true;
-  markdown.appendMarkdown(`**${ticket.id}: ${ticket.title}**\n\n`);
-  markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
-  markdown.appendMarkdown(`|-------|-------|\n`);
-  markdown.appendMarkdown(`| **${t('Status')}** | ${ticket.status} |\n`);
-  markdown.appendMarkdown(`| **${t('Priority')}** | ${priorityLabel} |\n`);
-  markdown.appendMarkdown(`| **${t('Type')}** | ${ticket.type} |\n`);
-  markdown.appendMarkdown(`| **${t('Dependencies')}** | ${deps} |\n`);
-  markdown.appendMarkdown(`| **${t('Parent Plan')}** | ${ticket.parent_plan} |\n`);
-
-  if (ticket.context?.notes) {
-    markdown.appendMarkdown(`\n---\n\n**${t('Notes')}:**\n${ticket.context.notes}\n`);
-  }
-
-  if (ticket.reviews?.length) {
-    markdown.appendMarkdown(`\n**${t('Review')}:**\n\n`);
-    markdown.appendMarkdown(`| ${t('Date')} | ${t('Status')} | ${t('Summary')} |\n|---|---|---|\n`);
-    for (const r of ticket.reviews) {
-      const icon = r.status === 'passed' ? '✅' : '❌';
-      markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
+function startPulseTimer(): void {
+  if (pulseTimer) { return; }
+  pulseOn = true;
+  pulseTimer = setInterval(() => {
+    pulseOn = !pulseOn;
+    for (const provider of pulseSubscribers) {
+      provider.firePulse();
     }
-  }
+  }, 1000);
+}
 
-  return markdown;
+function stopPulseTimer(): void {
+  if (pulseTimer) {
+    clearInterval(pulseTimer);
+    pulseTimer = null;
+  }
+  pulseOn = true;
 }
 
 /**
- * Get theme icon based on ticket priority
+ * Set the ticket ID whose priority dot should pulse (driven by pipeline).
+ * Call with undefined to stop pulsing.
  */
-function getTicketIcon(priority: number): vscode.ThemeIcon {
-  // Priority 1 = Critical, 5 = Low
-  if (priority <= 1) {
-    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
-  } else if (priority === 2) {
-    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
-  } else if (priority === 3) {
-    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
+export function setPulseTicketId(ticketId: string | undefined): void {
+  if (ticketId === pulseTicketId) { return; }
+  pulseTicketId = ticketId;
+  if (ticketId) {
+    startPulseTimer();
   } else {
-    return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('terminal.ansiGreen'));
+    stopPulseTimer();
+  }
+  // Force refresh all providers so the icon updates immediately
+  for (const provider of pulseSubscribers) {
+    provider.firePulse();
   }
 }
 
@@ -186,7 +162,7 @@ function getTicketIcon(priority: number): vscode.ThemeIcon {
  * TreeDataProvider for a single Kanban column
  * Parameterized by ticket status
  */
-export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketTreeItem> {
+export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketTreeItem>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<KanbanTicketTreeItem | undefined>();
   readonly onDidChangeTreeData: vscode.Event<KanbanTicketTreeItem | undefined> = this._onDidChangeTreeData.event;
 
@@ -202,9 +178,42 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
     // Subscribe to store change events for reactive updates
     store.onDidChange((event: StoreChangeEvent) => {
       if (event.type === 'ticket') {
-        this.refresh();
+        this.handleTicketChange(event);
       }
     });
+
+    // Register for pulse notifications
+    pulseSubscribers.add(this);
+   }
+
+  /**
+   * Handle ticket change event with incremental refresh
+   */
+  private handleTicketChange(event: StoreChangeEvent): void {
+    if (!event.id || !this.workflowRoot) {
+      this.refresh();
+      return;
+    }
+
+    const ticket = this.store.getTicketById(event.id);
+    if (!ticket) {
+      // Ticket deleted or not found
+      this.refresh();
+      return;
+    }
+
+    // Check if ticket status matches this provider's status
+    if (ticket.status !== this.status) {
+      // Ticket moved to another column, need full refresh
+      this.refresh();
+      return;
+    }
+
+    // Ticket updated within same column - incremental refresh
+    invalidateTicketCache(event.id);
+    sortedTicketsCache.clear(); // Invalidate sorted cache for this status
+    const treeItem = getOrCreateTreeItem(ticket, this.workflowRoot);
+    this._onDidChangeTreeData.fire(treeItem);
   }
 
   /**
@@ -265,9 +274,30 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   }
 
   /**
+   * Clean up: unregister from pulse subscribers
+   */
+  dispose(): void {
+    pulseSubscribers.delete(this);
+  }
+
+  /**
+   * Fire a tree data change for pulse animation (called by shared timer)
+   */
+  firePulse(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /**
    * Get tree item for element
    */
   getTreeItem(element: KanbanTicketTreeItem): vscode.TreeItem {
+    if (pulseTicketId && element.ticket.id === pulseTicketId) {
+      element.iconPath = pulseOn
+        ? getTicketIcon(element.ticket.priority)
+        : getTicketIconDimmed();
+    } else {
+      element.iconPath = getTicketIcon(element.ticket.priority);
+    }
     return element;
   }
 
@@ -302,11 +332,8 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
 
     // Check cache first
     if (sortedTicketsCache.has(cacheKey)) {
-      perfMetrics.cacheHits++;
       return Promise.resolve(sortedTicketsCache.get(cacheKey)!);
     }
-
-    perfMetrics.cacheMisses++;
 
     let tickets = this.store.getTicketsByStatus(this.status);
 
@@ -389,24 +416,5 @@ export function createKanbanProviders(store: WorkflowStore): {
     blocked: new KanbanTreeProvider(store, TicketStatus.Blocked),
     review: new KanbanTreeProvider(store, TicketStatus.Review),
     done
-  };
-}
-
-/**
- * Get performance metrics for debugging
- */
-export function getKanbanPerfMetrics(): typeof perfMetrics {
-  return { ...perfMetrics };
-}
-
-/**
- * Reset performance metrics
- */
-export function resetKanbanPerfMetrics(): void {
-  perfMetrics = {
-    cacheHits: 0,
-    cacheMisses: 0,
-    treeItemCacheHits: 0,
-    treeItemCacheMisses: 0
   };
 }

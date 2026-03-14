@@ -8,14 +8,14 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parse, serialize, updateFrontmatter, extractFrontmatterRaw } from '../../data/frontmatter-parser';
-import { Ticket, Plan, Report, TicketStatus } from '../../data/types';
+import { Ticket, Plan, TicketStatus } from '../../data/types';
 
 suite('FrontmatterParser Suite', () => {
   
   suite('parse<T>() function', () => {
     
     test('should parse a real ticket from IMPL-001.md', () => {
-      const ticketPath = path.join(__dirname, '../../../../.workflow/tickets/done/IMPL-001.md');
+      const ticketPath = path.join(process.cwd(), '.workflow/tickets/done/IMPL-001.md');
       const content = fs.readFileSync(ticketPath, 'utf-8');
       
       const result = parse<Ticket>(content);
@@ -30,7 +30,7 @@ suite('FrontmatterParser Suite', () => {
     });
     
     test('should parse a real plan from PLAN-004.md', () => {
-      const planPath = path.join(__dirname, '../../../../.workflow/plans/archive/PLAN-004.md');
+      const planPath = path.join(process.cwd(), '.workflow/plans/archive/PLAN-004.md');
       const content = fs.readFileSync(planPath, 'utf-8');
       
       const result = parse<Plan>(content);
@@ -169,7 +169,7 @@ Body`;
   suite('Roundtrip tests', () => {
     
     test('roundtrip: parse → serialize → parse should produce identical result for ticket', () => {
-      const ticketPath = path.join(__dirname, '../../../../.workflow/tickets/done/IMPL-001.md');
+      const ticketPath = path.join(process.cwd(), '.workflow/tickets/done/IMPL-001.md');
       const originalContent = fs.readFileSync(ticketPath, 'utf-8');
       
       const first = parse<Ticket>(originalContent);
@@ -185,7 +185,7 @@ Body`;
     });
     
     test('roundtrip: parse → serialize → parse should produce identical result for plan', () => {
-      const planPath = path.join(__dirname, '../../../../.workflow/plans/archive/PLAN-004.md');
+      const planPath = path.join(process.cwd(), '.workflow/plans/archive/PLAN-004.md');
       const originalContent = fs.readFileSync(planPath, 'utf-8');
       
       const first = parse<Plan>(originalContent);

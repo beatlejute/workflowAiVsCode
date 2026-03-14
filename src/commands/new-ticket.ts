@@ -5,9 +5,9 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { t } from '../i18n';
 import { TicketService } from '../services/ticket-service';
+import { getTicketPath } from '../utils/path-utils';
 
 /**
  * Execute workflow.newTicket command
@@ -58,7 +58,7 @@ export async function executeNewTicket(ticketService: TicketService): Promise<vo
     const workflowRoot = ticketService.getWorkflowRoot();
     if (workflowRoot) {
       const ticketPath = vscode.Uri.file(
-        path.join(workflowRoot, 'tickets', 'backlog', `${ticket.id}.md`)
+        getTicketPath(workflowRoot, 'backlog', ticket.id)
       );
       await vscode.commands.executeCommand('vscode.open', ticketPath);
     }

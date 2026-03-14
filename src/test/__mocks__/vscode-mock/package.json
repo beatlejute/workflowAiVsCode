@@ -1,0 +1,13 @@
+{
+  "name": "vscode",
+  "version": "1.0.0",
+  "description": "Mock vscode module for unit tests",
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "require": "./index.js",
+      "import": "./index.mjs",
+      "default": "./index.js"
+    }
+  }
+}

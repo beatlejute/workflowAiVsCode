@@ -8,7 +8,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const projectRoot = path.join(__dirname, '../../../../');
+const projectRoot = process.cwd();
 
 /**
  * Load JSON file safely
@@ -20,7 +20,7 @@ function loadJson(filePath: string): Record<string, string> | null {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(content);
-  } catch (error) {
+  } catch {
     return null;
   }
 }

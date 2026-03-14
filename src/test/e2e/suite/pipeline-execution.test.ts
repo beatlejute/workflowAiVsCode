@@ -108,10 +108,10 @@ suite('Pipeline Execution Tests', () => {
 
       // If command succeeds, pipeline started
       assert.ok(true, 'workflow.runPipeline executed successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Command may fail if CLI is not installed or workflow not configured
       // This is acceptable in test environment
-      const errorMessage = error?.message || String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Should fail gracefully with meaningful error
       assert.ok(
@@ -137,7 +137,7 @@ suite('Pipeline Execution Tests', () => {
     try {
       await vscode.commands.executeCommand('workflow.showPipelineOutput');
       assert.ok(true, 'workflow.showPipelineOutput executed successfully');
-    } catch (error) {
+    } catch {
       // May fail in test environment, which is acceptable
       assert.ok(true, 'workflow.showPipelineOutput was invoked');
     }

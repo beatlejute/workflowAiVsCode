@@ -6,6 +6,7 @@
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/workflow-ai.workflow-vscode)](https://marketplace.visualstudio.com/items?itemName=workflow-ai.workflow-vscode)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/workflow-ai.workflow-vscode)](https://marketplace.visualstudio.com/items?itemName=workflow-ai.workflow-vscode)
 [![License](https://img.shields.io/github/license/workflow-ai/wf-vscode)](https://github.com/workflow-ai/wf-vscode/blob/main/LICENSE)
+[![CI](https://github.com/workflow-ai/wf-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/workflow-ai/wf-vscode/actions/workflows/ci.yml)
 
 ## Table of Contents
 

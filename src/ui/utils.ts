@@ -3,6 +3,7 @@
  */
 
 import { ReviewEntry } from '../data/types';
+import { TreeItemCache } from '../utils/tree-item-cache';
 
 /**
  * Extract a plan ID (e.g. "PLAN-013") from a parent_plan field value,
@@ -30,31 +31,22 @@ function getReviewCacheKey(reviews?: ReviewEntry[]): string {
  * Cache for review badges results
  * Maps cache key to precomputed badge string
  */
-const reviewBadgesCache = new Map<string, string>();
-
-/**
- * Cache statistics for debugging
- */
-let cacheHits = 0;
-let cacheMisses = 0;
+const reviewBadgesCache = new TreeItemCache<string>();
 
 /**
  * Generate review badges string for a ticket.
  * Shows ✅ for passed, ❌ for failed. Max 4 most recent badges, prefixed with … if truncated.
- * 
+ *
  * Uses memoization to avoid recomputing badges for identical review arrays.
  */
 export function getReviewBadges(reviews?: ReviewEntry[]): string {
   const cacheKey = getReviewCacheKey(reviews);
-  
+
   // Check cache first
   if (reviewBadgesCache.has(cacheKey)) {
-    cacheHits++;
     return reviewBadgesCache.get(cacheKey)!;
   }
-  
-  cacheMisses++;
-  
+
   if (!reviews || reviews.length === 0) {
     reviewBadgesCache.set(cacheKey, '');
     return '';
@@ -69,7 +61,7 @@ export function getReviewBadges(reviews?: ReviewEntry[]): string {
   }
 
   for (let i = start; i < reviews.length; i++) {
-    badges += reviews[i].status === 'passed' ? '✅' : '❌';
+    badges += reviews[i].icon;
   }
 
   reviewBadgesCache.set(cacheKey, badges);
@@ -82,17 +74,16 @@ export function getReviewBadges(reviews?: ReviewEntry[]): string {
  */
 export function clearReviewBadgesCache(): void {
   reviewBadgesCache.clear();
-  cacheHits = 0;
-  cacheMisses = 0;
 }
 
 /**
  * Get cache statistics for debugging
  */
 export function getReviewBadgesCacheStats(): { hits: number; misses: number; size: number } {
+  const stats = reviewBadgesCache.getStats();
   return {
-    hits: cacheHits,
-    misses: cacheMisses,
-    size: reviewBadgesCache.size
+    hits: stats.hits,
+    misses: stats.misses,
+    size: stats.size
   };
 }

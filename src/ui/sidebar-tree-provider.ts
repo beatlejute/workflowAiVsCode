@@ -322,9 +322,33 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
     // Subscribe to store change events for reactive updates
     store.onDidChange((event: StoreChangeEvent) => {
       if (event.type === 'ticket') {
-        this.refresh();
+        this.handleTicketChange(event);
       }
     });
+  }
+
+  /**
+   * Handle ticket change event with incremental refresh
+   */
+  private handleTicketChange(event: StoreChangeEvent): void {
+    if (!event.id || !this.workflowRoot) {
+      this.refresh();
+      return;
+    }
+
+    const ticket = this.store.getTicketById(event.id);
+    if (!ticket) {
+      invalidateSidebarTicketCache(event.id);
+      sidebarTicketsCache.clear();
+      this._onDidChangeTreeData.fire(undefined);
+      return;
+    }
+
+    invalidateSidebarTicketCache(event.id);
+    sidebarTicketsCache.clear();
+
+    const ticketItem = getOrCreateSidebarTreeItem(ticket, this.workflowRoot);
+    this._onDidChangeTreeData.fire(ticketItem);
   }
 
   /**

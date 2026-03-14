@@ -22,34 +22,9 @@ import { load as loadYaml } from 'js-yaml';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketService } from '../services/ticket-service';
 import { DependencyService } from '../services/dependency-service';
-import { Ticket, TicketStatus } from '../data/types';
+import { Ticket } from '../data/types';
+import { STATUS_ICONS, DEP_STATUS_ICONS } from '../constants/ticket-constants';
 import { PipelineCodeLensProvider } from './pipeline-codelens-provider';
-
-/**
- * Status icon mapping for ticket status
- * @exported for testing
- */
-export const STATUS_ICONS: Record<TicketStatus, string> = {
-  [TicketStatus.Backlog]: '📋',
-  [TicketStatus.Ready]: '✅',
-  [TicketStatus.InProgress]: '🔄',
-  [TicketStatus.Review]: '👀',
-  [TicketStatus.Blocked]: '🚫',
-  [TicketStatus.Done]: '✨'
-};
-
-/**
- * Status icon mapping for dependency status
- * @exported for testing
- */
-export const DEP_STATUS_ICONS: Record<TicketStatus, string> = {
-  [TicketStatus.Backlog]: '⬜',
-  [TicketStatus.Ready]: '🔵',
-  [TicketStatus.InProgress]: '🔷',
-  [TicketStatus.Review]: '👁️',
-  [TicketStatus.Blocked]: '🔴',
-  [TicketStatus.Done]: '✅'
-};
 
 /**
  * CodeLensProvider for .md ticket files
@@ -221,7 +196,7 @@ export class TicketCodeLensProvider implements vscode.CodeLensProvider {
    */
   private createReviewLens(
     document: vscode.TextDocument,
-    frontmatterText: string
+    _frontmatterText: string
   ): vscode.CodeLens | null {
     const range = new vscode.Range(2, 0, 2, 0);
     const content = document.getText();

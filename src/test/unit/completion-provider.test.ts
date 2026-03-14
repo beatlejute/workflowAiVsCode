@@ -163,7 +163,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'test.md');
-      const position = new vscode.Position(4, 5); // After "- " in dependencies
+      const position = new vscode.Position(5, 4); // After "- " in dependencies (line 5, character 4)
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -186,7 +186,7 @@ conditions:
 `;
 
       const document = createMockDocument(content, 'test.md');
-      const position = new vscode.Position(6, 9); // After "- " in value
+      const position = new vscode.Position(7, 8); // After "- " in value (line 7, character 8)
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -247,7 +247,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'test.md');
-      const position = new vscode.Position(5, 5);
+      const position = new vscode.Position(5, 4); // After "- " in dependencies
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -289,7 +289,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'test.md');
-      const position = new vscode.Position(5, 5);
+      const position = new vscode.Position(5, 5); // After "- " in dependencies
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -314,7 +314,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'test.md');
-      const position = new vscode.Position(5, 5);
+      const position = new vscode.Position(5, 5); // After "- " in dependencies
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -366,7 +366,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(5, 15); // After "stage: "
+      const position = new vscode.Position(5, 18); // After "stage: " (line 5, character 18)
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -446,7 +446,7 @@ dependencies:
 `;
 
       const document = createMockDocument(content, 'pipeline.yaml');
-      const position = new vscode.Position(5, 15);
+      const position = new vscode.Position(5, 18); // After "stage: "
 
       const completions = provider.provideCompletionItems(document, position);
 
@@ -563,9 +563,9 @@ dependencies:
 `;
 
       const document = createMockDocument(content, '.workflow/tickets/test.md');
-      const position = new vscode.Position(5, 5);
+      const position = new vscode.Position(5, 5); // After "- " in dependencies
 
-      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoked });
+      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoke, triggerCharacter: undefined });
 
       assert.ok(completions, 'Should provide completions for .md files');
     });
@@ -574,13 +574,13 @@ dependencies:
       const content = `pipeline:
   stages:
     test:
-      skill: 
+      skill:
 `;
 
       const document = createMockDocument(content, '.workflow/config/pipeline.yaml');
       const position = new vscode.Position(3, 12);
 
-      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoked });
+      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoke, triggerCharacter: undefined });
 
       assert.ok(completions, 'Should provide completions for pipeline.yaml');
     });
@@ -591,7 +591,7 @@ dependencies:
       const document = createMockDocument(content, 'other.txt');
       const position = new vscode.Position(0, 5);
 
-      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoked });
+      const completions = provider.provideCompletionItems(document, position, new vscode.CancellationTokenSource().token, { triggerKind: vscode.CompletionTriggerKind.Invoke, triggerCharacter: undefined });
 
       assert.strictEqual(completions, undefined, 'Should return undefined for other files');
     });
@@ -614,6 +614,7 @@ function createMockDocument(content: string, fileName: string): vscode.TextDocum
     save: () => Promise.resolve(true),
     eol: vscode.EndOfLine.LF,
     lineCount: content.split('\n').length,
+    encoding: 'utf-8',
     lineAt(position: vscode.Position | number): vscode.TextLine {
       const lineNum = typeof position === 'number' ? position : position.line;
       const lines = content.split('\n');

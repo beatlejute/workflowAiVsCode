@@ -16,13 +16,13 @@
  * ADR-006: VS Code Hover API for inline previews
  */
 
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { t } from '../i18n';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as yaml from 'js-yaml';
+import { safeLoad } from '../utils/yaml-utils';
 import { WorkflowStore } from '../data/workflow-store';
-import { Ticket, TicketStatus } from '../data/types';
+import { Ticket } from '../data/types';
+import { STATUS_ICONS, PRIORITY_ICONS, TYPE_ICONS, COMPLEXITY_ICONS } from '../constants/ticket-constants';
 
 /**
  * Agent definition interface
@@ -33,50 +33,6 @@ interface AgentDefinition {
   workdir?: string;
   description?: string;
 }
-
-/**
- * Status icons mapping for hover preview
- */
-const STATUS_ICONS: Record<TicketStatus, string> = {
-  [TicketStatus.Backlog]: '📋',
-  [TicketStatus.Ready]: '✅',
-  [TicketStatus.InProgress]: '🔄',
-  [TicketStatus.Review]: '👀',
-  [TicketStatus.Blocked]: '🚫',
-  [TicketStatus.Done]: '✨'
-};
-
-/**
- * Priority icons mapping for hover preview
- */
-const PRIORITY_ICONS: Record<number, string> = {
-  1: '🔥',
-  2: '⚠️',
-  3: '📌',
-  4: 'ℹ️',
-  5: '💡'
-};
-
-/**
- * Type icons mapping for hover preview
- */
-const TYPE_ICONS: Record<string, string> = {
-  IMPL: '🔨',
-  FIX: '🐛',
-  DOCS: '📄',
-  REVIEW: '🔍',
-  ADMIN: '⚙️',
-  ARCH: '🏗️'
-};
-
-/**
- * Complexity icons mapping for hover preview
- */
-const COMPLEXITY_ICONS: Record<string, string> = {
-  low: '🟢',
-  medium: '🟡',
-  high: '🔴'
-};
 
 /**
  * HoverProvider for ticket ID references
@@ -197,8 +153,7 @@ export class TicketHoverProvider implements vscode.HoverProvider {
       markdown.appendMarkdown(`**${t('Review')}:**\n\n`);
       markdown.appendMarkdown(`| ${t('Date')} | ${t('Status')} | ${t('Summary')} |\n|---|---|---|\n`);
       for (const r of ticket.reviews) {
-        const icon = r.status === 'passed' ? '✅' : '❌';
-        markdown.appendMarkdown(`| ${r.date} | ${icon} ${r.status} | ${r.summary} |\n`);
+        markdown.appendMarkdown(`| ${r.date} | ${r.icon} ${r.status} | ${r.summary} |\n`);
       }
     }
 
@@ -210,11 +165,39 @@ export class TicketHoverProvider implements vscode.HoverProvider {
  * HoverProvider for agent definitions in pipeline.yaml
  *
  * Shows agent info when hovering over agent: or fallback_agent: values
+ * 
+ * Features:
+ * - YAML кэш с инвалидацией по mtime файла
+ * - Автоматическая инвалидация при изменении pipeline.yaml через WorkflowStore
  */
 export class AgentHoverProvider implements vscode.HoverProvider {
   private workflowRoot: string | null = null;
-  private agentsCache: Map<string, AgentDefinition> = new Map();
+  private agentsCache: Map<string, { data: AgentDefinition; mtime: number }> = new Map();
   private lastParsedFile: string | null = null;
+  private lastParsedMtime: number = 0;
+  private storeUnsubscribe: (() => void) | undefined;
+
+  constructor(private readonly store?: WorkflowStore) {
+    // Подписка на изменения store для инвалидации кэша
+    if (this.store) {
+      this.store.onDidChange((event) => {
+        // Инвалидация кэша при любом изменении (конфигурация меняется)
+        if (event.type === 'config') {
+          this.agentsCache.clear();
+          this.lastParsedFile = null;
+          this.lastParsedMtime = 0;
+        }
+      });
+    }
+  }
+
+  /**
+   * Очистка ресурсов
+   */
+  dispose(): void {
+    this.storeUnsubscribe?.();
+    this.agentsCache.clear();
+  }
 
   /**
    * Set workflow root directory
@@ -223,46 +206,78 @@ export class AgentHoverProvider implements vscode.HoverProvider {
     this.workflowRoot = root;
     this.agentsCache.clear();
     this.lastParsedFile = null;
+    this.lastParsedMtime = 0;
   }
 
   /**
    * Parse pipeline.yaml and extract agents definitions
+   * Использует кэш с инвалидацией по mtime файла
    */
   private parsePipelineYaml(document: vscode.TextDocument): Map<string, AgentDefinition> {
     const fsPath = document.uri.fsPath;
-    
-    // Use cache if already parsed
-    if (this.lastParsedFile === fsPath && this.agentsCache.size > 0) {
-      return this.agentsCache;
-    }
 
     try {
-      const content = document.getText();
-      const parsed = yaml.load(content) as any;
+      // Проверяем кэш по mtime файла
+      let mtime = 0;
+      try {
+        const stat = fs.statSync(fsPath);
+        mtime = stat.mtimeMs;
+      } catch {
+        // Файл не существует (например, в тестах) - используем mtime = 0
+        mtime = 0;
+      }
 
-      if (parsed?.pipeline?.agents) {
-        this.agentsCache.clear();
-        const agents = parsed.pipeline.agents;
-        
-        for (const [agentId, agentData] of Object.entries(agents)) {
-          const data = agentData as any;
-          this.agentsCache.set(agentId, {
-            command: data.command || '',
-            args: data.args || [],
-            workdir: data.workdir || '.',
-            description: data.description || ''
-          });
+      // Используем кэш если файл не изменился
+      if (this.lastParsedFile === fsPath && this.agentsCache.size > 0 && this.lastParsedMtime === mtime) {
+        // Возвращаем только данные без mtime
+        const result = new Map<string, AgentDefinition>();
+        this.agentsCache.forEach((value, key) => {
+          result.set(key, value.data);
+        });
+        return result;
+      }
+
+      const content = document.getText();
+      const parsed = safeLoad(content) as Record<string, unknown> | null;
+
+      if (parsed?.pipeline && typeof parsed.pipeline === 'object') {
+        const pipeline = parsed.pipeline as Record<string, unknown>;
+        if (pipeline.agents && typeof pipeline.agents === 'object') {
+          this.agentsCache.clear();
+          const agents = pipeline.agents as Record<string, unknown>;
+
+          for (const [agentId, agentData] of Object.entries(agents)) {
+            if (agentData && typeof agentData === 'object') {
+              const data = agentData as Record<string, unknown>;
+              this.agentsCache.set(agentId, {
+                data: {
+                  command: (data.command as string) || '',
+                  args: (data.args as string[]) || [],
+                  workdir: (data.workdir as string) || '.',
+                  description: (data.description as string) || ''
+                },
+                mtime
+              });
+            }
+          }
+
+          this.lastParsedFile = fsPath;
+          this.lastParsedMtime = mtime;
         }
-        
-        this.lastParsedFile = fsPath;
       }
     } catch (error) {
       console.error('Failed to parse pipeline.yaml:', error);
       this.agentsCache.clear();
       this.lastParsedFile = null;
+      this.lastParsedMtime = 0;
     }
 
-    return this.agentsCache;
+    // Возвращаем только данные без mtime
+    const result = new Map<string, AgentDefinition>();
+    this.agentsCache.forEach((value, key) => {
+      result.set(key, value.data);
+    });
+    return result;
   }
 
   /**
@@ -284,7 +299,6 @@ export class AgentHoverProvider implements vscode.HoverProvider {
     while ((match = agentValueRegex.exec(line)) !== null) {
       const fullMatchStart = match.index;
       const valueStart = fullMatchStart + match[1].length + 1; // +1 for colon
-      const valueEnd = fullMatchStart + match[0].length;
 
       // Skip whitespace after colon
       const trimmedValueStart = line.indexOf(match[2], valueStart);
@@ -374,13 +388,13 @@ export class AgentHoverProvider implements vscode.HoverProvider {
 /**
  * Combined HoverProvider that delegates to specific providers
  */
-export class WorkflowHoverProvider implements vscode.HoverProvider {
+export class WorkflowHoverProvider implements vscode.HoverProvider, vscode.Disposable {
   private readonly ticketProvider: TicketHoverProvider;
   private readonly agentProvider: AgentHoverProvider;
 
   constructor(store: WorkflowStore) {
     this.ticketProvider = new TicketHoverProvider(store);
-    this.agentProvider = new AgentHoverProvider();
+    this.agentProvider = new AgentHoverProvider(store);
   }
 
   /**
@@ -389,6 +403,13 @@ export class WorkflowHoverProvider implements vscode.HoverProvider {
   setWorkflowRoot(root: string): void {
     this.ticketProvider.setWorkflowRoot(root);
     this.agentProvider.setWorkflowRoot(root);
+  }
+
+  /**
+   * Dispose resources
+   */
+  dispose(): void {
+    this.agentProvider.dispose();
   }
 
   /**

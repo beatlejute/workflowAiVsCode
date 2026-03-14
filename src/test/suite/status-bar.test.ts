@@ -109,7 +109,6 @@ suite('StatusBar Suite', () => {
   let mockPipelineService: MockPipelineService;
   let store: WorkflowStore;
   let statusBar: StatusBar;
-  let statusBarItem: vscode.StatusBarItem;
 
   setup(async () => {
     // Initialize mock services
@@ -117,7 +116,7 @@ suite('StatusBar Suite', () => {
     store = new WorkflowStore();
 
     // Create status bar
-    statusBar = new StatusBar(mockPipelineService as any, store);
+    statusBar = new StatusBar(mockPipelineService as unknown as PipelineService, store);
   });
 
   teardown(() => {
@@ -232,8 +231,8 @@ suite('StatusBar Suite', () => {
   });
 
   test('Status bar disposes resources correctly', () => {
-    const newStatusBar = new StatusBar(mockPipelineService as any, store);
-    
+    const newStatusBar = new StatusBar(mockPipelineService as unknown as PipelineService, store);
+
     // Dispose
     newStatusBar.dispose();
 

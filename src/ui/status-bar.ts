@@ -62,13 +62,9 @@ export class StatusBar implements vscode.Disposable {
 
     // Subscribe to store changes
     // WorkflowStore.onDidChange returns a function, we need to wrap it in a disposable
-    const storeDisposable = this.store.onDidChange(() => {
+    this.store.onDidChange(() => {
       this.render();
     });
-    this.disposables.push({ dispose: () => {
-      // Store doesn't expose unsubscribe, so this is a no-op
-      // The store uses EventEmitter which doesn't leak significantly
-    } });
   }
 
   /**

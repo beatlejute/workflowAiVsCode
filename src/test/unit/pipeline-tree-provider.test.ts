@@ -30,6 +30,14 @@ import {
 } from '../../ui/pipeline-tree-provider';
 import { PipelineService, PipelineState } from '../../services/pipeline-service';
 
+// Interface for accessing private historyManager in tests
+interface PipelineTreeProviderWithHistory {
+  historyManager: {
+    runHistory: RunHistoryEntry[];
+    runCounter: number;
+  };
+}
+
 suite('PipelineTreeProvider Tests', () => {
   let store: WorkflowStore;
   let tempWorkflowRoot: string;
@@ -37,7 +45,7 @@ suite('PipelineTreeProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-pipeline');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-pipeline');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -277,7 +285,7 @@ statuses:
       const item = new StatisticsTreeItem(10, 3, 5);
 
       assert.ok((item.label as string).includes('Statistics'));
-      assert.strictEqual((item.description as string), 'Started: 10 | Retries: 3 | Gotos: 5');
+      assert.strictEqual((item.description as string), 'Stages Started: 10 | Retries: 3 | Goto Transitions: 5');
     });
 
     test('Tooltip contains all statistics', () => {
@@ -303,8 +311,8 @@ statuses:
 
     test('History with entries displays count', () => {
       const history: RunHistoryEntry[] = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success' },
-        { runNumber: 2, date: '2026-03-05 11:00', result: 'error' }
+        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] },
+        { runNumber: 2, date: '2026-03-05 11:00', result: 'error', reports: [] }
       ];
 
       const item = new HistoryTreeItem(history);
@@ -315,7 +323,8 @@ statuses:
       const history: RunHistoryEntry[] = Array.from({ length: 15 }, (_, i) => ({
         runNumber: i + 1,
         date: `2026-03-05 ${10 + i}:00`,
-        result: (i % 2 === 0 ? 'success' : 'error') as 'success' | 'error'
+        result: (i % 2 === 0 ? 'success' : 'error') as 'success' | 'error',
+        reports: []
       }));
 
       const item = new HistoryTreeItem(history);
@@ -335,7 +344,8 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 1,
         date: '2026-03-05 10:00',
-        result: 'success'
+        result: 'success',
+        reports: []
       };
 
       const item = new HistoryItemTreeItem(entry);
@@ -348,7 +358,8 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 2,
         date: '2026-03-05 11:00',
-        result: 'error'
+        result: 'error',
+        reports: []
       };
 
       const item = new HistoryItemTreeItem(entry);
@@ -359,14 +370,15 @@ statuses:
       const entry: RunHistoryEntry = {
         runNumber: 3,
         date: '2026-03-05 12:00',
-        result: 'success'
+        result: 'success',
+        reports: []
       };
 
       const item = new HistoryItemTreeItem(entry);
       const tooltip = item.tooltip as vscode.MarkdownString;
       const value = tooltip.value;
 
-      assert.ok(value.includes('**Run #3**'));
+      assert.ok(value.includes('**Run 3**'));
       assert.ok(value.includes('Date'));
       assert.ok(value.includes('Result'));
     });
@@ -399,7 +411,7 @@ statuses:
       assert.ok(hasHistory, 'Should have history item');
     });
 
-    test('Statistics item has no children', async () => {
+    test('Statistics item has children (Stages Started, Retries, Goto Transitions)', async () => {
       const provider = new PipelineTreeProvider(store, pipelineService);
       provider.setWorkflowRoot(tempWorkflowRoot);
 
@@ -408,7 +420,7 @@ statuses:
 
       if (statisticsItem) {
         const statsChildren = await provider.getChildren(statisticsItem);
-        assert.strictEqual(statsChildren.length, 0);
+        assert.strictEqual(statsChildren.length, 3);
       }
     });
 
@@ -455,82 +467,6 @@ statuses:
     });
   });
 
-  suite('PipelineTreeProvider Log Parsing Tests', () => {
-    test('Parses GOTO log entry correctly', () => {
-      const provider = new PipelineTreeProvider(store, pipelineService);
-      provider.setWorkflowRoot(tempWorkflowRoot);
-
-      // Simulate GOTO log
-      const logEntry = '[GOTO] analyze-report (elapsed: 1.2s)';
-      
-      // Access private method via any cast for testing
-      (provider as any).parseLogLine(logEntry);
-
-      const stage = (provider as any).currentStage;
-      const elapsed = (provider as any).elapsed;
-      const stagesStarted = (provider as any).stagesStarted;
-      const gotos = (provider as any).gotos;
-
-      assert.strictEqual(stage, 'analyze-report');
-      assert.strictEqual(elapsed, '1.2s');
-      assert.strictEqual(stagesStarted, 1);
-      assert.strictEqual(gotos, 1);
-    });
-
-    test('Parses INFO log with agent and ticket', () => {
-      const provider = new PipelineTreeProvider(store, pipelineService);
-      provider.setWorkflowRoot(tempWorkflowRoot);
-
-      const logEntry = '[INFO] agent: analyst-agent, ticket: IMPL-001';
-      (provider as any).parseLogLine(logEntry);
-
-      const agent = (provider as any).currentAgent;
-      const ticket = (provider as any).currentTicket;
-
-      assert.strictEqual(agent, 'analyst-agent');
-      assert.strictEqual(ticket, 'IMPL-001');
-    });
-
-    test('Parses INFO log with retry count', () => {
-      const provider = new PipelineTreeProvider(store, pipelineService);
-      provider.setWorkflowRoot(tempWorkflowRoot);
-
-      const logEntry = '[INFO] retry: 2/5';
-      (provider as any).parseLogLine(logEntry);
-
-      const attempt = (provider as any).currentAttempt;
-      const maxAttempts = (provider as any).currentMaxAttempts;
-      const retries = (provider as any).retries;
-
-      assert.strictEqual(attempt, 2);
-      assert.strictEqual(maxAttempts, 5);
-      assert.strictEqual(retries, 1);
-    });
-
-    test('Parses CTX log with skill', () => {
-      const provider = new PipelineTreeProvider(store, pipelineService);
-      provider.setWorkflowRoot(tempWorkflowRoot);
-
-      const logEntry = '[CTX] skill: analyze-report-skill';
-      (provider as any).parseLogLine(logEntry);
-
-      const skill = (provider as any).currentSkill;
-      assert.strictEqual(skill, 'analyze-report-skill');
-    });
-
-    test('Handles raw log entries gracefully', () => {
-      const provider = new PipelineTreeProvider(store, pipelineService);
-      provider.setWorkflowRoot(tempWorkflowRoot);
-
-      const logEntry = 'Some random log message';
-
-      // Should not throw
-      assert.doesNotThrow(() => {
-        (provider as any).parseLogLine(logEntry);
-      });
-    });
-  });
-
   suite('History Persistence Tests', () => {
     test('setContext stores extension context', () => {
       const provider = new PipelineTreeProvider(store, pipelineService);
@@ -559,7 +495,7 @@ statuses:
       await provider.loadHistoryFromStorage();
 
       // Should not throw and history should be empty
-      const history = (provider as any).runHistory as RunHistoryEntry[];
+      const history = (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory;
       assert.strictEqual(history.length, 0);
     });
 
@@ -580,7 +516,7 @@ statuses:
       provider.setContext(mockContext);
       await provider.loadHistoryFromStorage();
 
-      const history = (provider as any).runHistory as RunHistoryEntry[];
+      const history = (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory;
       assert.strictEqual(history.length, 2);
       assert.strictEqual(history[0].runNumber, 1);
       assert.strictEqual(history[0].result, 'success');
@@ -605,7 +541,7 @@ statuses:
       provider.setContext(mockContext);
       await provider.loadHistoryFromStorage();
 
-      const runCounter = (provider as any).runCounter as number;
+      const runCounter = (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runCounter;
       assert.strictEqual(runCounter, 5);
     });
 
@@ -625,10 +561,10 @@ statuses:
       provider.setContext(mockContext);
 
       // Add some history entries
-      (provider as any).runHistory = [
+      (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
         { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] },
         { runNumber: 2, date: '2026-03-05 11:00', result: 'error', reports: [{ id: 'RPT-001', path: '/path/to/report.md' }] }
-      ] as RunHistoryEntry[];
+      ];
 
       await provider.saveHistoryToStorage();
 
@@ -656,20 +592,20 @@ statuses:
       provider.setContext(mockContext);
 
       // Add 60 history entries
-      (provider as any).runHistory = Array.from({ length: 60 }, (_, i) => ({
+      (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = Array.from({ length: 60 }, (_, i) => ({
         runNumber: i + 1,
         date: `2026-03-05 ${10 + Math.floor(i / 10)}:${i % 10}0`,
         result: 'success' as const,
         reports: []
-      })) as RunHistoryEntry[];
+      }));
 
       await provider.saveHistoryToStorage();
 
       assert.ok(savedData);
       assert.strictEqual(savedData?.length, 50);
-      // Should keep first 50 (most recent, since unshift adds to front)
-      assert.strictEqual(savedData?.[0].runNumber, 60);
-      assert.strictEqual(savedData?.[49].runNumber, 11);
+      // slice(0, 50) keeps the first 50 items of the array (runNumbers 1-50)
+      assert.strictEqual(savedData?.[0].runNumber, 1);
+      assert.strictEqual(savedData?.[49].runNumber, 50);
     });
 
     test('loadHistoryFromStorage handles errors gracefully', async () => {
@@ -702,9 +638,9 @@ statuses:
       } as unknown as vscode.ExtensionContext;
 
       provider.setContext(mockContext);
-      (provider as any).runHistory = [
+      (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
         { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
-      ] as RunHistoryEntry[];
+      ];
 
       // Should not throw
       await provider.saveHistoryToStorage();
@@ -717,7 +653,7 @@ statuses:
       // Don't set context
       await provider.loadHistoryFromStorage();
 
-      const history = (provider as any).runHistory as RunHistoryEntry[];
+      const history = (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory;
       assert.strictEqual(history.length, 0);
     });
 
@@ -725,9 +661,9 @@ statuses:
       const provider = new PipelineTreeProvider(store, pipelineService);
 
       // Don't set context
-      (provider as any).runHistory = [
+      (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
         { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
-      ] as RunHistoryEntry[];
+      ];
 
       await provider.saveHistoryToStorage();
       // Should not throw

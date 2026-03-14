@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 suite('I18n t() Function Tests', () => {
-  const projectRoot = path.join(__dirname, '../../../');
+  const projectRoot = path.join(__dirname, '../../../../../');
 
   test('bundle.l10n.json should have valid JSON structure', () => {
     const bundlePath = path.join(projectRoot, 'l10n/bundle.l10n.json');

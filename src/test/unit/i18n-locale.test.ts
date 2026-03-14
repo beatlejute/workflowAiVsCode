@@ -15,7 +15,7 @@ import * as path from 'path';
 
 suite('I18n t() Locale Tests', () => {
 
-  const projectRoot = path.join(__dirname, '../../../');
+  const projectRoot = path.join(__dirname, '../../../../../');
   const l10nDir = path.join(projectRoot, 'l10n');
 
   suite('Bundle loading', () => {

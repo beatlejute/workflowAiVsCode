@@ -11,6 +11,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { getTicketsDir, getReportsDir } from '../utils/path-utils';
 import {
   Ticket,
   Plan,
@@ -22,6 +23,7 @@ import {
 } from './types';
 import { parse as parseFrontmatter } from './frontmatter-parser';
 import { ConfigManager } from './config-manager';
+import { IStore } from '../interfaces/IStore';
 
 /**
  * Event types that can be emitted by the store
@@ -48,7 +50,7 @@ export interface StoreChangeEvent {
  * Provides unified access to tickets, plans, reports, and configuration.
  * Supports both full refresh and incremental updates with event notifications.
  */
-export class WorkflowStore {
+export class WorkflowStore implements IStore {
   // Data storage
   private tickets: Map<string, Ticket> = new Map();
   private plans: Map<string, Plan> = new Map();
@@ -132,7 +134,7 @@ export class WorkflowStore {
    * Scan tickets for a specific status folder
    */
   private async scanTicketsForStatus(workflowRoot: string, status: TicketStatus): Promise<void> {
-    const statusDir = path.join(workflowRoot, 'tickets', status);
+    const statusDir = getTicketsDir(workflowRoot, status);
 
     try {
       const entries = await fs.readdir(statusDir, { withFileTypes: true });
@@ -175,14 +177,15 @@ export class WorkflowStore {
 
     const section = sectionMatch[1];
     const reviews: ReviewEntry[] = [];
-    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\s*\|\s*(?:✅|❌)\s*(passed|failed)\s*\|\s*([^|\n]*)\|?/g;
+    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\s*\|\s*(\S+)\s+(\w+)\s*\|\s*([^|\n]*)\|?/g;
     let match: RegExpExecArray | null;
 
     while ((match = rowRegex.exec(section)) !== null) {
       reviews.push({
         date: match[1],
-        status: match[2] as 'passed' | 'failed',
-        summary: match[3].trim()
+        icon: match[2],
+        status: match[3],
+        summary: match[4].trim()
       });
     }
 
@@ -232,7 +235,7 @@ export class WorkflowStore {
    * Scan reports from reports folder
    */
   private async scanReports(workflowRoot: string): Promise<void> {
-    const reportsDir = path.join(workflowRoot, 'reports');
+    const reportsDir = getReportsDir(workflowRoot);
 
     try {
       const entries = await fs.readdir(reportsDir, { withFileTypes: true });
@@ -266,6 +269,147 @@ export class WorkflowStore {
   }
 
   // ==================== Incremental Update Methods ====================
+
+  /**
+   * Parse a file and return the parsed entity (ticket, plan, or report)
+   * Used by updateFile() for incremental updates
+   */
+  private async parseFile(filePath: string): Promise<{ type: 'ticket' | 'plan' | 'report'; data: Ticket | Plan | Report; status?: TicketStatus } | null> {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const relativePath = path.relative(this.workflowRoot ?? '', filePath);
+      const pathParts = relativePath.split(path.sep);
+
+      // Check for tickets: tickets/{status}/{ID}.md
+      if (pathParts[0] === 'tickets' && pathParts.length >= 3) {
+        const status = pathParts[1] as TicketStatus;
+        const { frontmatter, body } = parseFrontmatter<Ticket>(content);
+        if (!frontmatter.id) { return null; }
+        const reviews = WorkflowStore.parseReviews(body);
+        return { type: 'ticket', data: { ...frontmatter, status, ...(reviews.length > 0 ? { reviews } : {}) }, status };
+      }
+
+      // Check for plans: plans/current/{ID}.md or plans/archive/{ID}.md
+      if (pathParts[0] === 'plans' && pathParts.length >= 3) {
+        const folder = pathParts[1] === 'archive' ? 'archive' as const : 'current' as const;
+        const { frontmatter } = parseFrontmatter<Plan>(content);
+        if (!frontmatter.id) { return null; }
+        return { type: 'plan', data: { ...frontmatter, folder } };
+      }
+
+      // Check for reports: reports/{ID}.md
+      if (pathParts[0] === 'reports' && pathParts.length >= 2) {
+        const { frontmatter } = parseFrontmatter<Report>(content);
+        if (!frontmatter.id) { return null; }
+        return { type: 'report', data: frontmatter };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Failed to parse file ${filePath}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update cache with a parsed entity
+   * Emits appropriate add/update event
+   */
+  private updateCache(filePath: string, entity: { type: 'ticket' | 'plan' | 'report'; data: Ticket | Plan | Report; status?: TicketStatus }): void {
+    if (entity.type === 'ticket') {
+      const ticket = entity.data as Ticket;
+      const isNew = !this.tickets.has(ticket.id);
+      this.tickets.set(ticket.id, ticket);
+      this.emitEvent({
+        type: 'ticket',
+        id: ticket.id,
+        operation: isNew ? 'add' : 'update'
+      });
+    } else if (entity.type === 'plan') {
+      const plan = entity.data as Plan;
+      const isNew = !this.plans.has(plan.id);
+      this.plans.set(plan.id, plan);
+      this.emitEvent({
+        type: 'plan',
+        id: plan.id,
+        operation: isNew ? 'add' : 'update'
+      });
+    } else if (entity.type === 'report') {
+      const report = entity.data as Report;
+      const index = this.reports.findIndex(r => r.id === report.id);
+      if (index === -1) {
+        this.reports.push(report);
+      } else {
+        this.reports[index] = report;
+      }
+      this.emitEvent({
+        type: 'report',
+        id: report.id,
+        operation: 'add'
+      });
+    }
+  }
+
+  /**
+   * Remove an entity from cache based on file path
+   * Emits appropriate delete event
+   */
+  private removeFromCache(filePath: string): void {
+    const relativePath = path.relative(this.workflowRoot ?? '', filePath);
+    const pathParts = relativePath.split(path.sep);
+
+    // Check for tickets: tickets/{status}/{ID}.md
+    if (pathParts[0] === 'tickets' && pathParts.length >= 3) {
+      const fileName = pathParts[2];
+      const id = fileName.replace('.md', '');
+      if (this.tickets.has(id)) {
+        this.tickets.delete(id);
+        this.emitEvent({ type: 'ticket', id, operation: 'delete' });
+      }
+    }
+
+    // Check for plans: plans/{folder}/{ID}.md
+    if (pathParts[0] === 'plans' && pathParts.length >= 3) {
+      const fileName = pathParts[2];
+      const id = fileName.replace('.md', '');
+      if (this.plans.has(id)) {
+        this.plans.delete(id);
+        this.emitEvent({ type: 'plan', id, operation: 'delete' });
+      }
+    }
+
+    // Check for reports: reports/{ID}.md
+    if (pathParts[0] === 'reports' && pathParts.length >= 2) {
+      const fileName = pathParts[1];
+      const id = fileName.replace('.md', '');
+      const index = this.reports.findIndex(r => r.id === id);
+      if (index !== -1) {
+        this.reports.splice(index, 1);
+        this.emitEvent({ type: 'report', id, operation: 'delete' });
+      }
+    }
+  }
+
+  /**
+   * Incremental update for a single file change
+   * Parses only the changed file and updates cache without full refresh
+   * 
+   * @param filePath - Path to the changed file
+   * @param changeType - Type of change: 'create', 'change', or 'delete'
+   */
+  async updateFile(filePath: string, changeType: 'create' | 'change' | 'delete'): Promise<void> {
+    if (changeType === 'delete') {
+      this.removeFromCache(filePath);
+    } else {
+      const entity = await this.parseFile(filePath);
+      if (entity) {
+        this.updateCache(filePath, entity);
+      }
+    }
+    this.emitEvent({ type: 'ticket', operation: 'refresh' });
+    this.emitEvent({ type: 'plan', operation: 'refresh' });
+    this.emitEvent({ type: 'report', operation: 'refresh' });
+  }
 
   /**
    * Add a new ticket to the store
@@ -512,6 +656,15 @@ export class WorkflowStore {
     this.config = undefined;
     this.pipeline = undefined;
     this.workflowRoot = null;
+  }
+
+  /**
+   * Dispose of the store and clean up resources
+   * Removes all event listeners to prevent memory leaks
+   */
+  dispose(): void {
+    this.eventEmitter.removeAllListeners();
+    this.configManager.dispose();
   }
 
   /**

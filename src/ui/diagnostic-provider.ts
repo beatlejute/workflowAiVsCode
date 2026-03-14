@@ -274,7 +274,7 @@ export class DiagnosticProvider implements vscode.Disposable {
       } else if (fsPath.endsWith(path.join('.workflow', 'config', 'config.yaml'))) {
         this.validateConfigDocument(uri, content);
       }
-    } catch (error) {
+    } catch {
       // File may have been deleted or inaccessible
       this.diagnosticCollection.delete(uri);
     }

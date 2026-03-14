@@ -25,8 +25,11 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      - name: Run linter
+        run: npm run lint
+
       - name: Run unit tests
-        run: npm run test:coverage
+        run: npm run test:unit
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

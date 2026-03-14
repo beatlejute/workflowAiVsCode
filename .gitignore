@@ -2,5 +2,16 @@
 .vscode-test/
 node_modules/
 dist/
+coverage/
+tmp/
+.kilocode/
 
 workflow-vscode-*.vsix
+
+# Temp/log files
+nul
+test-output.txt
+test-coverage-output.txt
+coverage-report.txt
+cov.txt
+.nyc_output/

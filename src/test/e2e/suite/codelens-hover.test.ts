@@ -78,7 +78,7 @@ Ticket for testing CodeLens and Hover functionality.
     // Open the ticket
     const uri = vscode.Uri.file(testTicketPath);
     const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc);
+    await vscode.window.showTextDocument(doc);
 
     // Wait for CodeLens to be computed
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -166,7 +166,7 @@ See also: ${path.basename(testTicketPath, '.md')}
       // Open the referencing ticket
       const uri = vscode.Uri.file(refTicketPath);
       const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc);
+      await vscode.window.showTextDocument(doc);
 
       // Wait for hover provider to be registered
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -174,11 +174,8 @@ See also: ${path.basename(testTicketPath, '.md')}
       // Find the position of the ticket ID in the document
       const content = doc.getText();
       const ticketId = path.basename(testTicketPath, '.md');
-      const idPosition = content.indexOf(ticketId);
-      
-      if (idPosition !== -1) {
-        const position = doc.positionAt(idPosition);
-        
+
+      if (content.indexOf(ticketId) !== -1) {
         // Trigger hover at the position
         // Note: VS Code doesn't expose a direct API to get hover content programmatically
         // We verify the hover provider is registered and functional
@@ -214,7 +211,6 @@ See also: ${path.basename(testTicketPath, '.md')}
     assert.ok(priorityMatch, 'Ticket should have priority');
 
     const ticketId = idMatch[1];
-    const title = titleMatch[1];
     const status = statusMatch[1];
     const priority = priorityMatch[1];
 

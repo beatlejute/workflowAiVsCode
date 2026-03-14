@@ -35,7 +35,7 @@ suite('CodeLensProvider Tests', () => {
 
   suiteSetup(async () => {
     // Create temporary workflow directory for testing
-    const tempDir = path.join(__dirname, '../../../tmp/test-workflow-codelens');
+    const tempDir = path.join(__dirname, '../../../../../tmp/test-workflow-codelens');
 
     // Create directory structure
     fs.mkdirSync(tempDir, { recursive: true });
@@ -45,6 +45,7 @@ suite('CodeLensProvider Tests', () => {
     fs.mkdirSync(path.join(tempDir, '.workflow', 'tickets', 'done'), { recursive: true });
     fs.mkdirSync(path.join(tempDir, '.workflow', 'plans', 'current'), { recursive: true });
     fs.mkdirSync(path.join(tempDir, '.workflow', 'config'), { recursive: true });
+    fs.mkdirSync(path.join(tempDir, '.workflow', 'templates'), { recursive: true });
 
     // Create minimal config.yaml
     fs.writeFileSync(
@@ -95,14 +96,19 @@ paths:
     // Create pipeline.yaml
     fs.writeFileSync(
       path.join(tempDir, '.workflow', 'config', 'pipeline.yaml'),
-      `version: "1.0"
-stages:
-  - id: analyze
-    agent: claude
-    skill: analyze-report
-  - id: plan
-    agent: claude
-    skill: create-plan
+      `pipeline:
+  agents:
+    test-agent:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
+  stages:
+    execute:
+      description: "Execute task"
+      agent: test-agent
+      goto:
+        default: end
+  entry: execute
 `
     );
 
@@ -131,7 +137,7 @@ type: "{type}"
   suiteTeardown(() => {
     // Cleanup
     try {
-      fs.rmSync(path.join(__dirname, '../../../tmp/test-workflow-codelens'), {
+      fs.rmSync(path.join(__dirname, '../../../../../tmp/test-workflow-codelens'), {
         recursive: true,
         force: true
       });
@@ -439,17 +445,18 @@ type: IMPL
 
     test('shows correct icons for different statuses', async () => {
       const testCases = [
-        { status: TicketStatus.Backlog, expectedIcon: '📋' },
-        { status: TicketStatus.Ready, expectedIcon: '✅' },
-        { status: TicketStatus.InProgress, expectedIcon: '🔄' },
-        { status: TicketStatus.Review, expectedIcon: '👀' },
-        { status: TicketStatus.Blocked, expectedIcon: '🚫' },
-        { status: TicketStatus.Done, expectedIcon: '✨' }
+        { status: TicketStatus.Backlog, expectedIcon: '📋', num: '010' },
+        { status: TicketStatus.Ready, expectedIcon: '✅', num: '011' },
+        { status: TicketStatus.InProgress, expectedIcon: '🔄', num: '012' },
+        { status: TicketStatus.Review, expectedIcon: '👀', num: '013' },
+        { status: TicketStatus.Blocked, expectedIcon: '🚫', num: '014' },
+        { status: TicketStatus.Done, expectedIcon: '✨', num: '015' }
       ];
 
       for (const testCase of testCases) {
+        const ticketId = `ST-${testCase.num}`;
         const ticket: Ticket = {
-          id: `STATUS-${testCase.status.toUpperCase()}`,
+          id: ticketId,
           title: `Status Test ${testCase.status}`,
           status: testCase.status,
           priority: 3,
@@ -471,7 +478,7 @@ type: IMPL
         fs.mkdirSync(statusDir, { recursive: true });
 
         const ticketContent = `---
-id: STATUS-${testCase.status.toUpperCase()}
+id: ${ticketId}
 title: Status Test ${testCase.status}
 status: ${testCase.status}
 priority: 3
@@ -480,7 +487,7 @@ type: IMPL
 
 # Status Test
 `;
-        const ticketPath = path.join(statusDir, `STATUS-${testCase.status.toUpperCase()}.md`);
+        const ticketPath = path.join(statusDir, `${ticketId}.md`);
         fs.writeFileSync(ticketPath, ticketContent);
 
         const document = await vscode.workspace.openTextDocument(ticketPath);
@@ -496,17 +503,19 @@ type: IMPL
 
     test('shows dependency status icons correctly', async () => {
       const depStatusTests = [
-        { status: TicketStatus.Backlog, expectedIcon: '⬜' },
-        { status: TicketStatus.Ready, expectedIcon: '🔵' },
-        { status: TicketStatus.InProgress, expectedIcon: '🔷' },
-        { status: TicketStatus.Review, expectedIcon: '👁️' },
-        { status: TicketStatus.Blocked, expectedIcon: '🔴' },
-        { status: TicketStatus.Done, expectedIcon: '✅' }
+        { status: TicketStatus.Backlog, expectedIcon: '⬜', num: '020' },
+        { status: TicketStatus.Ready, expectedIcon: '🔵', num: '021' },
+        { status: TicketStatus.InProgress, expectedIcon: '🔷', num: '022' },
+        { status: TicketStatus.Review, expectedIcon: '👁️', num: '023' },
+        { status: TicketStatus.Blocked, expectedIcon: '🔴', num: '024' },
+        { status: TicketStatus.Done, expectedIcon: '✅', num: '025' }
       ];
 
       for (const test of depStatusTests) {
+        const depId = `DEP-${test.num}`;
+        const mainId = `MAN-${test.num}`;
         const depTicket: Ticket = {
-          id: `DEPSTATUS-${test.status.toUpperCase()}`,
+          id: depId,
           title: `Dep Status ${test.status}`,
           status: test.status,
           priority: 3,
@@ -525,12 +534,12 @@ type: IMPL
         store.addTicket(depTicket);
 
         const mainTicket: Ticket = {
-          id: `MAIN-${test.status.toUpperCase()}`,
+          id: mainId,
           title: `Main ${test.status}`,
           status: TicketStatus.Ready,
           priority: 3,
           type: 'IMPL',
-          dependencies: [`DEPSTATUS-${test.status.toUpperCase()}`],
+          dependencies: [depId],
           conditions: [],
           context: {},
           tags: [],
@@ -547,7 +556,7 @@ type: IMPL
         fs.mkdirSync(statusDir, { recursive: true });
 
         const depTicketContent = `---
-id: DEPSTATUS-${test.status.toUpperCase()}
+id: ${depId}
 title: Dep Status ${test.status}
 status: ${test.status}
 priority: 3
@@ -556,22 +565,22 @@ type: IMPL
 
 # Dep Status Test
 `;
-        const depTicketPath = path.join(statusDir, `DEPSTATUS-${test.status.toUpperCase()}.md`);
+        const depTicketPath = path.join(statusDir, `${depId}.md`);
         fs.writeFileSync(depTicketPath, depTicketContent);
 
         const mainTicketContent = `---
-id: MAIN-${test.status.toUpperCase()}
+id: ${mainId}
 title: Main ${test.status}
 status: ready
 priority: 3
 type: IMPL
 dependencies:
-  - DEPSTATUS-${test.status.toUpperCase()}
+  - ${depId}
 ---
 
 # Main Test
 `;
-        const mainTicketPath = path.join(tempWorkflowRoot, 'tickets', 'ready', `MAIN-${test.status.toUpperCase()}.md`);
+        const mainTicketPath = path.join(tempWorkflowRoot, 'tickets', 'ready', `${mainId}.md`);
         fs.writeFileSync(mainTicketPath, mainTicketContent);
 
         const document = await vscode.workspace.openTextDocument(mainTicketPath);
@@ -704,8 +713,12 @@ Not a workflow ticket.
     });
 
     test('creates stage info CodeLens for pipeline.yaml', async () => {
-      const pipelineContent = `version: "1.0"
-pipeline:
+      const pipelineContent = `pipeline:
+  agents:
+    claude:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
   stages:
     analyze:
       description: "Analyze report"
@@ -721,6 +734,7 @@ pipeline:
       goto:
         passed: execute
         default: end
+  entry: analyze
 `;
       const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
       fs.writeFileSync(pipelinePath, pipelineContent);
@@ -745,8 +759,12 @@ pipeline:
     });
 
     test('creates goto CodeLens for pipeline.yaml stages', async () => {
-      const pipelineContent = `version: "1.0"
-pipeline:
+      const pipelineContent = `pipeline:
+  agents:
+    claude:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
   stages:
     analyze:
       agent: claude
@@ -754,6 +772,7 @@ pipeline:
       goto:
         passed: plan
         failed: end
+  entry: analyze
 `;
       const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
       fs.writeFileSync(pipelinePath, pipelineContent);
@@ -791,11 +810,16 @@ not: pipeline
       const providerWithoutRoot = new PipelineCodeLensProvider();
       // Don't set workflow root
 
-      const pipelineContent = `version: "1.0"
-pipeline:
+      const pipelineContent = `pipeline:
+  agents:
+    claude:
+      command: "echo"
+      args: ["test"]
+      workdir: "."
   stages:
     analyze:
       agent: claude
+  entry: analyze
 `;
       const pipelinePath = path.join(tempWorkflowRoot, 'config', 'pipeline.yaml');
       fs.writeFileSync(pipelinePath, pipelineContent);

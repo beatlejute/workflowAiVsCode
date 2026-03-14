@@ -5,9 +5,9 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { t } from '../i18n';
 import { PlanService } from '../services/plan-service';
+import { getPlanPath } from '../utils/path-utils';
 
 /**
  * Execute workflow.newPlan command
@@ -37,7 +37,7 @@ export async function executeNewPlan(planService: PlanService): Promise<void> {
     // Open the created plan file
     const workflowRoot = planService.getWorkflowRoot();
     const planPath = vscode.Uri.file(
-      path.join(workflowRoot, 'plans', 'current', `${plan.id}.md`)
+      getPlanPath(workflowRoot, plan.id)
     );
     await vscode.commands.executeCommand('vscode.open', planPath);
   } catch (error) {

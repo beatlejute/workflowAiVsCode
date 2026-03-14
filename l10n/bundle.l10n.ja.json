@@ -223,5 +223,6 @@
   "Reload": "リロード",
   "No current plans available": "現在のプランはありません",
   "Select plan to decompose": "分解するプランを選択",
-  "Decomposing plan {0}...": "プラン {0} を分解中..."
+  "Decomposing plan {0}...": "プラン {0} を分解中...",
+  "Pipeline is running": "パイプライン実行中"
 }
