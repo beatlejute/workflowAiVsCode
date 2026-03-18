@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore } from '../../data/workflow-store';
 import { PlanService } from '../../services/plan-service';
-import { Plan, Ticket } from '../../data/types';
+import { Plan, Ticket, TicketStatus } from '../../data/types';
 
 suite('PlanService Suite', () => {
 

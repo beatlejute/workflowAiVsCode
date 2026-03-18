@@ -125,5 +125,11 @@
   "Failed to archive plan {0}. Check Output channel for details.": "계획 {0} 아카이브를 실패했습니다. Output 채널에서 세부정보를 확인하세요.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "계획 {0} 아카이브 해제를 실패했습니다. Output 채널에서 세부정보를 확인하세요.",
   "Failed to filter tickets. Check Output channel for details.": "티켓 필터링을 실패했습니다. Output 채널에서 세부정보를 확인하세요.",
-  "Failed to clear filter. Check Output channel for details.": "필터 초기화를 실패했습니다. Output 채널에서 세부정보를 확인하세요."
+  "Failed to clear filter. Check Output channel for details.": "필터 초기화를 실패했습니다. Output 채널에서 세부정보를 확인하세요.",
+  "views.sidebar.recurring.name": "RECURRING",
+  "command.recurring.new.title": "New Recurring Definition",
+  "command.recurring.toggle.title": "Toggle Enable/Disable",
+  "command.recurring.delete.title": "Delete Recurring Definition",
+  "command.recurring.triggerNow.title": "Trigger Now",
+  "command.recurring.openConfig.title": "Open Config"
 }

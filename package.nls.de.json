@@ -125,5 +125,11 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Archivieren des Plans {0} fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Dearchivieren des Plans {0} fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
   "Failed to filter tickets. Check Output channel for details.": "Filtern der Tickets fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
-  "Failed to clear filter. Check Output channel for details.": "Filter zurücksetzen fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details."
+  "Failed to clear filter. Check Output channel for details.": "Filter zurücksetzen fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
+  "views.sidebar.recurring.name": "RECURRING",
+  "command.recurring.new.title": "New Recurring Definition",
+  "command.recurring.toggle.title": "Toggle Enable/Disable",
+  "command.recurring.delete.title": "Delete Recurring Definition",
+  "command.recurring.triggerNow.title": "Trigger Now",
+  "command.recurring.openConfig.title": "Open Config"
 }

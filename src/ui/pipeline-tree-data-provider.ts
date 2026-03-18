@@ -33,7 +33,9 @@ import { RunHistoryEntry, ReportInfo } from './pipeline-types';
 export interface CompletedStageData {
   stage: string;
   elapsed?: string;
+  durationMs?: number;
   success: boolean;
+  timedOut?: boolean;
   ticket?: string;
   agent?: string;
   skill?: string;
@@ -55,11 +57,13 @@ export interface PipelineDataState {
   currentTicket: string | undefined;
   currentAttempt: number | undefined;
   currentMaxAttempts: number | undefined;
+  currentStageStartTime: number | undefined;
   elapsed: string | undefined;
   completedStages: CompletedStageData[];
   stagesStarted: number;
   retries: number;
   gotos: number;
+  timeouts: number;
   runHistory: RunHistoryEntry[];
 }
 
@@ -78,8 +82,13 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     private pipelineService: PipelineService | null = null
   ) {
     // Subscribe to store change events for reactive updates
-    store.onDidChange(() => {
-      this.refresh();
+    // Only refresh on config changes — ticket/plan/report changes are handled
+    // by the orchestrator (PipelineTreeProvider) to avoid redundant refreshes
+    // that cause tooltip flickering
+    store.onDidChange((event) => {
+      if (event.type === 'config') {
+        this.refresh();
+      }
     });
   }
 
@@ -143,6 +152,7 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
       addStat(t('Stages Started'), stats.stagesStarted, 'play', 'stat-stages');
       addStat(t('Retries'), stats.retries, 'refresh', 'stat-retries');
       addStat(t('Goto Transitions'), stats.gotos, 'arrow-right', 'stat-gotos');
+      addStat(t('Timeouts'), stats.timeouts, 'watch', 'stat-timeouts');
 
       return Promise.resolve(items);
     }
@@ -186,7 +196,7 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     const items: PipelineTreeItem[] = [];
     
     items.push(new PipelineRunTreeItem(PipelineState.Idle, undefined));
-    items.push(new StatisticsTreeItem(0, 0, 0));
+    items.push(new StatisticsTreeItem(0, 0, 0, 0));
     items.push(new HistoryTreeItem(this.runHistory));
 
     return Promise.resolve(items);
@@ -210,7 +220,8 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
         state.currentSkill,
         state.currentTicket,
         state.currentAttempt,
-        state.currentMaxAttempts
+        state.currentMaxAttempts,
+        state.currentStageStartTime
       ));
     }
 
@@ -221,7 +232,9 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
       items.push(new CompletedStageTreeItem(
         info.stage,
         info.elapsed,
+        info.durationMs,
         info.success,
+        info.timedOut,
         info.ticket,
         info.agent,
         info.skill,
@@ -237,7 +250,8 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     items.push(new StatisticsTreeItem(
       state.stagesStarted,
       state.retries,
-      state.gotos
+      state.gotos,
+      state.timeouts
     ));
 
     // 5. History
@@ -275,6 +289,7 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
       addStat(t('Stages Started'), state.stagesStarted, 'play', 'stat-stages');
       addStat(t('Retries'), state.retries, 'refresh', 'stat-retries');
       addStat(t('Goto Transitions'), state.gotos, 'arrow-right', 'stat-gotos');
+      addStat(t('Timeouts'), state.timeouts, 'watch', 'stat-timeouts');
 
       return Promise.resolve(items);
     }
@@ -317,7 +332,20 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     try {
       if (!fs.existsSync(logsDir)) return undefined;
       const files = fs.readdirSync(logsDir).filter(f => f.endsWith('.log'));
-      return files.length > 0 ? path.join(logsDir, files[0]) : undefined;
+      if (files.length === 0) return undefined;
+      // Return most recent log file by mtime
+      let newest = files[0];
+      let newestMtime = 0;
+      for (const file of files) {
+        try {
+          const mtime = fs.statSync(path.join(logsDir, file)).mtimeMs;
+          if (mtime > newestMtime) {
+            newestMtime = mtime;
+            newest = file;
+          }
+        } catch { /* skip inaccessible files */ }
+      }
+      return path.join(logsDir, newest);
     } catch {
       return undefined;
     }

@@ -25,9 +25,12 @@ export interface PipelineExecutionState {
   currentAttempt?: number;
   currentMaxAttempts?: number;
   elapsed?: string;
+  currentStageStartTime?: number;
+  currentStageTimedOut?: boolean;
   stagesStarted: number;
   retries: number;
   gotos: number;
+  timeouts: number;
   completedStages: CompletedStageData[];
   stageOccurrences: Map<string, number>;
   currentOutputLines: string[];
@@ -47,9 +50,12 @@ export class PipelineStateManager {
     currentAttempt: undefined,
     currentMaxAttempts: undefined,
     elapsed: undefined,
+    currentStageStartTime: undefined,
+    currentStageTimedOut: undefined,
     stagesStarted: 0,
     retries: 0,
     gotos: 0,
+    timeouts: 0,
     completedStages: [],
     stageOccurrences: new Map(),
     currentOutputLines: [],
@@ -75,6 +81,15 @@ export class PipelineStateManager {
       if (data.stage) this.state.currentStage = data.stage;
       if (data.agent) this.state.currentAgent = data.agent;
       if (data.skill) this.state.currentSkill = data.skill;
+      this.state.currentStageStartTime = Date.now();
+      this.state.currentStageTimedOut = false;
+      changed = true;
+    }
+
+    // Handle TIMEOUT
+    if (data.isTimeout) {
+      this.state.currentStageTimedOut = true;
+      this.state.timeouts++;
       changed = true;
     }
 
@@ -138,11 +153,18 @@ export class PipelineStateManager {
         : (data.gotoTarget ? `→ ${data.gotoTarget}` : undefined);
 
       const occurrence = this.state.stageOccurrences.get(prevStage) ?? 0;
-      
+
+      // Calculate duration from stage start time
+      const durationMs = this.state.currentStageStartTime
+        ? Date.now() - this.state.currentStageStartTime
+        : undefined;
+
       this.state.completedStages.push({
         stage: prevStage,
         elapsed: this.state.elapsed,
-        success: true,
+        durationMs,
+        success: !this.state.currentStageTimedOut,
+        timedOut: this.state.currentStageTimedOut || false,
         ticket: this.state.currentTicket,
         agent: this.state.currentAgent,
         skill: this.state.currentSkill,
@@ -159,6 +181,8 @@ export class PipelineStateManager {
     this.state.ticketStatusHistory = [];
     this.state.currentOutputLines = [];
     this.state.currentStageReport = undefined;
+    this.state.currentStageStartTime = undefined;
+    this.state.currentStageTimedOut = false;
     this.state.stagesStarted++;
     this.state.gotos++;
   }
@@ -213,6 +237,13 @@ export class PipelineStateManager {
   }
 
   /**
+   * Get current stage start time
+   */
+  getCurrentStageStartTime(): number | undefined {
+    return this.state.currentStageStartTime;
+  }
+
+  /**
    * Get stages started count
    */
   getStagesStarted(): number {
@@ -231,6 +262,13 @@ export class PipelineStateManager {
    */
   getGotos(): number {
     return this.state.gotos;
+  }
+
+  /**
+   * Get timeouts count
+   */
+  getTimeouts(): number {
+    return this.state.timeouts;
   }
 
   /**
@@ -266,9 +304,12 @@ export class PipelineStateManager {
       currentAttempt: undefined,
       currentMaxAttempts: undefined,
       elapsed: undefined,
+      currentStageStartTime: undefined,
+      currentStageTimedOut: undefined,
       stagesStarted: 0,
       retries: 0,
       gotos: 0,
+      timeouts: 0,
       completedStages: [],
       stageOccurrences: new Map(),
       currentOutputLines: [],

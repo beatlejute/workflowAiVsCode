@@ -17,7 +17,7 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import * as path from 'path';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus } from '../data/types';
+import { Ticket, TicketStatus, RecurringDefinition } from '../data/types';
 import { getReviewBadges, extractPlanId } from './utils';
 import { TreeItemCache } from '../utils/tree-item-cache';
 import { getTicketIcon } from '../utils/ticket-utils';
@@ -52,12 +52,26 @@ const sortedTicketsCache = new TreeItemCache<KanbanTicketTreeItem[]>();
 const treeItemCache = new TreeItemCache<KanbanTicketTreeItem>();
 
 /**
+ * Shared recurring definitions across all kanban providers
+ */
+let recurringDefinitions: RecurringDefinition[] = [];
+
+/**
+ * Set recurring definitions for all kanban providers
+ */
+export function setRecurringDefinitions(definitions: RecurringDefinition[]): void {
+  recurringDefinitions = definitions;
+  treeItemCache.clear();
+}
+
+/**
  * Tree item representing a ticket in the Kanban board
  */
 export class KanbanTicketTreeItem extends vscode.TreeItem {
   constructor(
     public readonly ticket: Ticket,
-    workflowRoot: string
+    workflowRoot: string,
+    private readonly recurringDefinitions: RecurringDefinition[] = []
   ) {
     const label = ticket.id;
     const reviewBadges = getReviewBadges(ticket.reviews);
@@ -65,8 +79,8 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.description = description;
-    this.tooltip = buildTicketTooltip(ticket);
-    this.iconPath = getTicketIcon(ticket.priority);
+    this.tooltip = this.buildTooltip();
+    this.iconPath = this.getIconPath();
     this.contextValue = 'kanban-ticket';
 
     // Command to open ticket file on click
@@ -82,6 +96,41 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
       arguments: [vscode.Uri.file(ticketPath)]
     };
   }
+
+  private getIconPath(): vscode.ThemeIcon | undefined {
+    if (this.ticket.recurring_source) {
+      return new vscode.ThemeIcon('sync');
+    }
+    return getTicketIcon(this.ticket.priority);
+  }
+
+  private buildTooltip(): vscode.MarkdownString {
+    const baseTooltip = buildTicketTooltip(this.ticket);
+    
+    if (this.ticket.recurring_source && this.recurringDefinitions.length > 0) {
+      const definition = this.recurringDefinitions.find(d => d.id === this.ticket.recurring_source);
+      if (definition) {
+        baseTooltip.appendMarkdown('\n\n---\n\n');
+        baseTooltip.appendMarkdown(`**${t('Recurring')}:** ${definition.name}\n\n`);
+        baseTooltip.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
+        baseTooltip.appendMarkdown(`|-------|-------|\n`);
+        baseTooltip.appendMarkdown(`| **${t('Trigger Type')}** | ${definition.trigger.type} |\n`);
+        
+        if (definition.trigger.type === 'cron') {
+          const cronTrigger = definition.trigger as { type: string; expression: string };
+          baseTooltip.appendMarkdown(`| **${t('Cron Expression')}** | ${cronTrigger.expression} |\n`);
+        }
+        
+        if (definition.state.next_trigger_at) {
+          baseTooltip.appendMarkdown(`| **${t('Next Trigger')}** | ${definition.state.next_trigger_at} |\n`);
+        }
+        
+        baseTooltip.appendMarkdown(`| **${t('Instance Count')}** | ${definition.state.instance_count} |\n`);
+      }
+    }
+    
+    return baseTooltip;
+  }
 }
 
 /**
@@ -96,7 +145,7 @@ function getOrCreateTreeItem(ticket: Ticket, workflowRoot: string): KanbanTicket
     return treeItemCache.get(cacheKey)!;
   }
 
-  const item = new KanbanTicketTreeItem(ticket, workflowRoot);
+  const item = new KanbanTicketTreeItem(ticket, workflowRoot, recurringDefinitions);
   treeItemCache.set(cacheKey, item);
   return item;
 }
@@ -283,20 +332,56 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   /**
    * Fire a tree data change for pulse animation (called by shared timer)
    */
+  /**
+   * Fire a targeted tree data change for pulse animation.
+   * Only updates the pulsing ticket element instead of the entire tree,
+   * which prevents tooltips from flickering on hover.
+   */
   firePulse(): void {
-    this._onDidChangeTreeData.fire(undefined);
+    if (!pulseTicketId || !this.workflowRoot) {
+      return; // No pulse active or no root — skip
+    }
+
+    // Find the cached TreeItem for the pulsing ticket
+    const cacheKey = getCacheKey({
+      status: this.status,
+      sortMode: this.sortMode,
+      sortAscending: this.sortAscending,
+      filterPlan: this.filterPlan
+    });
+
+    const cachedItems = sortedTicketsCache.get(cacheKey);
+    if (cachedItems) {
+      const pulsingItem = cachedItems.find(item => item.ticket.id === pulseTicketId);
+      if (pulsingItem) {
+        this._onDidChangeTreeData.fire(pulsingItem);
+        return;
+      }
+    }
+
+    // Pulsing ticket not in this column — no update needed
   }
 
   /**
    * Get tree item for element
    */
   getTreeItem(element: KanbanTicketTreeItem): vscode.TreeItem {
-    if (pulseTicketId && element.ticket.id === pulseTicketId) {
-      element.iconPath = pulseOn
-        ? getTicketIcon(element.ticket.priority)
-        : getTicketIconDimmed();
+    if (element.ticket.recurring_source) {
+      if (pulseTicketId && element.ticket.id === pulseTicketId) {
+        element.iconPath = pulseOn
+          ? new vscode.ThemeIcon('sync')
+          : getTicketIconDimmed();
+      } else {
+        element.iconPath = new vscode.ThemeIcon('sync');
+      }
     } else {
-      element.iconPath = getTicketIcon(element.ticket.priority);
+      if (pulseTicketId && element.ticket.id === pulseTicketId) {
+        element.iconPath = pulseOn
+          ? getTicketIcon(element.ticket.priority)
+          : getTicketIconDimmed();
+      } else {
+        element.iconPath = getTicketIcon(element.ticket.priority);
+      }
     }
     return element;
   }

@@ -655,99 +655,127 @@ reporting:
 
   suite('Debounce Delay Configuration', () => {
     test('should use shorter delay for create/delete events (100ms)', async () => {
-      createTestStructure(testDir);
-      createConfigFiles(path.join(testDir, '.workflow', 'config'));
-      
-      await store.refresh(path.join(testDir, '.workflow'));
-      
-      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
-
-      const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
-
-      let refreshCallTime: number | null = null;
-      const originalRefresh = store.refresh.bind(store);
-      let lastCallTime = 0;
-      
-      store.refresh = async (workflowRoot?: string) => {
-        const now = Date.now();
-        if (lastCallTime === 0) {
-          lastCallTime = now;
-        } else {
-          refreshCallTime = now - lastCallTime;
-          lastCallTime = now;
-        }
-        return originalRefresh(workflowRoot as string);
-      };
-
-      // Create file - should trigger debounce with 100ms delay
-      createTicketFile(ticketsDir, 'DELAY-001', 'ready', 'Test 1');
-      
-      // Wait less than 100ms - should not have refreshed yet
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Create another file - resets timer
-      createTicketFile(ticketsDir, 'DELAY-002', 'ready', 'Test 2');
-      
-      // Wait for debounce to complete (more than 100ms from last event)
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      // Should have completed debounced refresh
-      const tickets = store.getTickets();
-      assert.ok(tickets.length >= 2, 'Should have added tickets after debounce');
-    }).timeout(2000);
+      const clock = sinon.useFakeTimers();
+      try {
+        watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
+        let refreshCallCount = 0;
+        store.refresh = async () => { refreshCallCount++; };
+        // Simulate config file create — config URIs bypass incremental and use scheduleRefresh(100ms)
+        const configUri = { fsPath: path.join(testDir, '.workflow', 'config', 'config.yaml') } as any;
+        await (watcher as any)['handleFileCreate'](configUri);
+        // At 99ms, should not have fired
+        clock.tick(99);
+        assert.strictEqual(refreshCallCount, 0, 'Should not fire before 100ms');
+        // At 100ms, should have fired
+        clock.tick(1);
+        assert.strictEqual(refreshCallCount, 1, 'Should fire at 100ms (create/delete delay)');
+      } finally {
+        clock.restore();
+      }
+    });
 
     test('should use longer delay for change events (300ms)', async () => {
-      createTestStructure(testDir);
-      createConfigFiles(path.join(testDir, '.workflow', 'config'));
-      
-      await store.refresh(path.join(testDir, '.workflow'));
-      
-      watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
-
-      const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
-
-      // Create initial file
-      const ticketPath = createTicketFile(ticketsDir, 'CHANGE-001', 'ready', 'Test 1');
-
-      // Wait for initial debounce
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Modify file - should trigger debounce with 300ms delay
-      const modifiedContent = `-----
-id: CHANGE-001
-title: Modified Title
-status: ready
-priority: 2
-type: IMPL
-dependencies: []
-conditions: []
-context: {}
-tags: []
-complexity: medium
-parent_plan: PLAN-001
-parent_task: 
-created_at: "2026-03-13T00:00:00Z"
-updated_at: "2026-03-13T00:00:00Z"
-completed_at: ""
----
-## Modified content`;
-      
-      fs.writeFileSync(ticketPath, modifiedContent, 'utf-8');
-
-      // Wait less than 300ms - change should still be debouncing
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // The store should still have the old title at this point (debounce not complete)
-      const tickets = store.getTickets();
-      const changedTicket = tickets.find(t => t.id === 'CHANGE-001');
-      
-      // Wait for debounce to complete
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // After full delay, the change should be reflected
-      const ticketsAfter = store.getTickets();
-      const changedTicketAfter = ticketsAfter.find(t => t.id === 'CHANGE-001');
-      assert.ok(changedTicketAfter, 'Ticket should exist after change debounce completes');
-    }).timeout(3000);
+      const clock = sinon.useFakeTimers();
+      try {
+        watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
+        let refreshCallCount = 0;
+        store.refresh = async () => { refreshCallCount++; };
+        // Simulate config file change — config URIs bypass incremental and use scheduleRefresh(300ms)
+        const configUri = { fsPath: path.join(testDir, '.workflow', 'config', 'config.yaml') } as any;
+        await (watcher as any)['handleFileChange'](configUri);
+        // At 299ms, should not have fired
+        clock.tick(299);
+        assert.strictEqual(refreshCallCount, 0, 'Should not fire before 300ms');
+        // At 300ms, should have fired
+        clock.tick(1);
+        assert.strictEqual(refreshCallCount, 1, 'Should fire at 300ms (change delay)');
+      } finally {
+        clock.restore();
+      }
+    });
   });
+
+  test('should handle recurring.yaml changes with RecurringService', async () => {
+    const mockRecurringService = {
+      loadDefinitions: sinon.stub().resolves([
+        {
+          id: 'recurring-001',
+          name: 'Weekly Review',
+          entity_type: 'ticket',
+          enabled: true,
+          trigger: { type: 'cron', expression: '0 9 * * 1' },
+          template: { type: 'task', title_template: 'Weekly Review {date}', priority: 2, tags: ['weekly'] },
+          state: { last_triggered_at: null, next_trigger_at: null, instance_count: 0, last_instance_id: null, is_active_instance: false }
+        }
+      ])
+    };
+
+    createTestStructure(testDir);
+
+    const recurringConfigPath = path.join(testDir, '.workflow', 'config', 'recurring.yaml');
+    fs.writeFileSync(recurringConfigPath, 'definitions: []', 'utf-8');
+
+    watcher = new FileWatcherService(store, path.join(testDir, '.workflow'), mockRecurringService as any);
+
+    const changeEvent = vscode.Uri.file(path.join(testDir, '.workflow', 'config', 'recurring.yaml'));
+
+    await watcher['handleFileChange'](changeEvent);
+
+    sinon.assert.calledOnce(mockRecurringService.loadDefinitions);
+    const recurringDefs = store.getRecurringDefinitions();
+    assert.strictEqual(recurringDefs.length, 1);
+    assert.strictEqual(recurringDefs[0].id, 'recurring-001');
+  }).timeout(3000);
+
+  test('should handle recurring.yaml deletion', async () => {
+    const mockRecurringService = {
+      loadDefinitions: sinon.stub().resolves([])
+    };
+
+    createTestStructure(testDir);
+
+    const recurringConfigPath = path.join(testDir, '.workflow', 'config', 'recurring.yaml');
+    fs.writeFileSync(recurringConfigPath, 'definitions:\n  - id: test', 'utf-8');
+
+    store.setRecurringDefinitions([
+      {
+        id: 'existing',
+        name: 'Existing',
+        entity_type: 'ticket',
+        enabled: true,
+        trigger: { type: 'cron', expression: '0 9 * * 1' },
+        template: { type: 'task', title_template: 'Test {date}', priority: 2, tags: [] },
+        state: { last_triggered_at: null, next_trigger_at: null, instance_count: 0, last_instance_id: null, is_active_instance: false }
+      }
+    ]);
+
+    watcher = new FileWatcherService(store, path.join(testDir, '.workflow'), mockRecurringService as any);
+
+    const deleteEvent = vscode.Uri.file(path.join(testDir, '.workflow', 'config', 'recurring.yaml'));
+
+    await watcher['handleFileDelete'](deleteEvent);
+
+    sinon.assert.calledOnce(mockRecurringService.loadDefinitions);
+    const recurringDefs = store.getRecurringDefinitions();
+    assert.strictEqual(recurringDefs.length, 0);
+  }).timeout(3000);
+
+  test('should warn when RecurringService is not provided for recurring.yaml changes', async () => {
+    createTestStructure(testDir);
+
+    const recurringConfigPath = path.join(testDir, '.workflow', 'config', 'recurring.yaml');
+    fs.writeFileSync(recurringConfigPath, 'definitions: []', 'utf-8');
+
+    const consoleSpy = sinon.spy(console, 'warn');
+
+    watcher = new FileWatcherService(store, path.join(testDir, '.workflow'));
+
+    const changeEvent = vscode.Uri.file(path.join(testDir, '.workflow', 'config', 'recurring.yaml'));
+
+    await watcher['handleFileChange'](changeEvent);
+
+    sinon.assert.calledWith(consoleSpy, sinon.match('RecurringService not available'));
+
+    consoleSpy.restore();
+  }).timeout(3000);
 });

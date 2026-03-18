@@ -10,6 +10,7 @@ import {
   createKanbanProviders
 } from '../ui/kanban-tree-provider';
 import { PipelineTreeProvider } from '../ui/pipeline-tree-provider';
+import { RecurringTreeProvider } from '../ui/recurring-tree-provider';
 import { PipelineService, PipelineState } from '../services/pipeline-service';
 import { DiagnosticProvider } from '../ui/diagnostic-provider';
 import { WorkflowDocumentLinkProvider } from '../ui/document-link-provider';
@@ -22,6 +23,7 @@ import { WorkflowStore } from '../data/workflow-store';
 import { TicketService } from '../services/ticket-service';
 import { FileWatcherService } from '../services/file-watcher-service';
 import { DependencyService } from '../services/dependency-service';
+import { IRecurringService } from '../services/IRecurringService';
 
 export interface AllProviders {
   tickets: TicketsTreeProvider;
@@ -30,6 +32,7 @@ export interface AllProviders {
   skills: SkillsTreeProvider;
   logs: LogsTreeProvider;
   pipeline: PipelineTreeProvider;
+  recurring: RecurringTreeProvider;
   kanban: ReturnType<typeof createKanbanProviders>;
 }
 
@@ -40,6 +43,7 @@ export function createProviders(store: WorkflowStore, pipelineService: PipelineS
   const pipelineProvider = new PipelineTreeProvider(store, pipelineService);
   const skillsProvider = new SkillsTreeProvider(store);
   const logsProvider = new LogsTreeProvider(store);
+  const recurringProvider = new RecurringTreeProvider();
   const kanbanProviders = createKanbanProviders(store);
 
   return {
@@ -49,6 +53,7 @@ export function createProviders(store: WorkflowStore, pipelineService: PipelineS
     skills: skillsProvider,
     logs: logsProvider,
     pipeline: pipelineProvider,
+    recurring: recurringProvider,
     kanban: kanbanProviders
   };
 }
@@ -59,14 +64,15 @@ export function setupTreeViews(
   pipelineService: PipelineService,
   store: WorkflowStore
 ): void {
-  const { tickets, plans, reports, skills, logs, pipeline, kanban } = providers;
+  const { tickets, plans, reports, skills, logs, pipeline, recurring, kanban } = providers;
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('workflow-sidebar.tickets', tickets),
     vscode.window.registerTreeDataProvider('workflow-sidebar.plans', plans),
     vscode.window.registerTreeDataProvider('workflow-sidebar.reports', reports),
     vscode.window.registerTreeDataProvider('workflow-sidebar.skills', skills),
-    vscode.window.registerTreeDataProvider('workflow-sidebar.logs', logs)
+    vscode.window.registerTreeDataProvider('workflow-sidebar.logs', logs),
+    vscode.window.registerTreeDataProvider('workflow-sidebar.recurring', recurring)
   );
 
   const pipelineTreeView = vscode.window.createTreeView('workflow-sidebar.pipeline', { treeDataProvider: pipeline });
@@ -217,9 +223,10 @@ export function setupWorkflowRoot(
   pipelineService: PipelineService,
   workflowRoot: string | null,
   context: vscode.ExtensionContext,
-  store: WorkflowStore
+  store: WorkflowStore,
+  recurringService: IRecurringService
 ): void {
-  const { tickets, plans, reports, skills, logs, pipeline, kanban } = providers;
+  const { tickets, plans, reports, skills, logs, pipeline, recurring, kanban } = providers;
 
   const notificationsManager = new NotificationsManager(store, pipelineService);
   if (workflowRoot) {
@@ -248,9 +255,12 @@ export function setupWorkflowRoot(
     kanban.review.setWorkflowRoot(workflowRoot);
     kanban.done.setWorkflowRoot(workflowRoot);
 
+    recurring.setRecurringService(recurringService);
+    recurring.setWorkflowRoot(workflowRoot);
+
     const config = vscode.workspace.getConfiguration('workflow');
     const incrementalRefresh = config.get<boolean>('settings.incrementalRefresh', true);
-    const fileWatcher = new FileWatcherService(store, workflowRoot, incrementalRefresh);
+    const fileWatcher = new FileWatcherService(store, workflowRoot, recurringService, incrementalRefresh);
     context.subscriptions.push(fileWatcher);
   }
 

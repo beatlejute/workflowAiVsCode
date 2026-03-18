@@ -84,6 +84,11 @@
           "name": "%views.sidebar.welcome.name%",
           "when": "!workflow.cliInstalled || !workflow.workflowFound",
           "visibility": "visible"
+        },
+        {
+          "id": "workflow-sidebar.recurring",
+          "name": "%views.sidebar.recurring.name%",
+          "when": "workflow.cliInstalled && workflow.workflowFound"
         }
       ],
       "workflow-kanban": [
@@ -410,6 +415,36 @@
         "icon": "$(file)"
       },
       {
+        "command": "workflow.recurring.new",
+        "title": "%command.recurring.new.title%",
+        "category": "%category.workflow%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflow.recurring.toggle",
+        "title": "%command.recurring.toggle.title%",
+        "category": "%category.workflow%",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "workflow.recurring.delete",
+        "title": "%command.recurring.delete.title%",
+        "category": "%category.workflow%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workflow.recurring.triggerNow",
+        "title": "%command.recurring.triggerNow.title%",
+        "category": "%category.workflow%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workflow.recurring.openConfig",
+        "title": "%command.recurring.openConfig.title%",
+        "category": "%category.workflow%",
+        "icon": "$(json)"
+      },
+      {
         "command": "workflow.createPlanFromFile",
         "title": "%command.createPlanFromFile.title%",
         "category": "%category.workflow%",
@@ -598,6 +633,16 @@
           "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_pipeline",
           "icon": "$(tools)"
+        },
+        {
+          "command": "workflow.recurring.new",
+          "when": "view == workflow-sidebar.recurring && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "view == workflow-sidebar.recurring && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -695,6 +740,26 @@
           "command": "workflow.openStageReport",
           "when": "viewItem =~ /^completed-stage-report/",
           "group": "1_open"
+        },
+        {
+          "command": "workflow.recurring.toggle",
+          "when": "view == workflow-sidebar.recurring && viewItem == recurring-definition && workflow.cliInstalled && workflow.workflowFound",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.recurring.triggerNow",
+          "when": "view == workflow-sidebar.recurring && viewItem == recurring-definition && workflow.cliInstalled && workflow.workflowFound",
+          "group": "1_actions"
+        },
+        {
+          "command": "workflow.recurring.delete",
+          "when": "view == workflow-sidebar.recurring && viewItem == recurring-definition && workflow.cliInstalled && workflow.workflowFound",
+          "group": "2_manage"
+        },
+        {
+          "command": "workflow.recurring.openConfig",
+          "when": "view == workflow-sidebar.recurring && viewItem == recurring-definition && workflow.cliInstalled && workflow.workflowFound",
+          "group": "3_config"
         }
       ],
       "commandPalette": [

@@ -75,7 +75,8 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
     public readonly skill?: string,
     public readonly ticket?: string,
     public readonly attempt?: number,
-    public readonly maxAttempts?: number
+    public readonly maxAttempts?: number,
+    public readonly stageStartTime?: number
   ) {
     super(
       stage,
@@ -86,13 +87,16 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
 
     this.iconPath = new vscode.ThemeIcon('gear~spin');
 
+    const durationMs = stageStartTime ? Date.now() - stageStartTime : undefined;
+    const durationStr = formatDuration(durationMs);
+    const durationInfo = durationStr ? `⏱ ${durationStr}` : '';
     const agentInfo = agent ? `${t('Agent')}: ${agent}` : '';
     const ticketInfo = ticket ? `${t('Ticket')}: ${ticket}` : '';
     const attemptInfo = attempt && maxAttempts ? `${t('Attempt')}: ${attempt}/${maxAttempts}` : '';
 
-    this.description = [agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
+    this.description = [durationInfo, agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
     this.tooltip = createCurrentStageTooltip(
-      stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts
+      stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts, durationMs
     );
     this.contextValue = 'current-stage';
   }
@@ -109,7 +113,9 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
   constructor(
     public readonly stage: string,
     public readonly elapsed?: string,
+    public readonly durationMs?: number,
     public readonly success?: boolean,
+    public readonly timedOut?: boolean,
     public readonly ticket?: string,
     public readonly agent?: string,
     public readonly skill?: string,
@@ -119,7 +125,7 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     logLineHint?: number,
     logFile?: string
   ) {
-    const icon = success ? '✅' : '❌';
+    const icon = timedOut ? '⏱️' : (success ? '✅' : '❌');
     const label = `${icon} ${stage}`;
     super(
       label,
@@ -128,10 +134,13 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
       `completed-stage-${CompletedStageTreeItem.counter++}-${stage}`
     );
 
-    // Build description: ticket | agent | status (graceful degradation)
-    const parts = [ticket, agent, statusChange].filter(Boolean);
+    // Build description: duration | ticket | agent | status (graceful degradation)
+    const durationStr = formatDuration(durationMs);
+    const timeoutSuffix = timedOut ? ` (${t('timeout')})` : '';
+    const durationPart = durationStr ? `${durationStr}${timeoutSuffix}` : (timedOut ? t('timeout') : undefined);
+    const parts = [durationPart, ticket, agent, statusChange].filter(Boolean);
     this.description = parts.length > 0 ? parts.join(' | ') : (elapsed ? `${t('Elapsed')}: ${elapsed}` : '');
-    this.tooltip = createCompletedStageTooltip(stage, elapsed, success, ticket, agent, skill, statusChange, outputLines);
+    this.tooltip = createCompletedStageTooltip(stage, elapsed, durationMs, success, timedOut, ticket, agent, skill, statusChange, outputLines);
     // Use contextValue to control context menu visibility:
     // - 'completed-stage-report' for report stages (has Open Report)
     // - 'completed-stage-ticket' for stages with a ticket (has Open Ticket)
@@ -155,7 +164,8 @@ export class StatisticsTreeItem extends PipelineTreeItem {
   constructor(
     public readonly stagesStarted: number,
     public readonly retries: number,
-    public readonly gotos: number
+    public readonly gotos: number,
+    public readonly timeouts: number = 0
   ) {
     super(
       'Statistics',
@@ -165,8 +175,9 @@ export class StatisticsTreeItem extends PipelineTreeItem {
     );
     this.iconPath = new vscode.ThemeIcon('graph');
 
-    this.description = `${t('Stages Started')}: ${stagesStarted} | ${t('Retries')}: ${retries} | ${t('Goto Transitions')}: ${gotos}`;
-    this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos);
+    const timeoutPart = timeouts > 0 ? ` | ${t('Timeouts')}: ${timeouts}` : '';
+    this.description = `${t('Stages Started')}: ${stagesStarted} | ${t('Retries')}: ${retries} | ${t('Goto Transitions')}: ${gotos}${timeoutPart}`;
+    this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos, timeouts);
     this.contextValue = 'statistics';
   }
 }
@@ -246,6 +257,19 @@ export class HistoryReportTreeItem extends PipelineTreeItem {
 }
 
 /**
+ * Format duration in milliseconds to human-readable string
+ */
+export function formatDuration(ms?: number): string | undefined {
+  if (ms === undefined || ms === null) return undefined;
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
+/**
  * Get label for pipeline run based on state and mode
  */
 function getPipelineRunLabel(state: PipelineState): string {
@@ -306,13 +330,18 @@ function createCurrentStageTooltip(
   skill?: string,
   ticket?: string,
   attempt?: number,
-  maxAttempts?: number
+  maxAttempts?: number,
+  durationMs?: number
 ): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
   markdown.appendMarkdown(`**${t('Current Stage')}: ${stage}**\n\n`);
   markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
+  const durationStr = formatDuration(durationMs);
+  if (durationStr) {
+    markdown.appendMarkdown(`| **${t('Duration')}** | ${durationStr} |\n`);
+  }
   if (agent) {
     markdown.appendMarkdown(`| **${t('Agent')}** | ${agent} |\n`);
   }
@@ -337,7 +366,9 @@ function createCurrentStageTooltip(
 function createCompletedStageTooltip(
   stage: string,
   elapsed?: string,
+  durationMs?: number,
   success?: boolean,
+  timedOut?: boolean,
   ticket?: string,
   agent?: string,
   skill?: string,
@@ -349,7 +380,15 @@ function createCompletedStageTooltip(
   markdown.appendMarkdown(`**${t('Completed Stage')}: ${stage}**\n\n`);
   markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
-  markdown.appendMarkdown(`| **${t('Result')}** | ${success ? '✅ Success' : '❌ Failed'} |\n`);
+  const resultIcon = timedOut ? '⏱️ Timeout' : (success ? '✅ Success' : '❌ Failed');
+  markdown.appendMarkdown(`| **${t('Result')}** | ${resultIcon} |\n`);
+  const durationStr = formatDuration(durationMs);
+  if (durationStr) {
+    markdown.appendMarkdown(`| **${t('Duration')}** | ${durationStr} |\n`);
+  }
+  if (timedOut) {
+    markdown.appendMarkdown(`| **${t('Timeout')}** | ⚠️ ${t('Stage was interrupted by timeout')} |\n`);
+  }
   if (ticket) {
     markdown.appendMarkdown(`| **${t('Ticket')}** | ${ticket} |\n`);
   }
@@ -390,7 +429,8 @@ function createCompletedStageTooltip(
 function createStatisticsTooltip(
   stagesStarted: number,
   retries: number,
-  gotos: number
+  gotos: number,
+  timeouts: number = 0
 ): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
@@ -400,6 +440,7 @@ function createStatisticsTooltip(
   markdown.appendMarkdown(`| **${t('Stages Started')}** | ${stagesStarted} |\n`);
   markdown.appendMarkdown(`| **${t('Retries')}** | ${retries} |\n`);
   markdown.appendMarkdown(`| **${t('Goto Transitions')}** | ${gotos} |\n`);
+  markdown.appendMarkdown(`| **${t('Timeouts')}** | ${timeouts} |\n`);
   return markdown;
 }
 

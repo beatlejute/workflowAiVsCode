@@ -36,7 +36,18 @@
     "dist/unit-test/src/services/validation-service.js",
     "dist/unit-test/src/services/ticket-service.js",
     "dist/unit-test/src/utils/extension-helpers.js",
-    "dist/unit-test/src/data/config-manager.js"
+    "dist/unit-test/src/data/config-manager.js",
+    "dist/unit-test/src/services/IRecurringService.js",
+    "dist/unit-test/src/commands/manage-recurring.js",
+    "dist/unit-test/src/services/file-watcher-service.js",
+    "dist/unit-test/src/services/history-backfill-service.js",
+    "dist/unit-test/src/services/pipeline-execution-listener.js",
+    "dist/unit-test/src/services/pipeline-state-manager.js",
+    "dist/unit-test/src/utils/cron-parser.js",
+    "dist/unit-test/src/services/pipeline-history-manager.js",
+    "dist/unit-test/src/ui/completion-provider.js",
+    "dist/unit-test/src/ui/hover-provider.js",
+    "dist/unit-test/src/ui/pipeline-codelens-provider.js"
   ],
   "reporter": [
     "text",

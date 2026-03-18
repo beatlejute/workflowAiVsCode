@@ -10,14 +10,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkflowStore } from '../data/workflow-store';
-import { TicketStatus } from '../data/types';
+import { TicketStatus, RecurringDefinition } from '../data/types';
 import { IFileWatcher } from '../interfaces/IFileWatcher';
+import { IRecurringService } from './IRecurringService';
 
 /**
  * Change classification result
  */
 interface ClassifiedChange {
-  entityType: 'ticket' | 'plan' | 'report' | 'config';
+  entityType: 'ticket' | 'plan' | 'report' | 'config' | 'recurring';
   id?: string;
   status?: TicketStatus;
 }
@@ -31,6 +32,7 @@ interface ClassifiedChange {
 export class FileWatcherService implements vscode.Disposable, IFileWatcher {
   private readonly store: WorkflowStore;
   private readonly workflowRoot: string;
+  private readonly recurringService?: IRecurringService;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private debounceTimer: NodeJS.Timeout | undefined;
   private isOwnWrite = false;
@@ -42,10 +44,18 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
    * Create FileWatcherService
    * @param store - WorkflowStore to update on file changes
    * @param workflowRoot - Root directory of the workflow project
+   * @param recurringService - Optional RecurringService for handling recurring.yaml changes
+   * @param incrementalRefresh - Enable incremental updates (default: true)
    */
-  constructor(store: WorkflowStore, workflowRoot: string, incrementalRefresh: boolean = true) {
+  constructor(
+    store: WorkflowStore, 
+    workflowRoot: string, 
+    recurringService?: IRecurringService,
+    incrementalRefresh: boolean = true
+  ) {
     this.store = store;
     this.workflowRoot = workflowRoot;
+    this.recurringService = recurringService;
     this.incrementalRefresh = incrementalRefresh;
     this.createWatcher();
   }
@@ -77,7 +87,7 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
    * Schedule a debounced refresh
    * Resets timer on each call, executes after specified delay
    */
-  private scheduleRefresh(delay: number): void {
+  scheduleRefresh(delay: number = this.debounceDelayCreateDelete): void {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
@@ -135,6 +145,10 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
 
     // Check for config files
     if (pathParts[0] === 'config') {
+      // Check specifically for recurring.yaml
+      if (pathParts[1] === 'recurring.yaml' || pathParts[1] === 'recurring.yml') {
+        return { entityType: 'recurring' };
+      }
       return { entityType: 'config' };
     }
 
@@ -174,6 +188,12 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
 
     const classification = this.classifyChange(uri);
 
+    // Handle recurring.yaml changes specially
+    if (classification.entityType === 'recurring') {
+      await this.handleRecurringChange();
+      return;
+    }
+
     if (this.incrementalRefresh && classification.id) {
       // Use incremental update for known entity types
       if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
@@ -196,6 +216,12 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
 
     const classification = this.classifyChange(uri);
 
+    // Handle recurring.yaml deletion - reload with empty definitions
+    if (classification.entityType === 'recurring') {
+      await this.handleRecurringChange();
+      return;
+    }
+
     if (this.incrementalRefresh && classification.id) {
       // Use incremental update for known entity types
       if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
@@ -206,6 +232,24 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
 
     // Fallback to full refresh
     this.scheduleRefresh(this.debounceDelayCreateDelete);
+  }
+
+  /**
+   * Handle recurring.yaml file change
+   * Loads new definitions and notifies the store about the reload
+   */
+  private async handleRecurringChange(): Promise<void> {
+    if (!this.recurringService) {
+      console.warn('FileWatcherService: RecurringService not available, skipping recurring.yaml reload');
+      return;
+    }
+
+    try {
+      const definitions = await this.recurringService.loadDefinitions();
+      this.store.setRecurringDefinitions(definitions);
+    } catch (error) {
+      console.error('FileWatcherService: Failed to reload recurring definitions:', error);
+    }
   }
 
   /**

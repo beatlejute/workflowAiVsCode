@@ -114,9 +114,10 @@ suite('NotificationsManager Suite', () => {
     mockWindow = new MockVSCodeWindow();
     store = new WorkflowStore();
 
-    // Mock vscode.window using index signature to avoid any
-    const windowMock = mockWindow as unknown as typeof vscode.window;
-    Object.assign(vscode.window, windowMock);
+    // Mock vscode.window methods directly (Object.assign doesn't copy prototype methods)
+    (vscode.window as any).showInformationMessage = (...args: any[]) => mockWindow.showInformationMessage(...args);
+    (vscode.window as any).showWarningMessage = (...args: any[]) => mockWindow.showWarningMessage(...args);
+    (vscode.window as any).showErrorMessage = (...args: any[]) => mockWindow.showErrorMessage(...args);
 
     // Create notifications manager with typed mock
     notificationsManager = new NotificationsManager(

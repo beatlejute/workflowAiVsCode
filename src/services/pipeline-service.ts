@@ -398,6 +398,17 @@ export class PipelineService extends EventEmitter {
       };
     }
 
+    // Parse TIMEOUT: [timestamp] [ERROR] [stage] TIMEOUT stage="X" after Ns
+    const timeoutMatch = message.match(/^TIMEOUT\s+stage="([^"]+)"\s+after\s+(\d+)s/);
+    if (timeoutMatch) {
+      return {
+        type: 'info',
+        raw: line,
+        timestamp,
+        stage: timeoutMatch[1]
+      };
+    }
+
     // Generic info message
     if (level === 'INFO') {
       return {

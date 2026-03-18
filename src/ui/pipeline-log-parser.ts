@@ -26,11 +26,13 @@ export interface ParsedLogData {
   gotoTarget?: string;
   statusTransition?: string;
   reportInfo?: ReportInfo;
+  timeoutSeconds?: number;
   planId?: string;
   outputLine?: string;
   isRetry: boolean;
   isGoto: boolean;
   isStart: boolean;
+  isTimeout: boolean;
   isMoveTicket: boolean;
   isCreateReport: boolean;
 }
@@ -62,7 +64,16 @@ export class PipelineLogParser {
     if (!baseMatch) return this.parseLegacy(line);
 
     const [, , , _stage, message] = baseMatch;
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false };
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isTimeout: false, isMoveTicket: false, isCreateReport: false };
+
+    // TIMEOUT: [timestamp] [ERROR] [stage] TIMEOUT stage="X" after Ns
+    const timeoutMatch = message.match(/^TIMEOUT\s+stage="([^"]+)"\s+after\s+(\d+)s/);
+    if (timeoutMatch) {
+      result.isTimeout = true;
+      result.stage = timeoutMatch[1];
+      result.timeoutSeconds = parseInt(timeoutMatch[2], 10);
+      return result;
+    }
 
     // GOTO
     const gotoMatch = message.match(/^GOTO\s+\S+\s*→\s*(\S+)(?:\s+status="([^"]*)")?(?:\s+params=(\{.*\}))?/) ||
@@ -145,7 +156,7 @@ export class PipelineLogParser {
    * Legacy parser for old format
    */
   private parseLegacy(line: string): ParsedLogData {
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false };
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isTimeout: false, isMoveTicket: false, isCreateReport: false };
 
     if (line.includes('[GOTO]')) {
       result.isGoto = true;
@@ -182,6 +193,14 @@ export class PipelineLogParser {
 
     const createReportMatch = line.match(/CREATE_REPORT\s+id="([^"]+)"(?:\s+path="([^"]+)")?/);
     if (createReportMatch) result.reportInfo = { id: createReportMatch[1], path: createReportMatch[2] || '' };
+
+    // Legacy TIMEOUT
+    const timeoutMatch = line.match(/TIMEOUT\s+stage="([^"]+)"\s+after\s+(\d+)s/);
+    if (timeoutMatch) {
+      result.isTimeout = true;
+      result.stage = timeoutMatch[1];
+      result.timeoutSeconds = parseInt(timeoutMatch[2], 10);
+    }
 
     return result;
   }

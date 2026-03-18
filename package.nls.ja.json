@@ -125,5 +125,11 @@
   "Failed to archive plan {0}. Check Output channel for details.": "計画 {0} のアーカイブに失敗しました。詳細は Output チャンネルを確認してください。",
   "Failed to unarchive plan {0}. Check Output channel for details.": "計画 {0} のアーカイブ解除に失敗しました。詳細は Output チャンネルを確認してください。",
   "Failed to filter tickets. Check Output channel for details.": "チケットのフィルタリングに失敗しました。詳細は Output チャンネルを確認してください。",
-  "Failed to clear filter. Check Output channel for details.": "フィルターのクリアに失敗しました。詳細は Output チャンネルを確認してください。"
+  "Failed to clear filter. Check Output channel for details.": "フィルターのクリアに失敗しました。詳細は Output チャンネルを確認してください。",
+  "views.sidebar.recurring.name": "RECURRING",
+  "command.recurring.new.title": "New Recurring Definition",
+  "command.recurring.toggle.title": "Toggle Enable/Disable",
+  "command.recurring.delete.title": "Delete Recurring Definition",
+  "command.recurring.triggerNow.title": "Trigger Now",
+  "command.recurring.openConfig.title": "Open Config"
 }

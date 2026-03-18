@@ -22,7 +22,7 @@ import * as vscode from 'vscode';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
 import { PipelineService, PipelineState } from '../services/pipeline-service';
 
-import { PipelineTreeItem } from './pipeline-tree-item-builder';
+import { PipelineTreeItem, CurrentStageTreeItem, formatDuration } from './pipeline-tree-item-builder';
 import { PipelineTreeDataProvider } from './pipeline-tree-data-provider';
 import { PipelineLogParser } from './pipeline-log-parser';
 import { HistoryBackfillService } from '../services/history-backfill-service';
@@ -67,7 +67,11 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private currentState: PipelineState = PipelineState.Idle;
   private runStartTime: number = 0;
   private currentRunLogFile?: string;
+
+  // Cached root items for targeted refresh (prevents tooltip flickering)
+  private lastRootItems: PipelineTreeItem[] = [];
   private currentRunPlanId?: string;
+  private durationRefreshTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly store: WorkflowStore,
@@ -84,7 +88,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       null, // outputChannel will be set later
       (result) => this.finalizeRun(result),
       () => this.refresh(),
-      (state) => { this.currentState = state; }
+      (state) => { this.currentState = state; this.handleStateChange(state); }
     );
     this.dataProvider = new PipelineTreeDataProvider(store, this.pipelineService);
 
@@ -114,7 +118,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
         this.outputChannel,
         (result) => this.finalizeRun(result),
         () => this.refresh(),
-        (state) => { this.currentState = state; }
+        (state) => { this.currentState = state; this.handleStateChange(state); }
       );
     }
     if (this.pipelineService && this.executionListener) {
@@ -162,7 +166,54 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  private handleStateChange(state: PipelineState): void {
+    if (state === PipelineState.Running) {
+      this.startDurationRefresh();
+    } else {
+      this.stopDurationRefresh();
+    }
+  }
+
+  private startDurationRefresh(): void {
+    if (this.durationRefreshTimer) return;
+    this.durationRefreshTimer = setInterval(() => {
+      // Targeted refresh: only update pipeline-run and current-stage items
+      // to avoid resetting tooltips on other elements
+      if (this.lastRootItems.length > 0) {
+        for (const item of this.lastRootItems) {
+          if (item.itemType === 'pipeline-run' || item.itemType === 'current-stage') {
+            this._onDidChangeTreeData.fire(item);
+          }
+        }
+      } else {
+        this._onDidChangeTreeData.fire(undefined);
+      }
+    }, 5000);
+  }
+
+  private stopDurationRefresh(): void {
+    if (this.durationRefreshTimer) {
+      clearInterval(this.durationRefreshTimer);
+      this.durationRefreshTimer = undefined;
+    }
+  }
+
   getTreeItem(element: PipelineTreeItem): vscode.TreeItem {
+    // For duration refresh: update description in-place for time-sensitive items
+    // so we can use targeted fire(element) without recreating the tree
+    if (element.itemType === 'pipeline-run' && this.currentState === PipelineState.Running) {
+      const elapsed = this.stateManager.getElapsed();
+      element.description = elapsed ? `Elapsed: ${elapsed}` : '';
+    } else if (element.itemType === 'current-stage') {
+      const stageItem = element as CurrentStageTreeItem;
+      const durationMs = stageItem.stageStartTime ? Date.now() - stageItem.stageStartTime : undefined;
+      const durationStr = durationMs ? formatDuration(durationMs) : '';
+      const durationInfo = durationStr ? `⏱ ${durationStr}` : '';
+      const agentInfo = stageItem.agent ? `${t('Agent')}: ${stageItem.agent}` : '';
+      const ticketInfo = stageItem.ticket ? `${t('Ticket')}: ${stageItem.ticket}` : '';
+      const attemptInfo = stageItem.attempt && stageItem.maxAttempts ? `${t('Attempt')}: ${stageItem.attempt}/${stageItem.maxAttempts}` : '';
+      element.description = [durationInfo, agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
+    }
     return element;
   }
 
@@ -178,15 +229,24 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       currentTicket: this.stateManager.getCurrentTicket(),
       currentAttempt: this.stateManager.getCurrentAttempt(),
       currentMaxAttempts: this.stateManager.getCurrentMaxAttempts(),
+      currentStageStartTime: this.stateManager.getCurrentStageStartTime(),
       elapsed: this.stateManager.getElapsed(),
       completedStages: this.stateManager.getCompletedStages(),
       stagesStarted: this.stateManager.getStagesStarted(),
       retries: this.stateManager.getRetries(),
       gotos: this.stateManager.getGotos(),
+      timeouts: this.stateManager.getTimeouts(),
       runHistory: this.historyManager.getHistory()
     };
 
-    return this.dataProvider.getChildrenForElement(element, state);
+    const result = this.dataProvider.getChildrenForElement(element, state);
+
+    // Cache root items for targeted duration refresh
+    if (!element) {
+      result.then(items => { this.lastRootItems = items; });
+    }
+
+    return result;
   }
 
   async startPipeline(planId?: string): Promise<void> {
@@ -232,6 +292,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   }
 
   dispose(): void {
+    this.stopDurationRefresh();
     if (this.pipelineService) this.pipelineService.dispose();
     if (this.outputChannel) this.outputChannel.dispose();
   }
