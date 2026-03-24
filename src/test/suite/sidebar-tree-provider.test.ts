@@ -225,7 +225,8 @@ suite('SidebarTreeProvider Suite', () => {
       assert.strictEqual(item.description, 'Test Ticket');
       assert.strictEqual(item.itemType, 'ticket');
       assert.strictEqual(item.id, 'IMPL-001');
-      assert.ok(item.tooltip);
+      // tooltip is resolved lazily via resolveTreeItem
+      assert.strictEqual(item.tooltip, undefined, 'Tooltip should be undefined before resolve');
       assert.ok(item.command);
       assert.ok(item.iconPath);
       assert.strictEqual(item.contextValue, 'ticket');

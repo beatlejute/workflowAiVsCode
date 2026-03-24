@@ -65,7 +65,7 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.description = description;
-    this.tooltip = buildTicketTooltip(ticket);
+    // tooltip is resolved lazily via resolveTreeItem to prevent hover flicker
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'kanban-ticket';
 
@@ -281,9 +281,18 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   }
 
   /**
-   * Fire a tree data change for pulse animation (called by shared timer)
+   * Fire a tree data change for pulse animation (called by shared timer).
+   * Only refreshes the pulsing ticket element to avoid hover flicker.
    */
   firePulse(): void {
+    if (pulseTicketId && this.workflowRoot) {
+      const ticket = this.store.getTicketById(pulseTicketId);
+      if (ticket && ticket.status === this.status) {
+        const item = getOrCreateTreeItem(ticket, this.workflowRoot);
+        this._onDidChangeTreeData.fire(item);
+        return;
+      }
+    }
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -299,6 +308,15 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
       element.iconPath = getTicketIcon(element.ticket.priority);
     }
     return element;
+  }
+
+  /**
+   * Resolve tree item tooltip lazily.
+   * This prevents hover from flickering when tree data changes.
+   */
+  resolveTreeItem(item: vscode.TreeItem, element: KanbanTicketTreeItem): Thenable<vscode.TreeItem> {
+    item.tooltip = buildTicketTooltip(element.ticket);
+    return Promise.resolve(item);
   }
 
   /**

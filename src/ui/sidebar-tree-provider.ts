@@ -74,7 +74,7 @@ export class TicketTreeItem extends SidebarTreeItem {
     super(label, vscode.TreeItemCollapsibleState.None, 'ticket', ticket.id);
 
     this.description = description;
-    this.tooltip = buildTicketTooltip(ticket);
+    // tooltip is resolved lazily via resolveTreeItem to prevent hover flicker
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'ticket';
 
@@ -405,6 +405,17 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    */
   getTreeItem(element: SidebarTreeItem): vscode.TreeItem {
     return element;
+  }
+
+  /**
+   * Resolve tree item tooltip lazily.
+   * This prevents hover from flickering when tree data changes.
+   */
+  resolveTreeItem(item: vscode.TreeItem, element: SidebarTreeItem): Thenable<vscode.TreeItem> {
+    if (element instanceof TicketTreeItem) {
+      item.tooltip = buildTicketTooltip(element.ticket);
+    }
+    return Promise.resolve(item);
   }
 
   /**

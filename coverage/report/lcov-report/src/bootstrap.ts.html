@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">99.29% </span>
+                <span class="strong">92.9% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>140/141</span>
+                <span class='fraction'>131/141</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>16/16</span>
+                <span class='fraction'>5/10</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">99.29% </span>
+                <span class="strong">92.9% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>140/141</span>
+                <span class='fraction'>131/141</span>
             </div>
         
             
@@ -273,32 +273,32 @@
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
@@ -334,8 +334,8 @@
 <span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-yes">15x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-yes">9x</span>
@@ -410,12 +410,12 @@ interface ContainerState {
  * @returns Container with all initialized services
  */
 export function createContainer(_context: vscode.ExtensionContext): Container {
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]<span class="branch-0 cbranch-no" title="branch not covered" >?.uri.</span>fsPath;
   let workflowRoot: string | null = null;
 &nbsp;
-  if (workspaceRoot) {
-    workflowRoot = getWorkflowRoot(workspaceRoot);
-  }
+  if (workspaceRoot) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >    workflowRoot = getWorkflowRoot(workspaceRoot);</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
   // 1. Create base store (no dependencies)
   const store = new WorkflowStore();
@@ -430,16 +430,16 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
 &nbsp;
   // 3. Create FileWatcherService only if workflowRoot is available
   let fileWatcher: FileWatcherService | undefined;
-  if (workflowRoot) {
-    fileWatcher = new FileWatcherService(store, workflowRoot);
-  }
+  if (workflowRoot) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >    fileWatcher = new FileWatcherService(store, workflowRoot);</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
   // 4. Initialize store with workflow data
-  if (workflowRoot) {
-    store.refresh(workflowRoot).catch(err =&gt; {
+  if (workflowRoot) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >    store.refresh(workflowRoot).catch(err =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >      console.error('Bootstrap: Failed to refresh workflow store:', err);</span>
-    });
-  }
+<span class="cstat-no" title="statement not covered" >    });</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
   // Create container object with dispose method
   const containerState: ContainerState = {
@@ -474,9 +474,9 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
       containerState.isDisposed = true;
 &nbsp;
       // Dispose FileWatcherService first (it's a vscode.Disposable)
-      if (containerState.fileWatcher) {
-        containerState.fileWatcher.dispose();
-      }
+      if (containerState.fileWatcher) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >        containerState.fileWatcher.dispose();</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
 &nbsp;
       // Dispose PipelineService (stops child processes, removes listeners)
       containerState.pipelineService.dispose();
@@ -493,7 +493,7 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-13T11:50:40.463Z
+                at 2026-03-24T15:10:01.745Z
             </div>
         <script src="../prettify.js"></script>
         <script>
