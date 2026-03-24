@@ -19,7 +19,6 @@ import { DependencyService } from './services/dependency-service';
 import { WorkflowStore } from './data/workflow-store';
 import { PlanService } from './services/plan-service';
 import { TicketStatus } from './data/types';
-import { IRecurringService } from './services/IRecurringService';
 import { executeNewTicket } from './commands/new-ticket';
 import { executeNewPlan } from './commands/new-plan';
 import { executeShowStatistics } from './commands/show-statistics';
@@ -33,13 +32,6 @@ import {
   executeFilterTicketsByPlan,
   executeClearTicketFilter
 } from './commands/index';
-import {
-  executeRecurringNew,
-  executeRecurringToggle,
-  executeRecurringDelete,
-  executeRecurringTriggerNow,
-  executeRecurringOpenConfig
-} from './commands/manage-recurring';
 import { onLocaleChanged, t } from './i18n';
 import { initializeErrorHandler, withErrorHandling } from './error-handler';
 import { getTicketPath, getPlanPath, getPipelineConfigPath } from './utils/path-utils';
@@ -69,8 +61,7 @@ export function registerCommands(
   skillsProvider: SkillsTreeProvider,
   logsProvider: LogsTreeProvider,
   kanbanProviders: ReturnType<typeof createKanbanProviders>,
-  errorHandler: ReturnType<typeof initializeErrorHandler>,
-  recurringService: IRecurringService | undefined
+  errorHandler: ReturnType<typeof initializeErrorHandler>
 ): void {
   registry.register('workflow.installCli', () => installCli(errorHandler));
   registry.register('workflow.init', () => initWorkflow(errorHandler));
@@ -801,42 +792,7 @@ export function registerCommands(
 
         plansProvider.setDecomposing(planId);
 
-        const disposables: vscode.Disposable[] = [];
-
-        const cleanup = () => {
-          plansProvider.clearDecomposing(planId);
-          disposables.forEach(d => d.dispose());
-          disposables.length = 0;
-        };
-
-        disposables.push(vscode.window.onDidCloseTerminal((closedTerminal) => {
-          if (closedTerminal === terminal) { cleanup(); }
-        }));
-
-        const runViaShellIntegration = (si: vscode.TerminalShellIntegration) => {
-          const execution = si.executeCommand(agentCommand);
-          disposables.push(vscode.window.onDidEndTerminalShellExecution((event) => {
-            if (event.execution === execution) { cleanup(); }
-          }));
-        };
-
-        if (terminal.shellIntegration) {
-          runViaShellIntegration(terminal.shellIntegration);
-        } else {
-          const integrationListener = vscode.window.onDidChangeTerminalShellIntegration((event) => {
-            if (event.terminal === terminal) {
-              integrationListener.dispose();
-              runViaShellIntegration(event.shellIntegration);
-            }
-          });
-          disposables.push(integrationListener);
-          // Fallback: если shell integration не появится за 5с — sendText
-          setTimeout(() => {
-            if (!terminal.shellIntegration) {
-              terminal.sendText(agentCommand);
-            }
-          }, 5000);
-        }
+        terminal.sendText(agentCommand);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Decompose Plan', {
@@ -1048,30 +1004,7 @@ export function registerCommands(
   registry.register(
     'workflow.openStageLog',
     async (arg?: unknown) => {
-      let logFile = resolveLogFile(arg);
-      if (!logFile && workspaceRoot) {
-        // Fallback: scan for most recent log file
-        const logsDir = path.join(workspaceRoot, '.workflow', 'logs');
-        try {
-          if (fs.existsSync(logsDir)) {
-            const files = fs.readdirSync(logsDir).filter(f => f.endsWith('.log'));
-            if (files.length > 0) {
-              let newest = files[0];
-              let newestMtime = 0;
-              for (const file of files) {
-                try {
-                  const mtime = fs.statSync(path.join(logsDir, file)).mtimeMs;
-                  if (mtime > newestMtime) {
-                    newestMtime = mtime;
-                    newest = file;
-                  }
-                } catch { /* skip */ }
-              }
-              logFile = path.join(logsDir, newest);
-            }
-          }
-        } catch { /* ignore scan errors */ }
-      }
+      const logFile = resolveLogFile(arg);
       if (!logFile) {
         vscode.window.showErrorMessage(t('No log file provided'));
         return;
@@ -1244,7 +1177,32 @@ export function registerCommands(
         return;
       }
       try {
-        await pipelineProvider.startPipeline(planId);
+        const pipelinePath = getPipelineConfigPath(workspaceRoot);
+        if (!fs.existsSync(pipelinePath)) {
+          vscode.window.showErrorMessage(t('Pipeline config not found: {0}', pipelinePath));
+          return;
+        }
+        const pipelineContent = fs.readFileSync(pipelinePath, 'utf-8');
+        const pipelineData = safeLoad(pipelineContent) as { pipeline?: { default_agent?: string; agents?: Record<string, { command: string; args: string[]; workdir?: string }> } };
+        const defaultAgentId = pipelineData?.pipeline?.default_agent;
+        const agent = defaultAgentId ? pipelineData?.pipeline?.agents?.[defaultAgentId] : undefined;
+        if (!agent) {
+          vscode.window.showErrorMessage(t('Default agent not configured in pipeline.yaml'));
+          return;
+        }
+
+        const prompt = `run --plan ${planId}`;
+        const agentArgs = agent.args.map((a: string) => `"${a}"`).join(' ');
+        const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
+
+        const terminalEnv: Record<string, string | null> = { CLAUDECODE: null };
+        const terminal = vscode.window.createTerminal({
+          name: `Pipeline ${planId}`,
+          cwd: workspaceRoot,
+          env: terminalEnv
+        });
+        terminal.show();
+        terminal.sendText(agentCommand);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Run Pipeline For Plan', {
@@ -1253,116 +1211,6 @@ export function registerCommands(
         } else {
           const message = error instanceof Error ? error.message : 'Unknown error';
           vscode.window.showErrorMessage(t('Pipeline failed for plan {0}: {1}', planId, message));
-        }
-      }
-    }
-  );
-
-  // Recurring commands
-  registry.register(
-    'workflow.recurring.new',
-    async () => {
-      try {
-        if (!recurringService || !workspaceRoot) {
-          vscode.window.showErrorMessage(t('Recurring service not available or workflow not found'));
-          return;
-        }
-        await executeRecurringNew(recurringService, workspaceRoot);
-      } catch (error) {
-        if (errorHandler) {
-          errorHandler.handleError(error, 'New Recurring Definition', {
-            userMessage: t('Failed to create recurring definition. Check Output channel for details.')
-          });
-        } else {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to create recurring definition: {0}', message));
-        }
-      }
-    }
-  );
-
-  registry.register(
-    'workflow.recurring.toggle',
-    async (arg?: unknown) => {
-      try {
-        if (!recurringService) {
-          vscode.window.showErrorMessage(t('Recurring service not available'));
-          return;
-        }
-        const definitionId = typeof arg === 'string' ? arg : undefined;
-        await executeRecurringToggle(recurringService, definitionId);
-      } catch (error) {
-        if (errorHandler) {
-          errorHandler.handleError(error, 'Toggle Recurring Definition', {
-            userMessage: t('Failed to toggle recurring definition. Check Output channel for details.')
-          });
-        } else {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to toggle recurring definition: {0}', message));
-        }
-      }
-    }
-  );
-
-  registry.register(
-    'workflow.recurring.delete',
-    async (arg?: unknown) => {
-      try {
-        if (!recurringService) {
-          vscode.window.showErrorMessage(t('Recurring service not available'));
-          return;
-        }
-        const definitionId = typeof arg === 'string' ? arg : undefined;
-        await executeRecurringDelete(recurringService, definitionId);
-      } catch (error) {
-        if (errorHandler) {
-          errorHandler.handleError(error, 'Delete Recurring Definition', {
-            userMessage: t('Failed to delete recurring definition. Check Output channel for details.')
-          });
-        } else {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to delete recurring definition: {0}', message));
-        }
-      }
-    }
-  );
-
-  registry.register(
-    'workflow.recurring.triggerNow',
-    async (arg?: unknown) => {
-      try {
-        if (!recurringService) {
-          vscode.window.showErrorMessage(t('Recurring service not available'));
-          return;
-        }
-        const definitionId = typeof arg === 'string' ? arg : undefined;
-        await executeRecurringTriggerNow(recurringService, definitionId);
-      } catch (error) {
-        if (errorHandler) {
-          errorHandler.handleError(error, 'Trigger Recurring Now', {
-            userMessage: t('Failed to trigger recurring definition. Check Output channel for details.')
-          });
-        } else {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to trigger recurring definition: {0}', message));
-        }
-      }
-    }
-  );
-
-  registry.register(
-    'workflow.recurring.openConfig',
-    async () => {
-      try {
-        await executeRecurringOpenConfig(workspaceRoot ?? null);
-      } catch (error) {
-        if (errorHandler) {
-          errorHandler.handleError(error, 'Open Recurring Config', {
-            userMessage: t('Failed to open recurring config. Check Output channel for details.')
-          });
-        } else {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          vscode.window.showErrorMessage(t('Failed to open recurring config: {0}', message));
         }
       }
     }

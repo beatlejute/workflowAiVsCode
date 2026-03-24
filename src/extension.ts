@@ -6,7 +6,6 @@ import { CommandRegistry } from './command-registry';
 import { registerCommands, setWorkspaceRoot } from './command-registration';
 import { createProviders, setupTreeViews, registerLanguageProviders, setupWorkflowRoot } from './ui/extension-setup';
 import { checkCliInstalled, checkWorkflowDir, updateContextKeys } from './utils/extension-helpers';
-import { setRecurringDefinitions } from './ui/kanban-tree-provider';
 
 export { checkCliInstalled, checkWorkflowDir, updateContextKeys };
 
@@ -30,17 +29,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   container = createContainer(context);
   context.subscriptions.push(container);
 
-  const { store, ticketService, planService, dependencyService, pipelineService, recurringService, workflowRoot } = container;
+  const { store, ticketService, planService, dependencyService, pipelineService, workflowRoot } = container;
 
   setWorkspaceRoot(workflowRoot ?? undefined);
 
   const providers = createProviders(store, pipelineService);
   
-  const definitions = await recurringService.loadDefinitions();
-  setRecurringDefinitions(definitions);
-  
-  setupWorkflowRoot(providers, pipelineService, workflowRoot ?? null, context, store, recurringService);
-  setupTreeViews(context, providers, pipelineService, store);
+  setupWorkflowRoot(providers, pipelineService, workflowRoot ?? null, context, store);
+  setupTreeViews(context, providers, pipelineService, store, workflowRoot ?? null);
   registerLanguageProviders(context, store, workflowRoot ?? null);
 
   await vscode.commands.executeCommand('setContext', 'workflow.pipelineRunning', pipelineService.getState() === PipelineState.Running);
@@ -59,8 +55,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     providers.skills,
     providers.logs,
     providers.kanban,
-    errorHandler,
-    recurringService
+    errorHandler
   );
 
   await updateContextKeys(pipelineService, errorHandler);

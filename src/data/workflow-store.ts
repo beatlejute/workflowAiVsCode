@@ -19,8 +19,7 @@ import {
   ReviewEntry,
   WorkflowConfig,
   PipelineConfig,
-  TicketStatus,
-  RecurringDefinition
+  TicketStatus
 } from './types';
 import { parse as parseFrontmatter } from './frontmatter-parser';
 import { ConfigManager } from './config-manager';
@@ -29,7 +28,7 @@ import { IStore } from '../interfaces/IStore';
 /**
  * Event types that can be emitted by the store
  */
-export type StoreEventType = 'ticket' | 'plan' | 'report' | 'config' | 'recurring';
+export type StoreEventType = 'ticket' | 'plan' | 'report' | 'config';
 
 /**
  * Operation types for store changes
@@ -52,12 +51,12 @@ export interface StoreChangeEvent {
  * Supports both full refresh and incremental updates with event notifications.
  */
 export class WorkflowStore implements IStore {
+  // Data storage
   private tickets: Map<string, Ticket> = new Map();
   private plans: Map<string, Plan> = new Map();
   private reports: Report[] = [];
   private config: WorkflowConfig | undefined;
   private pipeline: PipelineConfig | undefined;
-  private recurringDefinitions: RecurringDefinition[] = [];
 
   // Event handling
   private readonly eventEmitter: EventEmitter = new EventEmitter();
@@ -97,12 +96,9 @@ export class WorkflowStore implements IStore {
       this.config = await this.configManager.loadConfig(workflowRoot);
       this.pipeline = await this.configManager.loadPipeline(workflowRoot);
     } catch (error) {
+      // Configuration is optional for store to function
+      // Log error but continue with ticket/plan/report loading
       console.error('Failed to load configuration:', error);
-    }
-    try {
-      this.recurringDefinitions = await this.configManager.loadRecurring(workflowRoot);
-    } catch (error) {
-      console.error('Failed to load recurring configuration:', error);
     }
 
     // Scan all ticket status folders
@@ -131,9 +127,6 @@ export class WorkflowStore implements IStore {
     this.emitEvent({ type: 'report', operation: 'refresh' });
     if (this.config || this.pipeline) {
       this.emitEvent({ type: 'config', operation: 'refresh' });
-    }
-    if (this.recurringDefinitions.length > 0) {
-      this.emitEvent({ type: 'recurring', operation: 'refresh' });
     }
   }
 
@@ -254,9 +247,7 @@ export class WorkflowStore implements IStore {
             const content = await fs.readFile(filePath, 'utf-8');
             const { frontmatter } = parseFrontmatter<Report>(content);
             if (!frontmatter.id) { continue; }
-            if (!this.reports.some(r => r.id === frontmatter.id)) {
-              this.reports.push(frontmatter);
-            }
+            this.reports.push(frontmatter);
           } catch (error) {
             console.error(`Failed to parse report ${filePath}:`, error);
           }
@@ -354,7 +345,7 @@ export class WorkflowStore implements IStore {
       this.emitEvent({
         type: 'report',
         id: report.id,
-        operation: index === -1 ? 'add' : 'update'
+        operation: 'add'
       });
     }
   }
@@ -553,15 +544,6 @@ export class WorkflowStore implements IStore {
     this.emitEvent({ type: 'config', operation: 'update' });
   }
 
-  /**
-   * Update recurring definitions
-   * Emits a 'recurring' event
-   */
-  setRecurringDefinitions(definitions: RecurringDefinition[]): void {
-    this.recurringDefinitions = definitions;
-    this.emitEvent({ type: 'recurring', operation: 'update' });
-  }
-
   // ==================== Query Methods ====================
 
   /**
@@ -633,7 +615,7 @@ export class WorkflowStore implements IStore {
    * Get all reports
    */
   getReports(): Report[] {
-    return [...this.reports];
+    return this.reports;
   }
 
   /**
@@ -658,13 +640,6 @@ export class WorkflowStore implements IStore {
   }
 
   /**
-   * Get all recurring definitions
-   */
-  getRecurringDefinitions(): RecurringDefinition[] {
-    return this.recurringDefinitions;
-  }
-
-  /**
    * Get the workflow root directory
    */
   getWorkflowRoot(): string | null {
@@ -680,7 +655,6 @@ export class WorkflowStore implements IStore {
     this.reports = [];
     this.config = undefined;
     this.pipeline = undefined;
-    this.recurringDefinitions = [];
     this.workflowRoot = null;
   }
 
@@ -702,15 +676,13 @@ export class WorkflowStore implements IStore {
     reportCount: number;
     hasConfig: boolean;
     hasPipeline: boolean;
-    recurringDefinitionCount: number;
   } {
     return {
       ticketCount: this.tickets.size,
       planCount: this.plans.size,
       reportCount: this.reports.length,
       hasConfig: !!this.config,
-      hasPipeline: !!this.pipeline,
-      recurringDefinitionCount: this.recurringDefinitions.length
+      hasPipeline: !!this.pipeline
     };
   }
 }

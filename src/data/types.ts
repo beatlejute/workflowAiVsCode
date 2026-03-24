@@ -73,7 +73,6 @@ export interface Ticket {
   updated_at: string;
   completed_at: string;
   reviews?: ReviewEntry[];
-  recurring_source?: string;
 }
 
 /**
@@ -183,71 +182,4 @@ export interface FrontmatterResult<T> {
 export interface ValidationError {
   field: string;
   message: string;
-}
-
-/**
- * Recurring trigger type enum
- */
-export type RecurringTriggerType = 'cron' | 'on-completion' | 'event';
-
-/**
- * Cron trigger configuration
- */
-export interface CronTrigger {
-  type: 'cron';
-  expression: string;
-}
-
-/**
- * On-completion trigger configuration
- */
-export interface OnCompletionTrigger {
-  type: 'on-completion';
-  target_entity_id?: string;
-}
-
-/**
- * Event trigger configuration
- */
-export interface EventTrigger {
-  type: 'event';
-  event: string;
-  pattern?: string;
-  filter?: Record<string, unknown>;
-}
-
-/**
- * Union type for all recurring triggers
- */
-export type RecurringTrigger = CronTrigger | OnCompletionTrigger | EventTrigger;
-
-/**
- * Recurring definition state
- */
-export interface RecurringState {
-  last_triggered_at: string | null;
-  next_trigger_at: string | null;
-  instance_count: number;
-  last_instance_id: string | null;
-  is_active_instance: boolean;
-}
-
-/**
- * Recurring definition for creating tickets/plans on schedule
- */
-export interface RecurringDefinition {
-  id: string;
-  name: string;
-  enabled: boolean;
-  entity_type: 'ticket' | 'plan';
-  trigger: RecurringTrigger;
-  template: {
-    type: string;
-    title_template: string;
-    body_template?: string;
-    status?: string;
-    priority?: number;
-    tags?: string[];
-  };
-  state: RecurringState;
 }

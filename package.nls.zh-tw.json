@@ -125,11 +125,5 @@
   "Failed to archive plan {0}. Check Output channel for details.": "歸檔計劃 {0} 失敗。檢查 Output 頻道了解詳情。",
   "Failed to unarchive plan {0}. Check Output channel for details.": "取消歸檔計劃 {0} 失敗。檢查 Output 頻道了解詳情。",
   "Failed to filter tickets. Check Output channel for details.": "過濾票證失敗。檢查 Output 頻道了解詳情。",
-  "Failed to clear filter. Check Output channel for details.": "清除過濾器失敗。檢查 Output 頻道了解詳情。",
-  "views.sidebar.recurring.name": "RECURRING",
-  "command.recurring.new.title": "New Recurring Definition",
-  "command.recurring.toggle.title": "Toggle Enable/Disable",
-  "command.recurring.delete.title": "Delete Recurring Definition",
-  "command.recurring.triggerNow.title": "Trigger Now",
-  "command.recurring.openConfig.title": "Open Config"
+  "Failed to clear filter. Check Output channel for details.": "清除過濾器失敗。檢查 Output 頻道了解詳情。"
 }

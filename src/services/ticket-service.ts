@@ -193,8 +193,7 @@ export class TicketService implements ITicketService {
       parent_task: frontmatter.parent_task as string || '',
       created_at: now,
       updated_at: now,
-      completed_at: '',
-      recurring_source: (fields as any)?.recurring_source || '' // eslint-disable-line @typescript-eslint/no-explicit-any
+      completed_at: ''
     };
 
     this.store.addTicket(ticket);

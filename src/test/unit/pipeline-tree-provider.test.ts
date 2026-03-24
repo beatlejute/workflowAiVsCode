@@ -206,26 +206,6 @@ statuses:
       assert.strictEqual(item.label, 'init');
       assert.strictEqual((item.description as string).trim(), '');
     });
-
-    test('Displays duration when stageStartTime provided', () => {
-      const startTime = Date.now() - 65000; // 65 seconds ago
-      const item = new CurrentStageTreeItem(
-        'execute-task',
-        'agent-1',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        startTime
-      );
-
-      assert.ok((item.description as string).includes('⏱'));
-      assert.ok((item.description as string).includes('1m'));
-
-      const tooltip = item.tooltip as vscode.MarkdownString;
-      assert.ok(tooltip.value.includes('Duration'));
-    });
   });
 
   suite('CompletedStageTreeItem Tests', () => {
@@ -233,9 +213,7 @@ statuses:
       const item = new CompletedStageTreeItem(
         'analyze-report',
         '1.5s',
-        45000,
         true,
-        false,
         'IMPL-001',
         'general-purpose',
         'execute-task',
@@ -244,8 +222,7 @@ statuses:
 
       assert.ok((item.label as string).includes('✅'));
       assert.ok((item.label as string).includes('analyze-report'));
-      // Description should show duration | ticket | agent | statusChange when available
-      assert.ok((item.description as string).includes('45.0s'));
+      // Description should show ticket | agent | statusChange when available
       assert.ok((item.description as string).includes('IMPL-001'));
       assert.ok((item.description as string).includes('general-purpose'));
       assert.ok((item.description as string).includes('todo → in_progress'));
@@ -255,8 +232,6 @@ statuses:
       const item = new CompletedStageTreeItem(
         'execute-task',
         '2.3s',
-        2300,
-        false,
         false,
         'FIX-002',
         'code-reviewer',
@@ -268,31 +243,11 @@ statuses:
       assert.ok((item.description as string).includes('FIX-002'));
     });
 
-    test('Timeout displays timer icon', () => {
-      const item = new CompletedStageTreeItem(
-        'execute-task',
-        undefined,
-        300000,
-        false,
-        true,
-        'IMPL-005',
-        'general-purpose',
-        'execute-task'
-      );
-
-      assert.ok((item.label as string).includes('⏱️'));
-      assert.ok((item.label as string).includes('execute-task'));
-      assert.ok((item.description as string).includes('5m 0s'));
-      assert.ok((item.description as string).includes('timeout'));
-    });
-
     test('Tooltip contains result and elapsed time', () => {
       const item = new CompletedStageTreeItem(
         'create-report',
         '3.7s',
-        3700,
         true,
-        false,
         'IMPL-003',
         'general-purpose',
         'create-report',
@@ -304,63 +259,37 @@ statuses:
 
       assert.ok(value.includes('**Completed Stage: create-report**'));
       assert.ok(value.includes('Success'));
-      assert.ok(value.includes('Duration'));
-      assert.ok(value.includes('3.7s'));
+      assert.ok(value.includes('Elapsed'));
       assert.ok(value.includes('IMPL-003'));
       assert.ok(value.includes('general-purpose'));
       assert.ok(value.includes('create-report'));
       assert.ok(value.includes('ready → done'));
     });
 
-    test('Tooltip shows timeout info', () => {
-      const item = new CompletedStageTreeItem(
-        'slow-stage',
-        undefined,
-        300000,
-        false,
-        true,
-        'IMPL-006'
-      );
-
-      const tooltip = item.tooltip as vscode.MarkdownString;
-      const value = tooltip.value;
-
-      assert.ok(value.includes('Timeout'));
-      assert.ok(value.includes('Stage was interrupted by timeout'));
-      assert.ok(value.includes('5m 0s'));
-    });
-
     test('Graceful degradation when optional fields missing', () => {
       const item = new CompletedStageTreeItem(
         'simple-stage',
         '0.5s',
-        undefined,
         true
       );
 
       assert.ok((item.label as string).includes('✅'));
       assert.ok((item.label as string).includes('simple-stage'));
-      // Should fall back to elapsed when no ticket/agent/statusChange and no duration
+      // Should fall back to elapsed when no ticket/agent/statusChange
       assert.ok((item.description as string).includes('Elapsed: 0.5s'));
     });
   });
 
   suite('StatisticsTreeItem Tests', () => {
     test('Displays statistics correctly', () => {
-      const item = new StatisticsTreeItem(10, 3, 5, 0);
+      const item = new StatisticsTreeItem(10, 3, 5);
 
       assert.ok((item.label as string).includes('Statistics'));
       assert.strictEqual((item.description as string), 'Stages Started: 10 | Retries: 3 | Goto Transitions: 5');
     });
 
-    test('Displays timeouts when present', () => {
-      const item = new StatisticsTreeItem(10, 3, 5, 2);
-
-      assert.ok((item.description as string).includes('Timeouts: 2'));
-    });
-
     test('Tooltip contains all statistics', () => {
-      const item = new StatisticsTreeItem(15, 7, 12, 2);
+      const item = new StatisticsTreeItem(15, 7, 12);
 
       const tooltip = item.tooltip as vscode.MarkdownString;
       const value = tooltip.value;
@@ -369,7 +298,6 @@ statuses:
       assert.ok(value.includes('Stages Started'));
       assert.ok(value.includes('Retries'));
       assert.ok(value.includes('Goto Transitions'));
-      assert.ok(value.includes('Timeouts'));
     });
   });
 
@@ -483,7 +411,7 @@ statuses:
       assert.ok(hasHistory, 'Should have history item');
     });
 
-    test('Statistics item has children (Stages Started, Retries, Goto Transitions, Timeouts)', async () => {
+    test('Statistics item has children (Stages Started, Retries, Goto Transitions)', async () => {
       const provider = new PipelineTreeProvider(store, pipelineService);
       provider.setWorkflowRoot(tempWorkflowRoot);
 
@@ -492,7 +420,7 @@ statuses:
 
       if (statisticsItem) {
         const statsChildren = await provider.getChildren(statisticsItem);
-        assert.strictEqual(statsChildren.length, 4);
+        assert.strictEqual(statsChildren.length, 3);
       }
     });
 

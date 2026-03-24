@@ -10,7 +10,6 @@
   "views.sidebar.skills.name": "SKILLS",
   "views.sidebar.logs.name": "ЛОГИ",
   "views.sidebar.welcome.name": "Добро пожаловать",
-  "views.sidebar.recurring.name": "ПОВТОРЯЮЩИЕСЯ",
   "views.kanban.backlog.name": "БЭКЛОГ",
   "views.kanban.ready.name": "ГОТОВО",
   "views.kanban.inProgress.name": "В РАБОТЕ",
@@ -54,11 +53,6 @@
   "command.unarchivePlan.title": "Разархивировать план",
   "command.newTicket.title": "Новый тикет",
   "command.newPlan.title": "Новый план",
-  "command.recurring.new.title": "Новое повторяющееся определение",
-  "command.recurring.toggle.title": "Включить/Отключить",
-  "command.recurring.delete.title": "Удалить повторяющееся определение",
-  "command.recurring.triggerNow.title": "Запустить сейчас",
-  "command.recurring.openConfig.title": "Открыть конфигурацию",
   "command.moveTicket.title": "Переместить тикет",
   "command.showDependencies.title": "Показать зависимости",
   "command.showStatistics.title": "Показать статистику",
@@ -131,11 +125,5 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Не удалось архивировать план {0}. Проверьте канал 'Output' для деталей.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Не удалось разархивировать план {0}. Проверьте канал 'Output' для деталей.",
   "Failed to filter tickets. Check Output channel for details.": "Не удалось фильтровать тикеты. Проверьте канал 'Output' для деталей.",
-  "Failed to clear filter. Check Output channel for details.": "Не удалось сбросить фильтр. Проверьте канал 'Output' для деталей.",
-  "views.sidebar.recurring.name": "RECURRING",
-  "command.recurring.new.title": "New Recurring Definition",
-  "command.recurring.toggle.title": "Toggle Enable/Disable",
-  "command.recurring.delete.title": "Delete Recurring Definition",
-  "command.recurring.triggerNow.title": "Trigger Now",
-  "command.recurring.openConfig.title": "Open Config"
+  "Failed to clear filter. Check Output channel for details.": "Не удалось сбросить фильтр. Проверьте канал 'Output' для деталей."
 }

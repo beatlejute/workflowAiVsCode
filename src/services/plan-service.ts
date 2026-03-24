@@ -81,10 +81,9 @@ export class PlanService {
    *
    * @param title - Plan title
    * @param fields - Optional partial plan fields
-   * @param bodyContent - Optional body content to override template body
    * @returns Created plan
    */
-  async create(title: string, fields?: Partial<Plan>, bodyContent?: string): Promise<Plan> {
+  async create(title: string, fields?: Partial<Plan>): Promise<Plan> {
     const now = new Date().toISOString();
 
     // Generate next plan ID
@@ -120,7 +119,7 @@ export class PlanService {
     };
 
     // Generate file content
-    const fileContent = this.generatePlanFileContent(newPlan, bodyContent ?? body);
+    const fileContent = this.generatePlanFileContent(newPlan, body);
 
     // Save to plans/current/
     const plansDir = path.join(this.workflowRoot, 'plans', 'current');

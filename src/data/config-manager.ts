@@ -7,9 +7,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { safeLoad } from '../utils/yaml-utils';
-import { WorkflowConfig, PipelineConfig, ValidationError, RecurringDefinition } from './types';
+import { WorkflowConfig, PipelineConfig, ValidationError } from './types';
 import { EventEmitter } from 'events';
-import { CONFIG_SCHEMA, PIPELINE_SCHEMA, RECURRING_SCHEMA } from '../schemas/index';
+import { CONFIG_SCHEMA, PIPELINE_SCHEMA } from '../schemas/index';
 
 /**
  * Validates data against a JSON schema
@@ -96,7 +96,7 @@ function validateSchema(data: unknown, schema: Record<string, unknown>, fieldPre
 
                     if (_expectedPropType === 'array' && !Array.isArray(propValue)) {
                       errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be an array` });
-                    } else if (_expectedPropType !== 'array' && typeof propValue !== _expectedPropType) {
+                    } else if (typeof propValue !== _expectedPropType) {
                       errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be of type ${_expectedPropType}` });
                     }
                   }
@@ -119,7 +119,6 @@ function validateSchema(data: unknown, schema: Record<string, unknown>, fieldPre
 export class ConfigManager {
   private workflowConfig: WorkflowConfig | null = null;
   private pipelineConfig: PipelineConfig | null = null;
-  private recurringDefinitions: RecurringDefinition[] | null = null;
   private workflowRoot: string | null = null;
   private readonly eventEmitter: EventEmitter;
 
@@ -204,61 +203,22 @@ export class ConfigManager {
   }
 
   /**
-   * Loads recurring definitions from recurring.yaml
-   */
-  async loadRecurring(workflowRoot: string): Promise<RecurringDefinition[]> {
-    if (this.recurringDefinitions && this.workflowRoot === workflowRoot) {
-      return this.recurringDefinitions;
-    }
-
-    const recurringPath = path.join(workflowRoot, '.workflow', 'config', 'recurring.yaml');
-
-    try {
-      const content = await fs.readFile(recurringPath, 'utf-8');
-      const data = safeLoad(content) as { definitions?: RecurringDefinition[] };
-
-      if (data && data.definitions) {
-        const errors = validateSchema(data, RECURRING_SCHEMA);
-        if (errors.length > 0) {
-          throw new ConfigValidationError(errors);
-        }
-        this.recurringDefinitions = data.definitions;
-      } else {
-        this.recurringDefinitions = [];
-      }
-    } catch (error) {
-      if (error instanceof yaml.YAMLException) {
-        throw new Error(`Invalid YAML in ${recurringPath}: ${error.message}`);
-      }
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
-      }
-      this.recurringDefinitions = [];
-    }
-
-    this.workflowRoot = workflowRoot;
-    return this.recurringDefinitions;
-  }
-
-  /**
    * Reloads configuration from disk, clearing cache
    */
   async reload(): Promise<void> {
     const oldRoot = this.workflowRoot;
-    const hadConfig = this.workflowConfig !== null;
-    const hadPipeline = this.pipelineConfig !== null;
-    const hadRecurring = this.recurringDefinitions !== null;
 
+    // Clear cache
     this.workflowConfig = null;
     this.pipelineConfig = null;
-    this.recurringDefinitions = null;
 
+    // Reload if we had a previous root
     if (oldRoot) {
-      if (hadConfig) await this.loadConfig(oldRoot);
-      if (hadPipeline) await this.loadPipeline(oldRoot);
-      if (hadRecurring) await this.loadRecurring(oldRoot);
+      await this.loadConfig(oldRoot);
+      await this.loadPipeline(oldRoot);
     }
 
+    // Fire change event
     this.eventEmitter.emit('change');
   }
 
@@ -279,20 +239,11 @@ export class ConfigManager {
   }
 
   /**
-   * Gets cached recurring definitions
-   * Returns null if not loaded
-   */
-  getRecurring(): RecurringDefinition[] | null {
-    return this.recurringDefinitions;
-  }
-
-  /**
    * Clears configuration cache
    */
   clearCache(): void {
     this.workflowConfig = null;
     this.pipelineConfig = null;
-    this.recurringDefinitions = null;
   }
 
   /**

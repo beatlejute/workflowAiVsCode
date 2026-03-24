@@ -17,10 +17,6 @@ import { PlanService } from './services/plan-service';
 import { PipelineService } from './services/pipeline-service';
 import { ReportService } from './services/report-service';
 import { ValidationService } from './services/validation-service';
-import { RecurringService } from './services/RecurringService';
-import { RecurringScheduler } from './services/RecurringScheduler';
-import { IRecurringService } from './services/IRecurringService';
-import { ConfigManager } from './data/config-manager';
 import { getWorkflowRoot } from './utils/path-utils';
 
 /**
@@ -35,8 +31,6 @@ export interface Container {
   pipelineService: PipelineService;
   reportService: ReportService;
   validationService: ValidationService;
-  recurringService: IRecurringService;
-  recurringScheduler: RecurringScheduler;
   workflowRoot: string | null;
   dispose(): void;
 }
@@ -53,8 +47,6 @@ interface ContainerState {
   pipelineService: PipelineService;
   reportService: ReportService;
   validationService: ValidationService;
-  recurringService: IRecurringService;
-  recurringScheduler: RecurringScheduler;
   workflowRoot: string | null;
   isDisposed: boolean;
 }
@@ -65,8 +57,7 @@ interface ContainerState {
  * Order of initialization is critical:
  * 1. WorkflowStore - base data layer
  * 2. Services depending on Store
- * 3. ConfigManager, RecurringService
- * 4. FileWatcherService - depends on Store and workflowRoot
+ * 3. FileWatcherService - depends on Store and workflowRoot
  *
  * @param _context - VS Code extension context (not used directly, but passed for future extensions)
  * @returns Container with all initialized services
@@ -90,26 +81,13 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
   const reportService = new ReportService(store, workflowRoot || workspaceRoot || '');
   const validationService = new ValidationService(store);
 
-  // 3. Create ConfigManager and RecurringService
-  const configManager = new ConfigManager();
-  const recurringService = new RecurringService(
-    store,
-    ticketService,
-    planService,
-    configManager,
-    workflowRoot || workspaceRoot || ''
-  );
-
-  // 4. Create RecurringScheduler
-  const recurringScheduler = new RecurringScheduler(recurringService, store);
-
-  // 5. Create FileWatcherService only if workflowRoot is available
+  // 3. Create FileWatcherService only if workflowRoot is available
   let fileWatcher: FileWatcherService | undefined;
   if (workflowRoot) {
-    fileWatcher = new FileWatcherService(store, workflowRoot, recurringService);
+    fileWatcher = new FileWatcherService(store, workflowRoot);
   }
 
-  // 5. Initialize store with workflow data
+  // 4. Initialize store with workflow data
   if (workflowRoot) {
     store.refresh(workflowRoot).catch(err => {
       console.error('Bootstrap: Failed to refresh workflow store:', err);
@@ -126,8 +104,6 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
     pipelineService,
     reportService,
     validationService,
-    recurringService,
-    recurringScheduler,
     workflowRoot,
     isDisposed: false
   };
@@ -141,8 +117,6 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
     pipelineService,
     reportService,
     validationService,
-    recurringService,
-    recurringScheduler,
     workflowRoot,
 
     dispose(): void {
@@ -159,12 +133,6 @@ export function createContainer(_context: vscode.ExtensionContext): Container {
 
       // Dispose PipelineService (stops child processes, removes listeners)
       containerState.pipelineService.dispose();
-
-      // Dispose RecurringService (removes event listeners)
-      containerState.recurringService.dispose();
-
-      // Dispose RecurringScheduler (stops interval)
-      containerState.recurringScheduler.dispose();
 
       // Dispose Store (removes event listeners and disposes ConfigManager)
       containerState.store.dispose();
