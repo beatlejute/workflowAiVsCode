@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore } from '../../data/workflow-store';
 import { PlanService } from '../../services/plan-service';
-import { Plan, Ticket } from '../../data/types';
+import { Plan, Ticket, TicketStatus } from '../../data/types';
 
 suite('PlanService Suite', () => {
 
@@ -381,7 +381,7 @@ related_reports: []
 
       const archived = store.getPlanById('PLAN-001');
       assert.ok(archived?.completed_at, 'Should set completed_at');
-      assert.ok(archived?.completed_at > plan.created_at, 'completed_at should be after created_at');
+      assert.ok(archived?.completed_at! > archived?.created_at!, 'completed_at should be after created_at');
     });
 
     test('should throw error for non-existent plan', async () => {

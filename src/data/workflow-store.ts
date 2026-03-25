@@ -265,7 +265,7 @@ export class WorkflowStore implements IStore {
    * Emit a store change event
    */
   private emitEvent(event: StoreChangeEvent): void {
-    console.log(`[WorkflowStore] emitEvent: type=${event.type} id=${event.id || 'none'} action=${event.action || 'none'}`);
+    console.log(`[WorkflowStore] emitEvent: type=${event.type} id=${event.id || 'none'} operation=${event.operation || 'none'}`);
     this.eventEmitter.emit('change', event);
   }
 

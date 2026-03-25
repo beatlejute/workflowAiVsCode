@@ -96,7 +96,7 @@ function validateSchema(data: unknown, schema: Record<string, unknown>, fieldPre
 
                     if (_expectedPropType === 'array' && !Array.isArray(propValue)) {
                       errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be an array` });
-                    } else if (typeof propValue !== _expectedPropType) {
+                    } else if (_expectedPropType !== 'array' && typeof propValue !== _expectedPropType) {
                       errors.push({ field: fieldPrefix ? `${fieldPrefix}.${key}.${nestedKey}.${propKey}` : `${key}.${nestedKey}.${propKey}`, message: `Field "${key}.${nestedKey}.${propKey}" must be of type ${_expectedPropType}` });
                     }
                   }

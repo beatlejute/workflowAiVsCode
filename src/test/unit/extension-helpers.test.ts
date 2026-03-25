@@ -242,7 +242,7 @@ suite('extension-helpers - resolver functions', () => {
         },
         window: {
           withProgress: async (_options: unknown, task: (task: { report: () => void }, token: { isCancellationRequested: boolean; onCancellationRequested: { dispose: () => void } }) => Promise<unknown>) => {
-            return await task({ report: () => {} }, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) });
+            return await task({ report: () => {} }, { isCancellationRequested: false, onCancellationRequested: { dispose: () => {} } });
           },
           showInformationMessage: async (_message: string) => {
             return undefined;
@@ -335,35 +335,59 @@ suite('extension-helpers - resolver functions', () => {
     });
 
     suite('installCli()', () => {
+      let mockedInstallCli: typeof installCli;
+      let originalExec: typeof import('child_process').exec;
+
+      setup(() => {
+        // Mock child_process.exec before re-requiring extension-helpers
+        const cp = require('child_process');
+        originalExec = cp.exec;
+      });
+
+      teardown(() => {
+        const cp = require('child_process');
+        cp.exec = originalExec;
+        // Clear cached module so next test gets fresh mock
+        const helperPath = require.resolve('../../utils/extension-helpers');
+        delete require.cache[helperPath];
+      });
+
+      function setupMockedInstallCli(execBehavior: (cmd: string, cb: Function) => void) {
+        const cp = require('child_process');
+        cp.exec = (cmd: string, optsOrCb: unknown, cb?: Function) => {
+          const callback = typeof optsOrCb === 'function' ? optsOrCb as Function : cb;
+          execBehavior(cmd, callback!);
+          return { on: () => {}, kill: () => {} };
+        };
+        // Clear and re-require to capture mocked exec
+        const helperPath = require.resolve('../../utils/extension-helpers');
+        delete require.cache[helperPath];
+        const helpers = require('../../utils/extension-helpers');
+        mockedInstallCli = helpers.installCli;
+      }
+
       test('should install CLI successfully', async () => {
         mockTResult = 'CLI installed';
-        mockExecAsyncResult = undefined; // Success
-
-        // Mock execAsync directly in the module
-        const globalAny = global as typeof globalThis & Record<string, unknown>;
-        (globalAny.child_process as Record<string, unknown>).promises = { exec: async () => ({ stdout: '', stderr: '' }) };
-        
-        await installCli(getErrorHandler());
+        setupMockedInstallCli((_cmd, cb) => {
+          setImmediate(() => cb(null, { stdout: '', stderr: '' }));
+        });
+        await mockedInstallCli(getErrorHandler());
       });
 
       test('should handle installation error with errorHandler', async () => {
         mockTResult = 'Installation failed message';
-
-        // Mock execAsync to throw error
-        const globalAny = global as typeof globalThis & Record<string, unknown>;
-        (globalAny.child_process as Record<string, unknown>).promises = { exec: async () => { throw new Error('Installation failed'); } };
-        
-        await installCli(getErrorHandler());
+        setupMockedInstallCli((_cmd, cb) => {
+          setImmediate(() => cb(new Error('Installation failed')));
+        });
+        await mockedInstallCli(getErrorHandler());
       });
 
       test('should handle installation error without errorHandler', async () => {
         mockTResult = 'Installation failed message';
-
-        // Mock execAsync to throw error
-        const globalAny = global as typeof globalThis & Record<string, unknown>;
-        (globalAny.child_process as Record<string, unknown>).promises = { exec: async () => { throw new Error('Installation failed'); } };
-        
-        await installCli(undefined);
+        setupMockedInstallCli((_cmd, cb) => {
+          setImmediate(() => cb(new Error('Installation failed')));
+        });
+        await mockedInstallCli(undefined);
       });
     });
 

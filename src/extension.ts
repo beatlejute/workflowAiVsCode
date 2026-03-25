@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const providers = createProviders(store, pipelineService);
   
   setupWorkflowRoot(providers, pipelineService, workflowRoot ?? null, context, store);
-  setupTreeViews(context, providers, pipelineService, store, workflowRoot ?? null);
+  setupTreeViews(context, providers, pipelineService, store);
   registerLanguageProviders(context, store, workflowRoot ?? null);
 
   await vscode.commands.executeCommand('setContext', 'workflow.pipelineRunning', pipelineService.getState() === PipelineState.Running);
