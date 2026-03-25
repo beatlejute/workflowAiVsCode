@@ -15,3 +15,6 @@ test-coverage-output.txt
 coverage-report.txt
 cov.txt
 .nyc_output/
+
+#AI
+.mcp.json
