@@ -13,8 +13,9 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { NotificationsManager } from '../../ui/notifications';
-import { PipelineState } from '../../services/pipeline-service';
+import { PipelineState, PipelineService } from '../../services/pipeline-service';
 import { TicketStatus } from '../../data/types';
+import { WorkflowStore } from '../../data/workflow-store';
 
 // Mock ticket
 interface MockTicket {
@@ -116,7 +117,7 @@ suite('NotificationsManager Tests', () => {
     vscode.window.showInformationMessage = async (msg: string) => { shownInfos.push(msg); return undefined; };
     vscode.window.showWarningMessage = async (msg: string) => { shownWarnings.push(msg); return undefined; };
     vscode.window.showErrorMessage = async (msg: string) => { shownErrors.push(msg); return undefined; };
-    vscode.commands.executeCommand = async (cmd: string) => { executedCommands.push(cmd); return undefined; };
+    vscode.commands.executeCommand = (async (cmd: string) => { executedCommands.push(cmd); return undefined; }) as any;
 
     store = createMockStore();
     pipelineService = createMockPipelineService();
@@ -135,13 +136,13 @@ suite('NotificationsManager Tests', () => {
 
   suite('constructor', () => {
     test('creates NotificationsManager without throwing', () => {
-      assert.doesNotThrow(() => new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService));
+      assert.doesNotThrow(() => new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService));
     });
   });
 
   suite('initialize()', () => {
     test('initialize() does not throw', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       assert.doesNotThrow(() => manager.initialize());
       manager.dispose();
     });
@@ -152,7 +153,7 @@ suite('NotificationsManager Tests', () => {
         createTicket('IMPL-002', TicketStatus.InProgress)
       ];
       store = createMockStore(tickets);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
       // Cache is populated - no error
       manager.dispose();
@@ -163,7 +164,7 @@ suite('NotificationsManager Tests', () => {
     test('shows info when ticket transitions to done', async () => {
       const ticket = createTicket('IMPL-001', TicketStatus.Ready);
       store = createMockStore([ticket]);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       // Update ticket to Done status
@@ -179,7 +180,7 @@ suite('NotificationsManager Tests', () => {
     test('shows warning when ticket transitions to blocked', async () => {
       const ticket = createTicket('IMPL-001', TicketStatus.InProgress);
       store = createMockStore([ticket]);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       // Update ticket to Blocked status
@@ -193,7 +194,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('caches newly added tickets', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       const newTicket = createTicket('IMPL-NEW', TicketStatus.Ready);
@@ -206,7 +207,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('ignores non-ticket events', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       store._fireChange({ type: 'config', operation: 'update' });
@@ -216,7 +217,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('ignores update without id', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       store._fireChange({ type: 'ticket', operation: 'update', id: undefined });
@@ -225,7 +226,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('ignores update for non-existent ticket', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       store._fireChange({ type: 'ticket', operation: 'update', id: 'NONEXISTENT-001' });
@@ -236,7 +237,7 @@ suite('NotificationsManager Tests', () => {
     test('ignores when same status (no actual transition)', () => {
       const ticket = createTicket('IMPL-001', TicketStatus.Ready);
       store = createMockStore([ticket]);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       // Fire update but status hasn't changed
@@ -249,7 +250,7 @@ suite('NotificationsManager Tests', () => {
 
   suite('pipeline state change events', () => {
     test('shows error message when pipeline goes to Error state', async () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       pipelineService._fireStateChange(PipelineState.Error);
@@ -260,7 +261,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('shows info message when pipeline Completes', async () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       pipelineService._fireStateChange(PipelineState.Completed);
@@ -271,7 +272,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('no notification for Running state', async () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       pipelineService._fireStateChange(PipelineState.Running);
@@ -283,7 +284,7 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('no notification for Idle state', async () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       pipelineService._fireStateChange(PipelineState.Idle);
@@ -298,14 +299,14 @@ suite('NotificationsManager Tests', () => {
   suite('openTicketFile (via completed notification user action)', () => {
     test('shows error when workflowRoot not set and open is triggered', async () => {
       // Make showInformationMessage return "Open" to trigger openTicketFile
-      vscode.window.showInformationMessage = async (msg: string, ..._items: string[]) => {
+      (vscode.window as any).showInformationMessage = async (msg: string, ..._items: string[]) => {
         shownInfos.push(msg);
         return 'Open'; // User clicks "Open"
       };
 
       const ticket = createTicket('IMPL-001', TicketStatus.Ready);
       store = createMockStore([ticket]);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
 
       // Trigger done transition
@@ -321,12 +322,12 @@ suite('NotificationsManager Tests', () => {
 
   suite('openLatestReport (via completed notification user action)', () => {
     test('shows info when no reports available', async () => {
-      vscode.window.showInformationMessage = async (msg: string, ..._items: string[]) => {
+      (vscode.window as any).showInformationMessage = async (msg: string, ..._items: string[]) => {
         shownInfos.push(msg);
         return 'Report'; // User clicks "Report"
       };
 
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.setWorkflowRoot('/some/root');
       manager.initialize();
 
@@ -338,14 +339,14 @@ suite('NotificationsManager Tests', () => {
     });
 
     test('shows info when no reports with dates', async () => {
-      vscode.window.showInformationMessage = async (msg: string, ..._items: string[]) => {
+      (vscode.window as any).showInformationMessage = async (msg: string, ..._items: string[]) => {
         shownInfos.push(msg);
         return 'Report';
       };
 
       const reportWithoutDate = { id: 'REPORT-001' }; // no created_at
       store = createMockStore([], [reportWithoutDate]);
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.setWorkflowRoot('/some/root');
       manager.initialize();
 
@@ -358,7 +359,7 @@ suite('NotificationsManager Tests', () => {
 
   suite('setWorkflowRoot', () => {
     test('sets workflow root without throwing', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       assert.doesNotThrow(() => manager.setWorkflowRoot('/some/workflow/root'));
       assert.doesNotThrow(() => manager.setWorkflowRoot(null));
       manager.dispose();
@@ -367,13 +368,13 @@ suite('NotificationsManager Tests', () => {
 
   suite('dispose', () => {
     test('dispose() does not throw', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
       assert.doesNotThrow(() => manager.dispose());
     });
 
     test('dispose() can be called multiple times', () => {
-      const manager = new NotificationsManager(store as unknown as MockStore, pipelineService as unknown as MockPipelineService);
+      const manager = new NotificationsManager(store as any as WorkflowStore, pipelineService as any as PipelineService);
       manager.initialize();
       assert.doesNotThrow(() => {
         manager.dispose();

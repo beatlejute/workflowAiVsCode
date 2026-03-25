@@ -28,6 +28,11 @@ import {
 import { WorkflowStore } from '../../data/workflow-store';
 import * as vscode from 'vscode';
 
+// Cast vscode namespaces to any for mock property access
+const win = vscode.window as any;
+const cmd = vscode.commands as any;
+const env = vscode.env as any;
+
 suite('commands/index Tests', () => {
   let store: WorkflowStore;
   let tempWorkflowRoot: string;
@@ -37,9 +42,9 @@ suite('commands/index Tests', () => {
   let shownInfos: string[];
   let executedCommands: string[];
   let clipboardText: string;
-  let quickPickItems: vscode.QuickPickItem[];
-  let quickPickResult: vscode.QuickPickItem | undefined;
-  let activeTextEditor: vscode.TextEditor | undefined;
+  let quickPickItems: any[];
+  let quickPickResult: any;
+  let activeTextEditor: any;
 
   const createMockKanbanProviders = (planFilter?: string | null) => {
     const makeProvider = () => ({
@@ -109,27 +114,27 @@ suite('commands/index Tests', () => {
     activeTextEditor = undefined;
 
     // Patch vscode mock for tests
-    vscode.window._showError = vscode.window.showErrorMessage;
-    vscode.window._showInfo = vscode.window.showInformationMessage;
-    vscode.window._quickPick = vscode.window.showQuickPick;
-    vscode.window._activeEditor = vscode.window.activeTextEditor;
-    vscode.commands._exec = vscode.commands.executeCommand;
-    vscode.env._clipboard = vscode.env.clipboard;
+    win._showError = vscode.window.showErrorMessage;
+    win._showInfo = vscode.window.showInformationMessage;
+    win._quickPick = vscode.window.showQuickPick;
+    win._activeEditor = vscode.window.activeTextEditor;
+    cmd._exec = vscode.commands.executeCommand;
+    env._clipboard = vscode.env.clipboard;
 
-    vscode.window.showErrorMessage = async (msg: string) => { shownErrors.push(msg); return undefined; };
-    vscode.window.showInformationMessage = async (msg: string) => { shownInfos.push(msg); return undefined; };
-    vscode.window.showQuickPick = async (items: readonly vscode.QuickPickItem[], _opts?: vscode.QuickPickOptions) => { quickPickItems = Array.isArray(items) ? items : []; return quickPickResult; };
+    (vscode.window as any).showErrorMessage = async (msg: string) => { shownErrors.push(msg); return undefined; };
+    (vscode.window as any).showInformationMessage = async (msg: string) => { shownInfos.push(msg); return undefined; };
+    (vscode.window as any).showQuickPick = async (items: any[], _opts?: any) => { quickPickItems = Array.isArray(items) ? items : []; return quickPickResult; };
     Object.defineProperty(vscode.window, 'activeTextEditor', { get: () => activeTextEditor, configurable: true });
-    vscode.commands.executeCommand = async (_cmd: string, ..._args: unknown[]) => { executedCommands.push(_cmd); return undefined; };
-    vscode.env.clipboard = { writeText: async (text: string) => { clipboardText = text; }, readText: async () => '' };
+    (vscode.commands as any).executeCommand = async (_cmd: string, ..._args: unknown[]) => { executedCommands.push(_cmd); return undefined; };
+    (vscode.env as any).clipboard = { writeText: async (text: string) => { clipboardText = text; }, readText: async () => '' };
   });
 
   teardown(() => {
-    if (vscode.window._showError) { vscode.window.showErrorMessage = vscode.window._showError; }
-    if (vscode.window._showInfo) { vscode.window.showInformationMessage = vscode.window._showInfo; }
-    if (vscode.window._quickPick) { vscode.window.showQuickPick = vscode.window._quickPick; }
-    if (vscode.commands._exec) { vscode.commands.executeCommand = vscode.commands._exec; }
-    if (vscode.env._clipboard) { vscode.env.clipboard = vscode.env._clipboard; }
+    if (win._showError) { (vscode.window as any).showErrorMessage = win._showError; }
+    if (win._showInfo) { (vscode.window as any).showInformationMessage = win._showInfo; }
+    if (win._quickPick) { (vscode.window as any).showQuickPick = win._quickPick; }
+    if (cmd._exec) { (vscode.commands as any).executeCommand = cmd._exec; }
+    if (env._clipboard) { (vscode.env as any).clipboard = env._clipboard; }
     try { Object.defineProperty(vscode.window, 'activeTextEditor', { get: () => undefined, configurable: true }); } catch {}
   });
 
@@ -145,9 +150,9 @@ suite('commands/index Tests', () => {
     });
 
     test('handles executeCommand error gracefully', async () => {
-      vscode.commands.executeCommand = async (cmd: string) => {
-        executedCommands.push(cmd);
-        if (cmd === 'vscode.open') throw new Error('Cannot open');
+      (vscode.commands as any).executeCommand = async (c: string) => {
+        executedCommands.push(c);
+        if (c === 'vscode.open') throw new Error('Cannot open');
         return undefined;
       };
       await executeOpenPipelineConfig('/some/workflow/root');
@@ -168,9 +173,9 @@ suite('commands/index Tests', () => {
     });
 
     test('handles executeCommand error gracefully', async () => {
-      vscode.commands.executeCommand = async (cmd: string) => {
-        executedCommands.push(cmd);
-        if (cmd === 'vscode.open') throw new Error('Open failed');
+      (vscode.commands as any).executeCommand = async (c: string) => {
+        executedCommands.push(c);
+        if (c === 'vscode.open') throw new Error('Open failed');
         return undefined;
       };
       await executeOpenConfig('/some/root');
@@ -254,7 +259,7 @@ suite('commands/index Tests', () => {
       const emptyStore = new WorkflowStore();
       const kanban = createMockKanbanProviders();
       const tickets = createMockTicketsProvider();
-      await executeFilterTicketsByPlan(emptyStore, tickets, kanban);
+      await executeFilterTicketsByPlan(emptyStore, tickets as any, kanban as any);
       assert.ok(shownInfos.length > 0);
     });
 
@@ -262,13 +267,13 @@ suite('commands/index Tests', () => {
       quickPickResult = undefined;
       const kanban = createMockKanbanProviders();
       const tickets = createMockTicketsProvider();
-      await executeFilterTicketsByPlan(store, tickets, kanban);
+      await executeFilterTicketsByPlan(store, tickets as any, kanban as any);
       // No info shown, no error - just cancelled
       assert.strictEqual(shownErrors.length, 0);
     });
 
     test('applies filter when plan is selected', async () => {
-      quickPickResult = { label: 'PLAN-001', description: 'Test Plan', planId: 'PLAN-001', isCurrent: true };
+      quickPickResult = { label: 'PLAN-001', description: 'Test Plan', planId: 'PLAN-001', isCurrent: true } as any;
       const filters: (string | null)[] = [];
       const kanban = createMockKanbanProviders();
       const tickets = {
@@ -276,13 +281,13 @@ suite('commands/index Tests', () => {
         getPlanFilter: () => null,
         refresh: () => {}
       };
-      await executeFilterTicketsByPlan(store, tickets, kanban);
+      await executeFilterTicketsByPlan(store, tickets as any, kanban as any);
       assert.ok(filters.includes('PLAN-001'));
       assert.ok(shownInfos.length > 0);
     });
 
     test('clears filter when null planId selected', async () => {
-      quickPickResult = { label: 'Clear Filter', description: 'Show all', planId: null, isCurrent: false };
+      quickPickResult = { label: 'Clear Filter', description: 'Show all', planId: null, isCurrent: false } as any;
       const filters: (string | null)[] = [];
       const kanban = createMockKanbanProviders('PLAN-001');
       const tickets = {
@@ -290,7 +295,7 @@ suite('commands/index Tests', () => {
         getPlanFilter: () => 'PLAN-001',
         refresh: () => {}
       };
-      await executeFilterTicketsByPlan(store, tickets, kanban);
+      await executeFilterTicketsByPlan(store, tickets as any, kanban as any);
       assert.ok(filters.includes(null));
     });
 
@@ -298,7 +303,7 @@ suite('commands/index Tests', () => {
       quickPickResult = undefined;
       const kanban = createMockKanbanProviders('PLAN-001');
       const tickets = createMockTicketsProvider('PLAN-001');
-      await executeFilterTicketsByPlan(store, tickets, kanban);
+      await executeFilterTicketsByPlan(store, tickets as any, kanban as any);
       // Quick pick items should include "Clear Filter"
       const hasClear = quickPickItems.some(item => item.planId === null);
       assert.ok(hasClear, 'Should include clear filter option when filter is active');
@@ -327,7 +332,7 @@ suite('commands/index Tests', () => {
         refresh: () => {}
       };
 
-      await executeClearTicketFilter(tickets, kanban);
+      await executeClearTicketFilter(tickets as any, kanban as any);
       // tickets + 6 kanban providers = 7 total
       assert.strictEqual(cleared.length, 7);
       assert.ok(cleared.every(v => v === true));
@@ -337,7 +342,7 @@ suite('commands/index Tests', () => {
     test('executes setContext command to clear filter flag', async () => {
       const kanban = createMockKanbanProviders();
       const tickets = createMockTicketsProvider();
-      await executeClearTicketFilter(tickets, kanban);
+      await executeClearTicketFilter(tickets as any, kanban as any);
       assert.ok(executedCommands.includes('setContext'));
     });
   });

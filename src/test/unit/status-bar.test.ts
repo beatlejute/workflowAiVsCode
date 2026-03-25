@@ -13,7 +13,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { StatusBar, activateStatusBar } from '../../ui/status-bar';
-import { PipelineState } from '../../services/pipeline-service';
+import { PipelineService, PipelineState } from '../../services/pipeline-service';
+import { WorkflowStore } from '../../data/workflow-store';
 import { TicketStatus } from '../../data/types';
 
 // Mock interfaces
@@ -36,7 +37,7 @@ interface MockStore {
 interface StatusBarItemState {
   command: string;
   text: string;
-  tooltip?: unknown;
+  tooltip?: { value: string } | string;
   color?: string;
 }
 
@@ -94,11 +95,11 @@ suite('StatusBar Tests', () => {
 
   suite('constructor', () => {
     test('creates StatusBar without throwing', () => {
-      assert.doesNotThrow(() => new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore));
+      assert.doesNotThrow(() => new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore));
     });
 
     test('statusBarItem has command set', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.strictEqual(item.command, 'workflow.statusBarClick');
       statusBar.dispose();
@@ -107,13 +108,13 @@ suite('StatusBar Tests', () => {
     test('statusBarItem is shown after construction', () => {
       let showCalled = false;
       const origCreate = vscode.window.createStatusBarItem;
-      vscode.window.createStatusBarItem = (alignment, priority) => {
-        const item = origCreate(alignment, priority);
+      vscode.window.createStatusBarItem = (alignment: any, priority: any) => {
+        const item = origCreate(alignment, priority) as vscode.StatusBarItem;
         const origShow = item.show.bind(item);
         item.show = () => { showCalled = true; origShow(); };
         return item;
       };
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.ok(showCalled);
       statusBar.dispose();
       vscode.window.createStatusBarItem = origCreate;
@@ -122,21 +123,21 @@ suite('StatusBar Tests', () => {
 
   suite('render - Idle state', () => {
     test('sets idle text', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.includes('Idle') || item.text.includes('wf') || item.text.length > 0);
       statusBar.dispose();
     });
 
     test('tooltip is MarkdownString for idle', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.tooltip !== undefined);
       statusBar.dispose();
     });
 
     test('color is undefined for idle', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.strictEqual(item.color, undefined);
       statusBar.dispose();
@@ -150,7 +151,7 @@ suite('StatusBar Tests', () => {
         currentTicket: 'IMPL-001',
         retryCount: 0
       });
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.includes('Running') || item.text.includes('execute-task') || item.text.includes('loading'));
       statusBar.dispose();
@@ -161,7 +162,7 @@ suite('StatusBar Tests', () => {
         currentStage: 'execute-task',
         retryCount: 2
       });
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.includes('retry') || item.text.includes('2'));
       statusBar.dispose();
@@ -169,7 +170,7 @@ suite('StatusBar Tests', () => {
 
     test('sets running text with no stage', () => {
       pipelineService = createMockPipelineService(PipelineState.Running, {});
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.length > 0);
       statusBar.dispose();
@@ -179,7 +180,7 @@ suite('StatusBar Tests', () => {
   suite('render - Error state', () => {
     test('sets error text', () => {
       pipelineService = createMockPipelineService(PipelineState.Error);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.includes('Error') || item.text.includes('error'));
       statusBar.dispose();
@@ -187,7 +188,7 @@ suite('StatusBar Tests', () => {
 
     test('sets error color', () => {
       pipelineService = createMockPipelineService(PipelineState.Error);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.color !== undefined);
       statusBar.dispose();
@@ -197,7 +198,7 @@ suite('StatusBar Tests', () => {
   suite('render - Completed state', () => {
     test('sets completed text', () => {
       pipelineService = createMockPipelineService(PipelineState.Completed);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.text.includes('Completed') || item.text.includes('check'));
       statusBar.dispose();
@@ -205,7 +206,7 @@ suite('StatusBar Tests', () => {
 
     test('color is undefined for completed', () => {
       pipelineService = createMockPipelineService(PipelineState.Completed);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.strictEqual(item.color, undefined);
       statusBar.dispose();
@@ -215,12 +216,12 @@ suite('StatusBar Tests', () => {
   suite('event subscriptions', () => {
     test('re-renders on pipeline state change', () => {
       pipelineService = createMockPipelineService(PipelineState.Idle);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
 
       // Simulate state change by changing mock state and firing
-      (pipelineService as unknown as MockPipelineService).getState = () => PipelineState.Running;
-      (pipelineService as unknown as MockPipelineService)._fireStateChange(PipelineState.Running);
+      pipelineService.getState = () => PipelineState.Running;
+      pipelineService._fireStateChange(PipelineState.Running);
 
       const newText = item.text;
       // Text may have changed (Running vs Idle)
@@ -229,15 +230,15 @@ suite('StatusBar Tests', () => {
     });
 
     test('re-renders on store change', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
 
       // Change store mock and fire event
-      (store as unknown as MockStore).getTicketsByStatus = (status: string) => {
+      store.getTicketsByStatus = (status: string) => {
         if (status === TicketStatus.Ready) return new Array(10);
         return [];
       };
-      (store as unknown as MockStore)._fireChange({ type: 'ticket', operation: 'update' });
+      store._fireChange({ type: 'ticket', operation: 'update' });
 
       // Status bar should have re-rendered
       assert.ok(item.text.length > 0);
@@ -247,13 +248,13 @@ suite('StatusBar Tests', () => {
 
   suite('show/hide', () => {
     test('show() calls statusBarItem.show()', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.doesNotThrow(() => statusBar.show());
       statusBar.dispose();
     });
 
     test('hide() calls statusBarItem.hide()', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.doesNotThrow(() => statusBar.hide());
       statusBar.dispose();
     });
@@ -261,12 +262,12 @@ suite('StatusBar Tests', () => {
 
   suite('dispose', () => {
     test('dispose() does not throw', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.doesNotThrow(() => statusBar.dispose());
     });
 
     test('dispose() can be called multiple times', () => {
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.doesNotThrow(() => {
         statusBar.dispose();
         statusBar.dispose();
@@ -277,9 +278,9 @@ suite('StatusBar Tests', () => {
   suite('tooltip builders', () => {
     test('idle tooltip contains ready/blocked counts', () => {
       store = createMockStore(5, 2);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
-      const tooltipValue = item.tooltip?.value || '';
+      const tooltipValue = (item.tooltip as { value: string } | undefined)?.value || '';
       assert.ok(tooltipValue.includes('5') || tooltipValue.length > 0);
       statusBar.dispose();
     });
@@ -291,16 +292,16 @@ suite('StatusBar Tests', () => {
         currentTicket: 'IMPL-001',
         retryCount: 1
       });
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
-      const tooltipValue = item.tooltip?.value || '';
+      const tooltipValue = (item.tooltip as { value: string } | undefined)?.value || '';
       assert.ok(tooltipValue.length > 0);
       statusBar.dispose();
     });
 
     test('running tooltip without optional fields', () => {
       pipelineService = createMockPipelineService(PipelineState.Running, {});
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
       assert.ok(item.tooltip !== undefined);
       statusBar.dispose();
@@ -308,18 +309,18 @@ suite('StatusBar Tests', () => {
 
     test('error tooltip has error text', () => {
       pipelineService = createMockPipelineService(PipelineState.Error);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
-      const tooltipValue = item.tooltip?.value || '';
+      const tooltipValue = (item.tooltip as { value: string } | undefined)?.value || '';
       assert.ok(tooltipValue.length > 0);
       statusBar.dispose();
     });
 
     test('completed tooltip has completion text', () => {
       pipelineService = createMockPipelineService(PipelineState.Completed);
-      const statusBar = new StatusBar(pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       const item = getStatusBarItem(statusBar);
-      const tooltipValue = item.tooltip?.value || '';
+      const tooltipValue = (item.tooltip as { value: string } | undefined)?.value || '';
       assert.ok(tooltipValue.length > 0);
       statusBar.dispose();
     });
@@ -329,7 +330,7 @@ suite('StatusBar Tests', () => {
     test('creates StatusBar and adds to subscriptions', () => {
       const subscriptions: unknown[] = [];
       const context = { subscriptions } as unknown as vscode.ExtensionContext;
-      activateStatusBar(context, pipelineService as unknown as MockPipelineService, store as unknown as MockStore);
+      activateStatusBar(context, pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
       assert.strictEqual(subscriptions.length, 1);
       // Cleanup
       (subscriptions[0] as { dispose: () => void }).dispose();

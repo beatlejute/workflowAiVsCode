@@ -433,7 +433,7 @@ reporting:
     });
 
     test('pipeline without entry_point should return Error Diagnostic', () => {
-      const invalidPipeline: PipelineConfig = {
+      const invalidPipeline = {
         pipeline: {
           name: 'Test Pipeline',
           version: '1.0',
@@ -458,7 +458,7 @@ reporting:
             log_file: ''
           }
         }
-      } as Partial<PipelineConfig>;
+      } as any as PipelineConfig;
 
       const uri = vscode.Uri.file(path.join(testDir, 'pipeline.yaml'));
       const diagnostics = validationService.validatePipeline(uri, invalidPipeline);
@@ -605,7 +605,7 @@ reporting:
           reports: '.workflow/reports',
           archive: '.workflow/archive'
         }
-      } as Partial<WorkflowConfig>;
+      } as any as WorkflowConfig;
 
       const uri = vscode.Uri.file(path.join(testDir, 'config.yaml'));
       const diagnostics = validationService.validateConfig(uri, invalidConfig);
@@ -628,7 +628,7 @@ reporting:
         paths: {
           tickets: '.workflow/tickets'
           // Missing plans, reports, archive
-        } as Partial<WorkflowConfig['paths']>,
+        } as any,
         reporting: {
           enabled: true,
           auto_generate: true

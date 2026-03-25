@@ -3,6 +3,11 @@ import Mocha from 'mocha';
 import { glob } from 'glob';
 
 export async function run(): Promise<void> {
+  // Set cwd to project root so process.cwd()-based paths work in Extension Host
+  // __dirname is dist/test/test/suite/ → 4 levels up to project root
+  const projectRoot = path.resolve(__dirname, '../../../../');
+  process.chdir(projectRoot);
+
   const mocha = new Mocha({
     ui: 'tdd',
     color: true,
