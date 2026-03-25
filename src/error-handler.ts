@@ -347,6 +347,16 @@ export function getErrorHandler(): ErrorHandler {
 }
 
 /**
+ * Reset the global error handler (for testing only).
+ */
+export function resetErrorHandler(): void {
+  if (globalErrorHandler) {
+    globalErrorHandler.dispose();
+    globalErrorHandler = undefined;
+  }
+}
+
+/**
  * Universal error handling wrapper for async operations.
  * Eliminates duplicated try/catch blocks by providing a single, consistent
  * error handling pattern with logging and user notifications.

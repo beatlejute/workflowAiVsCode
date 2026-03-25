@@ -23,8 +23,12 @@ export class CommandRegistry implements vscode.Disposable {
    * @param handler - Функция-обработчик команды
    */
   register(id: string, handler: (...args: unknown[]) => unknown): void {
-    const disposable = vscode.commands.registerCommand(id, handler);
-    this.disposables.push(disposable);
+    try {
+      const disposable = vscode.commands.registerCommand(id, handler);
+      this.disposables.push(disposable);
+    } catch {
+      // Command may already be registered (e.g. during re-activation in tests)
+    }
   }
 
   /**

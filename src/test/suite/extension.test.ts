@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Import from the built extension (compiled to dist/extension.js)
 import { activate, deactivate, checkCliInstalled, checkWorkflowDir, updateContextKeys } from '../../extension';
+import { resetErrorHandler } from '../../error-handler';
 
 suite('Extension Activation Suite', () => {
   let context: vscode.ExtensionContext;
@@ -41,6 +42,7 @@ suite('Extension Activation Suite', () => {
   teardown(async () => {
     // Deactivate and cleanup after each test
     deactivate();
+    resetErrorHandler();
     for (const d of disposables) {
       try {
         d.dispose();
@@ -77,6 +79,7 @@ suite('Extension Activation Suite', () => {
 
     // Deactivate extension
     deactivate();
+    resetErrorHandler();
 
     // Verify that no active watchers or registered commands remain
     // This is a simple check that deactivate does not throw and container is disposed
