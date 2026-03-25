@@ -1003,8 +1003,41 @@ export function registerCommands(
 
   registry.register(
     'workflow.openStageLog',
-    async (arg?: unknown) => {
-      const logFile = resolveLogFile(arg);
+    async (...args: unknown[]) => {
+      const arg = args[0];
+      let logFile = resolveLogFile(arg);
+      let stageName: string | undefined;
+      let logLineHintVal: number | undefined;
+      if (arg && typeof arg === 'object') {
+        const item = arg as Record<string, unknown>;
+        stageName = typeof item.stage === 'string' ? item.stage : undefined;
+        logLineHintVal = typeof item.logLineHint === 'number' ? item.logLineHint : undefined;
+      }
+      // Fallback: scan for newest timestamped log file
+      if (!logFile) {
+        const wfRoot = store.getWorkflowRoot();
+        if (wfRoot) {
+          const logsDir = path.join(wfRoot, 'logs');
+          try {
+            if (fs.existsSync(logsDir)) {
+              const files = fs.readdirSync(logsDir)
+                .filter(f => f.endsWith('.log') && /^pipeline_\d{4}-\d{2}-\d{2}_/.test(f));
+              if (files.length > 0) {
+                let newest = files[0];
+                let newestMtime = fs.statSync(path.join(logsDir, newest)).mtimeMs;
+                for (let i = 1; i < files.length; i++) {
+                  const mtime = fs.statSync(path.join(logsDir, files[i])).mtimeMs;
+                  if (mtime > newestMtime) {
+                    newest = files[i];
+                    newestMtime = mtime;
+                  }
+                }
+                logFile = path.join(logsDir, newest);
+              }
+            }
+          } catch { /* ignore scan errors */ }
+        }
+      }
       if (!logFile) {
         vscode.window.showErrorMessage(t('No log file provided'));
         return;
@@ -1012,45 +1045,51 @@ export function registerCommands(
       try {
         const doc = await vscode.workspace.openTextDocument(logFile);
         const editor = await vscode.window.showTextDocument(doc);
-        if (arg && typeof arg === 'object') {
-          const item = arg as Record<string, unknown>;
-          const stageName = typeof item.stage === 'string' ? item.stage : undefined;
-          if (stageName) {
-            const content = fs.readFileSync(logFile, 'utf-8');
-            const lines = content.split('\n');
-            const escapedStage = stageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const startPattern = new RegExp(`START stage="${escapedStage}"`);
-            const nextStepPattern = /\[PipelineRunner\] Step \d+/;
-            const nextStartPattern = /START stage="/;
+        if (stageName) {
+          const content = doc.getText();
+          const lines = content.split('\n');
+          const escapedStage = stageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const startPattern = new RegExp(`START stage="${escapedStage}"`);
+          const gotoPattern = new RegExp(`GOTO ${escapedStage}[\\s\u2192]`);
+          const completePattern = new RegExp(`COMPLETE stage="${escapedStage}"`);
+          const nextStepPattern = /\[PipelineRunner\] Step \d+/;
+          const nextStartPattern = /START stage="/;
 
-            const stageIndex = typeof item.logLineHint === 'number' ? item.logLineHint : 0;
-            let occurrence = 0;
-            let startLine = -1;
-            let endLine = lines.length - 1;
+          const stageIndex = typeof logLineHintVal === 'number' ? logLineHintVal : 0;
+          let occurrence = 0;
+          let startLine = -1;
+          let endLine = lines.length - 1;
 
-            for (let i = 0; i < lines.length; i++) {
-              if (startPattern.test(lines[i])) {
-                if (occurrence === stageIndex) {
-                  startLine = i;
-                  break;
-                }
-                occurrence++;
+          for (let i = 0; i < lines.length; i++) {
+            if (startPattern.test(lines[i])) {
+              if (occurrence === stageIndex) {
+                startLine = i;
+                break;
+              }
+              occurrence++;
+            }
+          }
+
+          if (startLine >= 0) {
+            // Find end of section: GOTO, COMPLETE, next Step, or next START of different stage
+            for (let i = startLine + 1; i < lines.length; i++) {
+              if (gotoPattern.test(lines[i]) || completePattern.test(lines[i])) {
+                endLine = i;
+                break;
+              }
+              if (nextStepPattern.test(lines[i]) || (nextStartPattern.test(lines[i]) && !startPattern.test(lines[i]))) {
+                endLine = i - 1;
+                break;
               }
             }
 
-            if (startLine >= 0) {
-              for (let i = startLine + 1; i < lines.length; i++) {
-                if (nextStepPattern.test(lines[i]) || (nextStartPattern.test(lines[i]) && !startPattern.test(lines[i]))) {
-                  endLine = i - 1;
-                  break;
-                }
-              }
-
-              const from = new vscode.Position(startLine, 0);
-              const to = new vscode.Position(endLine, lines[endLine].length);
+            const from = new vscode.Position(startLine, 0);
+            const to = new vscode.Position(endLine, lines[endLine].length);
+            // Delay to ensure editor is fully rendered
+            setTimeout(() => {
               editor.selection = new vscode.Selection(from, to);
               editor.revealRange(new vscode.Range(from, to), vscode.TextEditorRevealType.InCenter);
-            }
+            }, 150);
           }
         }
       } catch (error) {

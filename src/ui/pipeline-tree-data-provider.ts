@@ -26,6 +26,17 @@ import {
   HistoryReportTreeItem
 } from './pipeline-tree-item-builder';
 import { RunHistoryEntry, ReportInfo } from './pipeline-types';
+import { formatMsToElapsed } from '../services/pipeline-state-manager';
+
+/**
+ * Result of a completed pipeline stage
+ */
+export enum StageResult {
+  Success = 'success',
+  Error = 'error',
+  Timeout = 'timeout',
+  Skipped = 'skipped'
+}
 
 /**
  * Completed stage data for building tree items
@@ -33,7 +44,9 @@ import { RunHistoryEntry, ReportInfo } from './pipeline-types';
 export interface CompletedStageData {
   stage: string;
   elapsed?: string;
+  /** @deprecated Use `result` instead */
   success: boolean;
+  result: StageResult;
   ticket?: string;
   agent?: string;
   skill?: string;
@@ -56,11 +69,16 @@ export interface PipelineDataState {
   currentAttempt: number | undefined;
   currentMaxAttempts: number | undefined;
   elapsed: string | undefined;
+  stageElapsed: string | undefined;
   completedStages: CompletedStageData[];
   stagesStarted: number;
   retries: number;
   gotos: number;
+  timeouts: number;
+  totalElapsedMs: number;
+  averageElapsedMs: number;
   runHistory: RunHistoryEntry[];
+  currentRunLogFile?: string;
 }
 
 /**
@@ -143,6 +161,22 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
       addStat(t('Stages Started'), stats.stagesStarted, 'play', 'stat-stages');
       addStat(t('Retries'), stats.retries, 'refresh', 'stat-retries');
       addStat(t('Goto Transitions'), stats.gotos, 'arrow-right', 'stat-gotos');
+      addStat(t('Timeouts'), stats.timeouts, 'watch', 'stat-timeouts');
+
+      if (stats.totalElapsedMs > 0) {
+        const addTimeStat = (label: string, value: string, icon: string, id: string) => {
+          const item = new PipelineTreeItem(
+            `${label}: ${value}`,
+            vscode.TreeItemCollapsibleState.None,
+            'statistics',
+            id
+          );
+          item.iconPath = new vscode.ThemeIcon(icon);
+          items.push(item);
+        };
+        addTimeStat(t('Total Time'), formatMsToElapsed(stats.totalElapsedMs), 'clock', 'stat-total-time');
+        addTimeStat(t('Avg Time'), formatMsToElapsed(stats.averageElapsedMs), 'dashboard', 'stat-avg-time');
+      }
 
       return Promise.resolve(items);
     }
@@ -210,7 +244,8 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
         state.currentSkill,
         state.currentTicket,
         state.currentAttempt,
-        state.currentMaxAttempts
+        state.currentMaxAttempts,
+        state.stageElapsed
       ));
     }
 
@@ -229,7 +264,8 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
         info.outputLines,
         info.reportInfo,
         info.logLineHint,
-        logFile
+        logFile,
+        info.result
       ));
     }
 
@@ -237,7 +273,10 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     items.push(new StatisticsTreeItem(
       state.stagesStarted,
       state.retries,
-      state.gotos
+      state.gotos,
+      state.timeouts,
+      state.totalElapsedMs,
+      state.averageElapsedMs
     ));
 
     // 5. History
@@ -255,7 +294,7 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     }
 
     if (!element) {
-      return this.getRootItemsFromState(state);
+      return this.getRootItemsFromState(state, state.currentRunLogFile);
     }
 
     if (element.itemType === 'statistics') {
@@ -275,6 +314,23 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
       addStat(t('Stages Started'), state.stagesStarted, 'play', 'stat-stages');
       addStat(t('Retries'), state.retries, 'refresh', 'stat-retries');
       addStat(t('Goto Transitions'), state.gotos, 'arrow-right', 'stat-gotos');
+      addStat(t('Timeouts'), state.timeouts, 'watch', 'stat-timeouts');
+
+      // Time stats (string-based items)
+      if (state.totalElapsedMs > 0) {
+        const addTimeStat = (label: string, value: string, icon: string, id: string) => {
+          const item = new PipelineTreeItem(
+            `${label}: ${value}`,
+            vscode.TreeItemCollapsibleState.None,
+            'statistics',
+            id
+          );
+          item.iconPath = new vscode.ThemeIcon(icon);
+          items.push(item);
+        };
+        addTimeStat(t('Total Time'), formatMsToElapsed(state.totalElapsedMs), 'clock', 'stat-total-time');
+        addTimeStat(t('Avg Time'), formatMsToElapsed(state.averageElapsedMs), 'dashboard', 'stat-avg-time');
+      }
 
       return Promise.resolve(items);
     }
@@ -311,13 +367,29 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
   /**
    * Scan logs directory for log file
    */
-  scanForLogFile(): string | undefined {
+  scanForLogFile(sinceMs?: number): string | undefined {
     if (!this.workflowRoot) return undefined;
     const logsDir = path.join(this.workflowRoot, 'logs');
     try {
       if (!fs.existsSync(logsDir)) return undefined;
-      const files = fs.readdirSync(logsDir).filter(f => f.endsWith('.log'));
-      return files.length > 0 ? path.join(logsDir, files[0]) : undefined;
+      // Prefer timestamped log files (pipeline_YYYY-MM-DD_HH-MM-SS.log)
+      const allFiles = fs.readdirSync(logsDir).filter(f => f.endsWith('.log'));
+      const timestamped = allFiles.filter(f => /^pipeline_\d{4}-\d{2}-\d{2}_/.test(f));
+      const files = timestamped.length > 0 ? timestamped : allFiles;
+      if (files.length === 0) return undefined;
+      // Return the newest log file by modification time, optionally filtered by sinceMs
+      let newest: string | undefined;
+      let newestMtime = 0;
+      for (const f of files) {
+        const fullPath = path.join(logsDir, f);
+        const mtime = fs.statSync(fullPath).mtimeMs;
+        if (sinceMs && mtime < sinceMs) continue;
+        if (mtime > newestMtime) {
+          newest = f;
+          newestMtime = mtime;
+        }
+      }
+      return newest ? path.join(logsDir, newest) : undefined;
     } catch {
       return undefined;
     }

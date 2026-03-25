@@ -74,7 +74,7 @@ export class TicketTreeItem extends SidebarTreeItem {
     super(label, vscode.TreeItemCollapsibleState.None, 'ticket', ticket.id);
 
     this.description = description;
-    // tooltip is resolved lazily via resolveTreeItem to prevent hover flicker
+    this.tooltip = buildTicketTooltip(ticket);
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'ticket';
 
@@ -332,18 +332,21 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    */
   private handleTicketChange(event: StoreChangeEvent): void {
     if (!event.id || !this.workflowRoot) {
+      console.log(`[TicketsTreeProvider] handleTicketChange: full refresh (no id or root)`);
       this.refresh();
       return;
     }
 
     const ticket = this.store.getTicketById(event.id);
     if (!ticket) {
+      console.log(`[TicketsTreeProvider] handleTicketChange: full refresh (ticket ${event.id} deleted)`);
       invalidateSidebarTicketCache(event.id);
       sidebarTicketsCache.clear();
       this._onDidChangeTreeData.fire(undefined);
       return;
     }
 
+    console.log(`[TicketsTreeProvider] handleTicketChange: incremental (ticket ${event.id})`);
     invalidateSidebarTicketCache(event.id);
     sidebarTicketsCache.clear();
 
@@ -395,7 +398,7 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    * Refresh tree data
    */
   refresh(): void {
-    // Invalidate cache when refreshing
+    console.log(`[TicketsTreeProvider] refresh() called`, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     sidebarTicketsCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -405,17 +408,6 @@ export class TicketsTreeProvider implements vscode.TreeDataProvider<SidebarTreeI
    */
   getTreeItem(element: SidebarTreeItem): vscode.TreeItem {
     return element;
-  }
-
-  /**
-   * Resolve tree item tooltip lazily.
-   * This prevents hover from flickering when tree data changes.
-   */
-  resolveTreeItem(item: vscode.TreeItem, element: SidebarTreeItem): Thenable<vscode.TreeItem> {
-    if (element instanceof TicketTreeItem) {
-      item.tooltip = buildTicketTooltip(element.ticket);
-    }
-    return Promise.resolve(item);
   }
 
   /**

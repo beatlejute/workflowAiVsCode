@@ -155,6 +155,56 @@ suite('PipelineLogParser', () => {
     });
   });
 
+  suite('parse() - ERROR pattern', () => {
+    test('should parse ERROR with stage and message', () => {
+      const line = '[2026-03-11T10:00:00] [ERROR] [execute-task] ERROR stage="execute-task" message="Agent process crashed"';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isError, true);
+      assert.strictEqual(result.stage, 'execute-task');
+      assert.strictEqual(result.errorMessage, 'Agent process crashed');
+    });
+
+    test('isError=false for non-ERROR lines', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] GOTO review-result (elapsed: 2m)';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isError, false);
+    });
+  });
+
+  suite('parse() - TIMEOUT pattern', () => {
+    test('should parse TIMEOUT with stage and seconds', () => {
+      const line = '[2026-03-11T10:00:00] [ERROR] [execute-task] TIMEOUT stage="execute-task" after 120s';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isTimeout, true);
+      assert.strictEqual(result.stage, 'execute-task');
+      assert.strictEqual(result.timeoutSeconds, 120);
+    });
+
+    test('isTimeout=false for non-TIMEOUT lines', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] OUTPUT: some text';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isTimeout, false);
+    });
+  });
+
+  suite('parse() - COMPLETE pattern', () => {
+    test('should parse COMPLETE with stage, status and exitCode', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] COMPLETE stage="execute-task" status="success" exitCode=0';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isComplete, true);
+      assert.strictEqual(result.stage, 'execute-task');
+      assert.strictEqual(result.completeStatus, 'success');
+      assert.strictEqual(result.exitCode, 0);
+    });
+
+    test('should parse COMPLETE with non-zero exitCode', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] COMPLETE stage="execute-task" status="failed" exitCode=1';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isComplete, true);
+      assert.strictEqual(result.exitCode, 1);
+    });
+  });
+
   suite('parse() - non-matching lines', () => {
     test('should return empty result for non-matching log format', () => {
       const line = 'This is not a structured log line';
@@ -164,6 +214,9 @@ suite('PipelineLogParser', () => {
       assert.strictEqual(result.isRetry, false);
       assert.strictEqual(result.isMoveTicket, false);
       assert.strictEqual(result.isCreateReport, false);
+      assert.strictEqual(result.isError, false);
+      assert.strictEqual(result.isTimeout, false);
+      assert.strictEqual(result.isComplete, false);
     });
   });
 

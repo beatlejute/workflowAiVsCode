@@ -150,17 +150,16 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
       return;
     }
 
+    console.log(`[FileWatcher] CREATE: ${uri.fsPath}`);
     const classification = this.classifyChange(uri);
 
     if (this.incrementalRefresh && classification.id) {
-      // Use incremental update for known entity types
       if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
         await this.store.updateFile(uri.fsPath, 'create');
         return;
       }
     }
 
-    // Fallback to full refresh
     this.scheduleRefresh(this.debounceDelayCreateDelete);
   }
 
@@ -172,17 +171,16 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
       return;
     }
 
+    console.log(`[FileWatcher] CHANGE: ${uri.fsPath}`);
     const classification = this.classifyChange(uri);
 
     if (this.incrementalRefresh && classification.id) {
-      // Use incremental update for known entity types
       if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
         await this.store.updateFile(uri.fsPath, 'change');
         return;
       }
     }
 
-    // Fallback to full refresh
     this.scheduleRefresh(this.debounceDelayChange);
   }
 

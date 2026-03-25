@@ -123,21 +123,12 @@ export function setupTreeViews(
   updateKanbanTitles();
   updateKanbanBadges();
 
+  // Update titles and badges on store changes.
+  // Individual providers handle their own incremental refresh via store.onDidChange,
+  // so we only update kanban titles/badges here (no redundant full refresh).
   store.onDidChange(() => {
     updateKanbanTitles();
     updateKanbanBadges();
-    tickets.refresh();
-    plans.refresh();
-    reports.refresh();
-    skills.refresh();
-    logs.refresh();
-    pipeline.refresh();
-    kanban.backlog.refresh();
-    kanban.ready.refresh();
-    kanban.inProgress.refresh();
-    kanban.blocked.refresh();
-    kanban.review.refresh();
-    kanban.done.refresh();
   });
 }
 

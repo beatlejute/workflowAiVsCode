@@ -207,7 +207,7 @@ paths:
       );
     });
 
-    test('creates tree item with MarkdownString tooltip via resolveTreeItem', async () => {
+    test('creates tree item with MarkdownString tooltip', () => {
       const ticket: Ticket = {
         id: 'KANBAN-004',
         title: 'Tooltip Test',
@@ -228,20 +228,13 @@ paths:
 
       const item = new KanbanTicketTreeItem(ticket, tempWorkflowRoot);
 
-      // tooltip is undefined until resolveTreeItem is called
-      assert.strictEqual(item.tooltip, undefined, 'Tooltip should be undefined before resolve');
-
-      // Resolve tooltip via provider
-      const kanbanProvider = new KanbanTreeProvider(store, TicketStatus.Ready);
-      const resolved = await kanbanProvider.resolveTreeItem(item, item);
-
-      assert.ok(resolved.tooltip, 'Should have tooltip after resolve');
+      assert.ok(item.tooltip, 'Should have tooltip');
       assert.ok(
-        resolved.tooltip instanceof vscode.MarkdownString,
+        item.tooltip instanceof vscode.MarkdownString,
         'Tooltip should be MarkdownString'
       );
 
-      const markdown = resolved.tooltip as vscode.MarkdownString;
+      const markdown = item.tooltip as vscode.MarkdownString;
       assert.ok(
         markdown.value.includes('KANBAN-004'),
         'Tooltip should contain ticket ID'
@@ -270,8 +263,6 @@ paths:
         markdown.value.includes('PLAN-001'),
         'Tooltip should contain parent plan'
       );
-
-      kanbanProvider.dispose();
     });
 
     test('creates tree item with priority-based icon', () => {

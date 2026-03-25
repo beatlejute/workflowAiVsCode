@@ -33,6 +33,14 @@ export interface ParsedLogData {
   isStart: boolean;
   isMoveTicket: boolean;
   isCreateReport: boolean;
+  isError: boolean;
+  isTimeout: boolean;
+  isComplete: boolean;
+  timestamp?: string;
+  errorMessage?: string;
+  timeoutSeconds?: number;
+  completeStatus?: string;
+  exitCode?: number;
 }
 
 /**
@@ -61,24 +69,63 @@ export class PipelineLogParser {
 
     if (!baseMatch) return this.parseLegacy(line);
 
-    const [, , , _stage, message] = baseMatch;
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false };
+    const [, timestamp, , _stage, message] = baseMatch;
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false };
+    result.timestamp = timestamp;
 
-    // GOTO
-    const gotoMatch = message.match(/^GOTO\s+\S+\s*→\s*(\S+)(?:\s+status="([^"]*)")?(?:\s+params=(\{.*\}))?/) ||
-                      message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
-    if (gotoMatch) {
+    // ERROR stage="X" message="..."
+    const errorMatch = message.match(/^ERROR\s+stage="([^"]+)"\s+message="([^"]*)"/);
+    if (errorMatch) {
+      result.isError = true;
+      result.stage = errorMatch[1];
+      result.errorMessage = errorMatch[2];
+      return result;
+    }
+
+    // TIMEOUT stage="X" after Ns
+    const timeoutMatch = message.match(/^TIMEOUT\s+stage="([^"]+)"\s+after\s+(\d+)s/);
+    if (timeoutMatch) {
+      result.isTimeout = true;
+      result.stage = timeoutMatch[1];
+      result.timeoutSeconds = parseInt(timeoutMatch[2], 10);
+      return result;
+    }
+
+    // COMPLETE stage="X" status="Y" exitCode=N
+    const completeMatch = message.match(/^COMPLETE\s+stage="([^"]+)"\s+status="([^"]*)"\s+exitCode=(\d+)/);
+    if (completeMatch) {
+      result.isComplete = true;
+      result.stage = completeMatch[1];
+      result.completeStatus = completeMatch[2];
+      result.exitCode = parseInt(completeMatch[3], 10);
+      return result;
+    }
+
+    // GOTO new format: GOTO old → new status="..." params={...}
+    const gotoNewMatch = message.match(/^GOTO\s+\S+\s*→\s*(\S+)(?:\s+status="([^"]*)")?(?:\s+params=(\{.*\}))?/);
+    if (gotoNewMatch) {
       result.isGoto = true;
-      result.gotoStage = gotoMatch[1];
-      result.elapsed = gotoMatch[2];
-      if (gotoMatch[3]) {
+      result.gotoStage = gotoNewMatch[1];
+      // gotoNewMatch[2] is status (e.g. "default", "passed"), NOT elapsed
+      result.gotoTarget = gotoNewMatch[2];
+      if (gotoNewMatch[3]) {
         try {
-          const params = JSON.parse(gotoMatch[3]);
+          const params = JSON.parse(gotoNewMatch[3]);
           if (params.ticket_id && /^[A-Z]+-\d+$/.test(params.ticket_id)) result.ticket = params.ticket_id;
           if (params.target) result.gotoTarget = params.target;
         } catch { /* ignore */ }
       }
       result.statusTransition = this.ticketStatusHistory.length > 0 ? this.ticketStatusHistory.join(' → ') : result.gotoTarget ? `→ ${result.gotoTarget}` : undefined;
+      return result;
+    }
+
+    // GOTO legacy format: GOTO stage (elapsed: 1.5s)
+    const gotoLegacyMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (gotoLegacyMatch) {
+      result.isGoto = true;
+      result.gotoStage = gotoLegacyMatch[1];
+      result.elapsed = gotoLegacyMatch[2];
+      result.statusTransition = this.ticketStatusHistory.length > 0 ? this.ticketStatusHistory.join(' → ') : undefined;
       return result;
     }
 
@@ -145,7 +192,7 @@ export class PipelineLogParser {
    * Legacy parser for old format
    */
   private parseLegacy(line: string): ParsedLogData {
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false };
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false };
 
     if (line.includes('[GOTO]')) {
       result.isGoto = true;

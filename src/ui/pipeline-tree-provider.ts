@@ -32,6 +32,7 @@ import { PipelineExecutionListener } from '../services/pipeline-execution-listen
 import { t } from '../i18n';
 
 export { RunHistoryEntry, PersistedHistoryItem };
+export { StageResult } from './pipeline-tree-data-provider';
 export {
   PipelineTreeItem,
   PipelineRunTreeItem,
@@ -68,6 +69,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private runStartTime: number = 0;
   private currentRunLogFile?: string;
   private currentRunPlanId?: string;
+  private stageElapsedTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly store: WorkflowStore,
@@ -84,7 +86,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       null, // outputChannel will be set later
       (result) => this.finalizeRun(result),
       () => this.refresh(),
-      (state) => { this.currentState = state; }
+      (state) => {
+        this.currentState = state;
+        this.updateStageElapsedTimer(state);
+      }
     );
     this.dataProvider = new PipelineTreeDataProvider(store, this.pipelineService);
 
@@ -114,7 +119,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
         this.outputChannel,
         (result) => this.finalizeRun(result),
         () => this.refresh(),
-        (state) => { this.currentState = state; }
+        (state) => {
+          this.currentState = state;
+          this.updateStageElapsedTimer(state);
+        }
       );
     }
     if (this.pipelineService && this.executionListener) {
@@ -159,6 +167,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   }
 
   refresh(): void {
+    // Auto-detect log file for current run when pipeline is running
+    if (this.currentState === PipelineState.Running && !this.currentRunLogFile) {
+      this.currentRunLogFile = this.dataProvider.scanForLogFile(this.runStartTime);
+    }
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -178,12 +190,17 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       currentTicket: this.stateManager.getCurrentTicket(),
       currentAttempt: this.stateManager.getCurrentAttempt(),
       currentMaxAttempts: this.stateManager.getCurrentMaxAttempts(),
-      elapsed: this.stateManager.getElapsed(),
+      elapsed: this.stateManager.getRunElapsed(),
+      stageElapsed: this.stateManager.getStageElapsed(),
       completedStages: this.stateManager.getCompletedStages(),
       stagesStarted: this.stateManager.getStagesStarted(),
       retries: this.stateManager.getRetries(),
       gotos: this.stateManager.getGotos(),
-      runHistory: this.historyManager.getHistory()
+      timeouts: this.stateManager.getTimeouts(),
+      totalElapsedMs: this.stateManager.getTotalElapsedMs(),
+      averageElapsedMs: this.stateManager.getAverageElapsedMs(),
+      runHistory: this.historyManager.getHistory(),
+      currentRunLogFile: this.currentRunLogFile
     };
 
     return this.dataProvider.getChildrenForElement(element, state);
@@ -196,6 +213,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     }
 
     this.stateManager.reset();
+    this.stateManager.setRunStartTime(Date.now());
     this.historyManager.clear();
     this.currentRunLogFile = undefined;
     this.currentRunPlanId = planId;
@@ -231,7 +249,27 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     vscode.window.showInformationMessage(t('Pipeline history cleared'));
   }
 
+  /**
+   * Start/stop timer that refreshes tree every second while pipeline is running
+   */
+  private updateStageElapsedTimer(state: PipelineState): void {
+    if (state === PipelineState.Running) {
+      if (!this.stageElapsedTimer) {
+        this.stageElapsedTimer = setInterval(() => this.refresh(), 1000);
+      }
+    } else {
+      if (this.stageElapsedTimer) {
+        clearInterval(this.stageElapsedTimer);
+        this.stageElapsedTimer = undefined;
+      }
+    }
+  }
+
   dispose(): void {
+    if (this.stageElapsedTimer) {
+      clearInterval(this.stageElapsedTimer);
+      this.stageElapsedTimer = undefined;
+    }
     if (this.pipelineService) this.pipelineService.dispose();
     if (this.outputChannel) this.outputChannel.dispose();
   }

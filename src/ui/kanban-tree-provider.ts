@@ -65,7 +65,7 @@ export class KanbanTicketTreeItem extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.description = description;
-    // tooltip is resolved lazily via resolveTreeItem to prevent hover flicker
+    this.tooltip = buildTicketTooltip(ticket);
     this.iconPath = getTicketIcon(ticket.priority);
     this.contextValue = 'kanban-ticket';
 
@@ -191,27 +191,27 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
    */
   private handleTicketChange(event: StoreChangeEvent): void {
     if (!event.id || !this.workflowRoot) {
+      console.log(`[KanbanTreeProvider:${this.status}] handleTicketChange: full refresh (no id or root)`);
       this.refresh();
       return;
     }
 
     const ticket = this.store.getTicketById(event.id);
     if (!ticket) {
-      // Ticket deleted or not found
+      console.log(`[KanbanTreeProvider:${this.status}] handleTicketChange: full refresh (ticket ${event.id} not found)`);
       this.refresh();
       return;
     }
 
-    // Check if ticket status matches this provider's status
     if (ticket.status !== this.status) {
-      // Ticket moved to another column, need full refresh
+      console.log(`[KanbanTreeProvider:${this.status}] handleTicketChange: full refresh (ticket ${event.id} moved to ${ticket.status})`);
       this.refresh();
       return;
     }
 
-    // Ticket updated within same column - incremental refresh
+    console.log(`[KanbanTreeProvider:${this.status}] handleTicketChange: incremental (ticket ${event.id})`);
     invalidateTicketCache(event.id);
-    sortedTicketsCache.clear(); // Invalidate sorted cache for this status
+    sortedTicketsCache.clear();
     const treeItem = getOrCreateTreeItem(ticket, this.workflowRoot);
     this._onDidChangeTreeData.fire(treeItem);
   }
@@ -268,7 +268,7 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
    * Refresh tree data
    */
   refresh(): void {
-    // Invalidate cache for this status when refreshing
+    console.log(`[KanbanTreeProvider:${this.status}] refresh() called`, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     sortedTicketsCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -285,15 +285,15 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
    * Only refreshes the pulsing ticket element to avoid hover flicker.
    */
   firePulse(): void {
-    if (pulseTicketId && this.workflowRoot) {
-      const ticket = this.store.getTicketById(pulseTicketId);
-      if (ticket && ticket.status === this.status) {
-        const item = getOrCreateTreeItem(ticket, this.workflowRoot);
-        this._onDidChangeTreeData.fire(item);
-        return;
-      }
+    if (!pulseTicketId || !this.workflowRoot) {
+      return;
     }
-    this._onDidChangeTreeData.fire(undefined);
+    const ticket = this.store.getTicketById(pulseTicketId);
+    if (ticket && ticket.status === this.status) {
+      console.log(`[KanbanTreeProvider:${this.status}] firePulse: updating ${pulseTicketId}`);
+      const item = getOrCreateTreeItem(ticket, this.workflowRoot);
+      this._onDidChangeTreeData.fire(item);
+    }
   }
 
   /**
@@ -308,15 +308,6 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
       element.iconPath = getTicketIcon(element.ticket.priority);
     }
     return element;
-  }
-
-  /**
-   * Resolve tree item tooltip lazily.
-   * This prevents hover from flickering when tree data changes.
-   */
-  resolveTreeItem(item: vscode.TreeItem, element: KanbanTicketTreeItem): Thenable<vscode.TreeItem> {
-    item.tooltip = buildTicketTooltip(element.ticket);
-    return Promise.resolve(item);
   }
 
   /**

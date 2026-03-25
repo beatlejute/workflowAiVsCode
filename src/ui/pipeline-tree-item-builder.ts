@@ -12,6 +12,8 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { PipelineState } from '../services/pipeline-service';
+import { StageResult } from './pipeline-tree-data-provider';
+import { formatMsToElapsed } from '../services/pipeline-state-manager';
 import { ReportInfo, RunHistoryEntry } from './pipeline-types';
 
 /**
@@ -75,7 +77,8 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
     public readonly skill?: string,
     public readonly ticket?: string,
     public readonly attempt?: number,
-    public readonly maxAttempts?: number
+    public readonly maxAttempts?: number,
+    public readonly stageElapsed?: string
   ) {
     super(
       stage,
@@ -86,13 +89,14 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
 
     this.iconPath = new vscode.ThemeIcon('gear~spin');
 
+    const elapsedInfo = stageElapsed ? `⏱ ${stageElapsed}` : '';
     const agentInfo = agent ? `${t('Agent')}: ${agent}` : '';
     const ticketInfo = ticket ? `${t('Ticket')}: ${ticket}` : '';
     const attemptInfo = attempt && maxAttempts ? `${t('Attempt')}: ${attempt}/${maxAttempts}` : '';
 
-    this.description = [agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
+    this.description = [elapsedInfo, agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
     this.tooltip = createCurrentStageTooltip(
-      stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts
+      stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts, stageElapsed
     );
     this.contextValue = 'current-stage';
   }
@@ -102,7 +106,6 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
  * Tree item representing a completed stage
  */
 export class CompletedStageTreeItem extends PipelineTreeItem {
-  private static counter = 0;
   public readonly reportPath?: string;
   public readonly logLineHint?: number;
   public readonly logFile?: string;
@@ -117,21 +120,26 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     public readonly outputLines?: string[],
     public readonly reportInfo?: ReportInfo,
     logLineHint?: number,
-    logFile?: string
+    logFile?: string,
+    public readonly result: StageResult = success === false ? StageResult.Error : StageResult.Success
   ) {
-    const icon = success ? '✅' : '❌';
+    const icon = getStageResultIcon(result);
     const label = `${icon} ${stage}`;
+    // Use stable id based on stage name and logLineHint so VSCode can
+    // track the same tree item across refresh() cycles
+    const stableIndex = typeof logLineHint === 'number' ? logLineHint : 0;
     super(
       label,
       vscode.TreeItemCollapsibleState.None,
       'completed-stage',
-      `completed-stage-${CompletedStageTreeItem.counter++}-${stage}`
+      `completed-stage-${stage}-${stableIndex}`
     );
 
-    // Build description: ticket | agent | status (graceful degradation)
-    const parts = [ticket, agent, statusChange].filter(Boolean);
-    this.description = parts.length > 0 ? parts.join(' | ') : (elapsed ? `${t('Elapsed')}: ${elapsed}` : '');
-    this.tooltip = createCompletedStageTooltip(stage, elapsed, success, ticket, agent, skill, statusChange, outputLines);
+    // Build description: elapsed | ticket | agent | status
+    const elapsedPart = elapsed ? `⏱ ${elapsed}` : '';
+    const parts = [elapsedPart, ticket, agent, statusChange].filter(Boolean);
+    this.description = parts.join(' | ');
+    this.tooltip = createCompletedStageTooltip(stage, elapsed, result, ticket, agent, skill, statusChange, outputLines);
     // Use contextValue to control context menu visibility:
     // - 'completed-stage-report' for report stages (has Open Report)
     // - 'completed-stage-ticket' for stages with a ticket (has Open Ticket)
@@ -145,6 +153,13 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     this.reportPath = reportInfo?.path;
     this.logLineHint = logLineHint;
     this.logFile = logFile;
+
+    // Click on completed stage opens log at that stage's section
+    this.command = {
+      command: 'workflow.openStageLog',
+      title: t('Open Stage Log'),
+      arguments: [this]
+    };
   }
 }
 
@@ -155,7 +170,10 @@ export class StatisticsTreeItem extends PipelineTreeItem {
   constructor(
     public readonly stagesStarted: number,
     public readonly retries: number,
-    public readonly gotos: number
+    public readonly gotos: number,
+    public readonly timeouts: number = 0,
+    public readonly totalElapsedMs: number = 0,
+    public readonly averageElapsedMs: number = 0
   ) {
     super(
       'Statistics',
@@ -165,8 +183,9 @@ export class StatisticsTreeItem extends PipelineTreeItem {
     );
     this.iconPath = new vscode.ThemeIcon('graph');
 
-    this.description = `${t('Stages Started')}: ${stagesStarted} | ${t('Retries')}: ${retries} | ${t('Goto Transitions')}: ${gotos}`;
-    this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos);
+    const totalStr = totalElapsedMs > 0 ? ` | ⏱ ${formatMsToElapsed(totalElapsedMs)}` : '';
+    this.description = `${t('Stages Started')}: ${stagesStarted} | ${t('Retries')}: ${retries}${totalStr}`;
+    this.tooltip = createStatisticsTooltip(stagesStarted, retries, gotos, timeouts, totalElapsedMs, averageElapsedMs);
     this.contextValue = 'statistics';
   }
 }
@@ -306,13 +325,17 @@ function createCurrentStageTooltip(
   skill?: string,
   ticket?: string,
   attempt?: number,
-  maxAttempts?: number
+  maxAttempts?: number,
+  stageElapsed?: string
 ): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
   markdown.appendMarkdown(`**${t('Current Stage')}: ${stage}**\n\n`);
   markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
+  if (stageElapsed) {
+    markdown.appendMarkdown(`| **${t('Elapsed')}** | ${stageElapsed} |\n`);
+  }
   if (agent) {
     markdown.appendMarkdown(`| **${t('Agent')}** | ${agent} |\n`);
   }
@@ -334,10 +357,36 @@ function createCurrentStageTooltip(
 /**
  * Create tooltip for completed stage
  */
+/**
+ * Get icon for stage result
+ */
+function getStageResultIcon(result: StageResult): string {
+  switch (result) {
+    case StageResult.Success: return '✅';
+    case StageResult.Error: return '❌';
+    case StageResult.Timeout: return '⏱️';
+    case StageResult.Skipped: return '⏭️';
+    default: return '✅';
+  }
+}
+
+/**
+ * Get label for stage result
+ */
+function getStageResultLabel(result: StageResult): string {
+  switch (result) {
+    case StageResult.Success: return '✅ Success';
+    case StageResult.Error: return '❌ Failed';
+    case StageResult.Timeout: return '⏱️ Timeout';
+    case StageResult.Skipped: return '⏭️ Skipped';
+    default: return '✅ Success';
+  }
+}
+
 function createCompletedStageTooltip(
   stage: string,
   elapsed?: string,
-  success?: boolean,
+  result?: StageResult,
   ticket?: string,
   agent?: string,
   skill?: string,
@@ -349,7 +398,7 @@ function createCompletedStageTooltip(
   markdown.appendMarkdown(`**${t('Completed Stage')}: ${stage}**\n\n`);
   markdown.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|-------|-------|\n`);
-  markdown.appendMarkdown(`| **${t('Result')}** | ${success ? '✅ Success' : '❌ Failed'} |\n`);
+  markdown.appendMarkdown(`| **${t('Result')}** | ${getStageResultLabel(result ?? StageResult.Success)} |\n`);
   if (ticket) {
     markdown.appendMarkdown(`| **${t('Ticket')}** | ${ticket} |\n`);
   }
@@ -390,16 +439,24 @@ function createCompletedStageTooltip(
 function createStatisticsTooltip(
   stagesStarted: number,
   retries: number,
-  gotos: number
+  gotos: number,
+  timeouts: number = 0,
+  totalElapsedMs: number = 0,
+  averageElapsedMs: number = 0
 ): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = true;
   markdown.appendMarkdown(`**${t('Pipeline Statistics')}**\n\n`);
-  markdown.appendMarkdown(`| ${t('Metric')} | ${t('Count')} |\n`);
+  markdown.appendMarkdown(`| ${t('Metric')} | ${t('Value')} |\n`);
   markdown.appendMarkdown(`|--------|-------|\n`);
   markdown.appendMarkdown(`| **${t('Stages Started')}** | ${stagesStarted} |\n`);
   markdown.appendMarkdown(`| **${t('Retries')}** | ${retries} |\n`);
   markdown.appendMarkdown(`| **${t('Goto Transitions')}** | ${gotos} |\n`);
+  markdown.appendMarkdown(`| **${t('Timeouts')}** | ${timeouts} |\n`);
+  if (totalElapsedMs > 0) {
+    markdown.appendMarkdown(`| **${t('Total Time')}** | ${formatMsToElapsed(totalElapsedMs)} |\n`);
+    markdown.appendMarkdown(`| **${t('Avg Time')}** | ${formatMsToElapsed(averageElapsedMs)} |\n`);
+  }
   return markdown;
 }
 

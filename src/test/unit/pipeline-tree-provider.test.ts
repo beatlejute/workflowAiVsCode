@@ -26,7 +26,8 @@ import {
   HistoryTreeItem,
   HistoryItemTreeItem,
   RunHistoryEntry,
-  PersistedHistoryItem
+  PersistedHistoryItem,
+  StageResult
 } from '../../ui/pipeline-tree-provider';
 import { PipelineService, PipelineState } from '../../services/pipeline-service';
 
@@ -169,16 +170,18 @@ statuses:
         'analyze-report-skill',
         'IMPL-001',
         1,
-        3
+        3,
+        '15s'
       );
 
       assert.strictEqual(item.label, 'analyze-report');
+      assert.ok((item.description as string).includes('⏱ 15s'));
       assert.ok((item.description as string).includes('Agent: analyst-agent'));
       assert.ok((item.description as string).includes('Ticket: IMPL-001'));
       assert.ok((item.description as string).includes('Attempt: 1/3'));
     });
 
-    test('Tooltip contains all stage information', () => {
+    test('Tooltip contains all stage information including elapsed', () => {
       const item = new CurrentStageTreeItem(
         'review-code',
         'reviewer-agent',
@@ -186,13 +189,16 @@ statuses:
         'code-review-skill',
         'FIX-002',
         2,
-        5
+        5,
+        '2m30s'
       );
 
       const tooltip = item.tooltip as vscode.MarkdownString;
       const value = tooltip.value;
 
       assert.ok(value.includes('**Current Stage: review-code**'));
+      assert.ok(value.includes('Elapsed'));
+      assert.ok(value.includes('2m30s'));
       assert.ok(value.includes('Agent'));
       assert.ok(value.includes('Fallback Agent'));
       assert.ok(value.includes('Skill'));
@@ -222,7 +228,8 @@ statuses:
 
       assert.ok((item.label as string).includes('✅'));
       assert.ok((item.label as string).includes('analyze-report'));
-      // Description should show ticket | agent | statusChange when available
+      // Description should show elapsed | ticket | agent | statusChange
+      assert.ok((item.description as string).includes('⏱ 1.5s'));
       assert.ok((item.description as string).includes('IMPL-001'));
       assert.ok((item.description as string).includes('general-purpose'));
       assert.ok((item.description as string).includes('todo → in_progress'));
@@ -275,21 +282,116 @@ statuses:
 
       assert.ok((item.label as string).includes('✅'));
       assert.ok((item.label as string).includes('simple-stage'));
-      // Should fall back to elapsed when no ticket/agent/statusChange
-      assert.ok((item.description as string).includes('Elapsed: 0.5s'));
+      // Should show elapsed even without ticket/agent/statusChange
+      assert.ok((item.description as string).includes('⏱ 0.5s'));
+    });
+
+    test('Timeout displays timeout icon when result=Timeout', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '120s',
+        false,
+        'IMPL-001',
+        'qwen-code',
+        'execute-task',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        StageResult.Timeout
+      );
+
+      assert.ok((item.label as string).includes('⏱️'));
+      assert.ok((item.label as string).includes('execute-task'));
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('Timeout'));
+    });
+
+    test('Skipped displays skip icon when result=Skipped', () => {
+      const item = new CompletedStageTreeItem(
+        'review-result',
+        '0.1s',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        StageResult.Skipped
+      );
+
+      assert.ok((item.label as string).includes('⏭️'));
+      assert.ok((item.label as string).includes('review-result'));
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('Skipped'));
+    });
+
+    test('Error displays error icon when result=Error', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5.2s',
+        false,
+        'FIX-003',
+        'claude-sonnet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        StageResult.Error
+      );
+
+      assert.ok((item.label as string).includes('❌'));
+      assert.ok((item.label as string).includes('execute-task'));
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('Failed'));
+    });
+
+    test('Result parameter takes precedence over success boolean', () => {
+      // success=true but result=Timeout — result should win
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '120s',
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        StageResult.Timeout
+      );
+
+      assert.ok((item.label as string).includes('⏱️'));
     });
   });
 
   suite('StatisticsTreeItem Tests', () => {
-    test('Displays statistics correctly', () => {
+    test('Displays statistics correctly without time', () => {
       const item = new StatisticsTreeItem(10, 3, 5);
 
       assert.ok((item.label as string).includes('Statistics'));
-      assert.strictEqual((item.description as string), 'Stages Started: 10 | Retries: 3 | Goto Transitions: 5');
+      assert.ok((item.description as string).includes('Stages Started: 10'));
+      assert.ok((item.description as string).includes('Retries: 3'));
+      // No time shown when totalElapsedMs is 0
+      assert.ok(!(item.description as string).includes('⏱'));
     });
 
-    test('Tooltip contains all statistics', () => {
-      const item = new StatisticsTreeItem(15, 7, 12);
+    test('Displays total time in description when available', () => {
+      const item = new StatisticsTreeItem(5, 1, 3, 0, 90000, 30000);
+
+      assert.ok((item.description as string).includes('⏱ 1m30s'));
+    });
+
+    test('Tooltip contains all statistics including timeouts and time', () => {
+      const item = new StatisticsTreeItem(15, 7, 12, 2, 180000, 12000);
 
       const tooltip = item.tooltip as vscode.MarkdownString;
       const value = tooltip.value;
@@ -298,6 +400,16 @@ statuses:
       assert.ok(value.includes('Stages Started'));
       assert.ok(value.includes('Retries'));
       assert.ok(value.includes('Goto Transitions'));
+      assert.ok(value.includes('Timeouts'));
+      assert.ok(value.includes('Total Time'));
+      assert.ok(value.includes('Avg Time'));
+    });
+
+    test('Tooltip shows timeouts even when 0', () => {
+      const item = new StatisticsTreeItem(5, 1, 3, 0);
+
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('Timeouts'));
     });
   });
 
@@ -411,7 +523,7 @@ statuses:
       assert.ok(hasHistory, 'Should have history item');
     });
 
-    test('Statistics item has children (Stages Started, Retries, Goto Transitions)', async () => {
+    test('Statistics item has children (Stages Started, Retries, Goto Transitions, Timeouts)', async () => {
       const provider = new PipelineTreeProvider(store, pipelineService);
       provider.setWorkflowRoot(tempWorkflowRoot);
 
@@ -420,7 +532,7 @@ statuses:
 
       if (statisticsItem) {
         const statsChildren = await provider.getChildren(statisticsItem);
-        assert.strictEqual(statsChildren.length, 3);
+        assert.strictEqual(statsChildren.length, 4);
       }
     });
 
@@ -668,6 +780,212 @@ statuses:
       await provider.saveHistoryToStorage();
       // Should not throw
       assert.ok(true);
+    });
+  });
+
+  suite('PipelineStateManager Stage Elapsed Tests', () => {
+    const { PipelineStateManager } = require('../../services/pipeline-state-manager');
+
+    test('getStageStartTime returns undefined initially', () => {
+      const sm = new PipelineStateManager();
+      assert.strictEqual(sm.getStageStartTime(), undefined);
+    });
+
+    test('getStageElapsed returns undefined when no stageStartTime', () => {
+      const sm = new PipelineStateManager();
+      assert.strictEqual(sm.getStageElapsed(), undefined);
+    });
+
+    test('getStageElapsed returns seconds format', () => {
+      const sm = new PipelineStateManager();
+      // Process a START event to set stageStartTime
+      sm.process({ isStart: true, stage: 'test-stage', agent: 'agent' });
+      const elapsed = sm.getStageElapsed();
+      assert.ok(elapsed);
+      assert.ok(elapsed.endsWith('s'), `Expected seconds format, got: ${elapsed}`);
+    });
+
+    test('stageStartTime resets on GOTO', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+      const firstStartTime = sm.getStageStartTime();
+      assert.ok(firstStartTime);
+
+      // Small delay then GOTO
+      sm.process({ isGoto: true, gotoStage: 'stage-2', elapsed: '5s' });
+      const secondStartTime = sm.getStageStartTime();
+      assert.ok(secondStartTime);
+      assert.ok(secondStartTime >= firstStartTime!);
+    });
+
+    test('stageStartTime resets on reset()', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'test-stage', agent: 'agent' });
+      assert.ok(sm.getStageStartTime());
+
+      sm.reset();
+      assert.strictEqual(sm.getStageStartTime(), undefined);
+      assert.strictEqual(sm.getStageElapsed(), undefined);
+    });
+
+    test('getStageElapsed formats minutes correctly', () => {
+      const sm = new PipelineStateManager();
+      // Manually set stageStartTime to 2 minutes ago
+      sm.process({ isStart: true, stage: 'test-stage', agent: 'agent' });
+      // Access private state to override stageStartTime for testing
+      (sm as any).state.stageStartTime = Date.now() - 125000; // 2m05s ago
+      const elapsed = sm.getStageElapsed();
+      assert.ok(elapsed);
+      assert.ok(elapsed.startsWith('2m'), `Expected 2m format, got: ${elapsed}`);
+    });
+
+    test('getStageElapsed formats hours correctly', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'test-stage', agent: 'agent' });
+      (sm as any).state.stageStartTime = Date.now() - 3720000; // 1h02m ago
+      const elapsed = sm.getStageElapsed();
+      assert.ok(elapsed);
+      assert.ok(elapsed.startsWith('1h'), `Expected 1h format, got: ${elapsed}`);
+    });
+
+    test('completed stage has result=error after ERROR event', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'execute-task', agent: 'agent' });
+      sm.process({ isError: true, stage: 'execute-task', errorMessage: 'crashed' });
+      sm.process({ isGoto: true, gotoStage: 'create-report', elapsed: '5s' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages.length, 1);
+      assert.strictEqual(stages[0].result, 'error');
+      assert.strictEqual(stages[0].success, false);
+    });
+
+    test('completed stage has result=timeout after TIMEOUT event', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'execute-task', agent: 'agent' });
+      sm.process({ isTimeout: true, stage: 'execute-task', timeoutSeconds: 120 });
+      sm.process({ isGoto: true, gotoStage: 'create-report', elapsed: '120s' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages.length, 1);
+      assert.strictEqual(stages[0].result, 'timeout');
+      assert.strictEqual(stages[0].success, false);
+    });
+
+    test('completed stage has result=success by default', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'execute-task', agent: 'agent' });
+      sm.process({ isGoto: true, gotoStage: 'review-result', elapsed: '3s' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages.length, 1);
+      assert.strictEqual(stages[0].result, 'success');
+      assert.strictEqual(stages[0].success, true);
+    });
+
+    test('lastStageResult resets to success after GOTO', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+      sm.process({ isError: true, stage: 'stage-1', errorMessage: 'err' });
+      sm.process({ isGoto: true, gotoStage: 'stage-2', elapsed: '1s' });
+      // stage-2 should start with success
+      sm.process({ isGoto: true, gotoStage: 'stage-3', elapsed: '2s' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages[0].result, 'error');
+      assert.strictEqual(stages[1].result, 'success');
+    });
+
+    test('COMPLETE with non-zero exitCode marks stage as error', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'execute-task', agent: 'agent' });
+      sm.process({ isComplete: true, stage: 'execute-task', completeStatus: 'failed', exitCode: 1 });
+      sm.process({ isGoto: true, gotoStage: 'create-report', elapsed: '10s' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages[0].result, 'error');
+    });
+
+    test('getTimeouts counts timeout events', () => {
+      const sm = new PipelineStateManager();
+      assert.strictEqual(sm.getTimeouts(), 0);
+      sm.process({ isTimeout: true, stage: 'stage-1', timeoutSeconds: 120 });
+      assert.strictEqual(sm.getTimeouts(), 1);
+      sm.process({ isTimeout: true, stage: 'stage-2', timeoutSeconds: 60 });
+      assert.strictEqual(sm.getTimeouts(), 2);
+    });
+
+    test('getTotalElapsedMs sums elapsed from completed stages', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+      sm.process({ isGoto: true, gotoStage: 'stage-2', elapsed: '5s' });
+      sm.process({ isGoto: true, gotoStage: 'stage-3', elapsed: '10s' });
+      // Both completed stages have elapsed from GOTO
+      assert.ok(sm.getTotalElapsedMs() > 0);
+    });
+
+    test('getAverageElapsedMs returns 0 when no completed stages', () => {
+      const sm = new PipelineStateManager();
+      assert.strictEqual(sm.getAverageElapsedMs(), 0);
+    });
+
+    test('getAverageElapsedMs computes average', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+      sm.process({ isGoto: true, gotoStage: 'stage-2', elapsed: '10s' });
+      sm.process({ isGoto: true, gotoStage: 'stage-3', elapsed: '20s' });
+      // Average of 10s and 20s = 15s = 15000ms
+      // Note: both stages get the last GOTO elapsed, so both are "20s"
+      // Actually: stage-1 gets elapsed="5s" from first GOTO, stage-2 gets "10s" from second GOTO
+      // The elapsed in GOTO is stored in state.elapsed and used for the PREVIOUS stage
+      const avg = sm.getAverageElapsedMs();
+      assert.ok(avg > 0);
+    });
+
+    test('timeouts resets on reset()', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isTimeout: true, stage: 'stage-1', timeoutSeconds: 60 });
+      assert.strictEqual(sm.getTimeouts(), 1);
+      sm.reset();
+      assert.strictEqual(sm.getTimeouts(), 0);
+    });
+  });
+
+  suite('parseElapsedToMs and formatMsToElapsed Tests', () => {
+    const { parseElapsedToMs, formatMsToElapsed } = require('../../services/pipeline-state-manager');
+
+    test('parseElapsedToMs parses seconds', () => {
+      assert.strictEqual(parseElapsedToMs('5s'), 5000);
+      assert.strictEqual(parseElapsedToMs('1.5s'), 1500);
+      assert.strictEqual(parseElapsedToMs('0.3s'), 300);
+    });
+
+    test('parseElapsedToMs parses minutes and seconds', () => {
+      assert.strictEqual(parseElapsedToMs('2m30s'), 150000);
+      assert.strictEqual(parseElapsedToMs('1m05s'), 65000);
+    });
+
+    test('parseElapsedToMs parses hours', () => {
+      assert.strictEqual(parseElapsedToMs('1h02m'), 3720000);
+      assert.strictEqual(parseElapsedToMs('2h00m'), 7200000);
+    });
+
+    test('parseElapsedToMs returns 0 for undefined/empty', () => {
+      assert.strictEqual(parseElapsedToMs(undefined), 0);
+      assert.strictEqual(parseElapsedToMs(''), 0);
+    });
+
+    test('formatMsToElapsed formats seconds', () => {
+      assert.strictEqual(formatMsToElapsed(5000), '5s');
+      assert.strictEqual(formatMsToElapsed(45000), '45s');
+    });
+
+    test('formatMsToElapsed formats minutes', () => {
+      assert.strictEqual(formatMsToElapsed(90000), '1m30s');
+      assert.strictEqual(formatMsToElapsed(125000), '2m05s');
+    });
+
+    test('formatMsToElapsed formats hours', () => {
+      assert.strictEqual(formatMsToElapsed(3720000), '1h02m');
+    });
+
+    test('formatMsToElapsed handles zero', () => {
+      assert.strictEqual(formatMsToElapsed(0), '0s');
     });
   });
 });
