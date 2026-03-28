@@ -65,7 +65,7 @@ export async function executeFocusTicketsView(): Promise<void> {
  * Execute workflow.focusKanban command
  */
 export async function executeFocusKanban(): Promise<void> {
-  await vscode.commands.executeCommand('workbench.panel.workflow-kanban.view.wf-kanban-backlog');
+  await vscode.commands.executeCommand('workbench.view.workflow-kanban.wf-kanban-backlog');
 }
 
 /**

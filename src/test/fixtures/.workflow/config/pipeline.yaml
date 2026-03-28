@@ -1,116 +1,36 @@
-# =============================================================================
-# Pipeline Configuration — формат конфигурации пайплайна
-# =============================================================================
-# Тестовый pipeline для E2E тестирования
-# =============================================================================
-
 pipeline:
-  name: "e2e-test"
+  name: "test-pipeline"
   version: "1.0"
 
-  # Агенты для тестирования
   agents:
-    claude-sonnet:
-      command: "claude"
-      args: ["--model", "claude-sonnet-4-6", "--permission-mode", "acceptEdits", "-p"]
-      workdir: "."
-      description: "Claude Sonnet — быстрая модель для простых задач"
-
-    claude-opus:
-      command: "claude"
-      args: ["--model", "claude-opus-4-6", "--permission-mode", "acceptEdits", "-p"]
-      workdir: "."
-      description: "Claude Opus — мощная модель для сложных задач"
-
-    qwen-code:
-      command: "qwen"
-      args: ["-y", "-p"]
-      workdir: "."
-      description: "Qwen Code — альтернативный агент для независимой проверки"
-
-    script-move:
+    mock-agent:
       command: "node"
-      args: [".workflow/src/scripts/move-ticket.js"]
+      args: ["-e", "console.log('Test stage completed'); process.exit(0)"]
       workdir: "."
-      description: "Скрипт для перемещения тикетов между директориями"
+      description: "Mock agent for e2e testing"
 
-    script-pick:
-      command: "node"
-      args: [".workflow/src/scripts/pick-next-task.js"]
-      workdir: "."
-      description: "Скрипт для выбора следующего тикета из ready/"
+  default_agent: mock-agent
 
-  # Этапы пайплайна
   stages:
-    pick-task:
-      description: "Выбрать задачу из ready"
-      agent: script-pick
+    stage1:
+      description: "Test stage 1"
+      agent: mock-agent
       goto:
-        found:
-          stage: execute-task
-          params:
-            ticket_id: "$result.ticket_id"
-        empty: end
+        default: stage2
 
-    execute-task:
-      description: "Выполнить задачу"
-      agent: qwen-code
-      skill: execute-task
+    stage2:
+      description: "Test stage 2"
+      agent: mock-agent
       goto:
-        default:
-          stage: move-to-review
-          params:
-            ticket_id: "$context.ticket_id"
-            target: review
+        default: end
 
-    move-to-review:
-      description: "Переместить в review"
-      agent: script-move
-      timeout: 120
-      goto:
-        default:
-          stage: review-result
-          params:
-            ticket_id: "$context.ticket_id"
+  entry: stage1
 
-    review-result:
-      description: "Проверить результат"
-      agent: claude-sonnet
-      skill: review-result
-      goto:
-        passed:
-          stage: move-ticket
-          params:
-            ticket_id: "$context.ticket_id"
-            target: done
-        failed:
-          stage: move-ticket
-          params:
-            ticket_id: "$context.ticket_id"
-            target: ready
-
-    move-ticket:
-      description: "Переместить тикет"
-      agent: script-move
-      timeout: 120
-      goto:
-        default: pick-task
-
-  # Точка входа
-  entry: pick-task
-
-  # Контекст
   context:
-    plan_id: "TEST-PLAN-001"
+    test: "true"
 
-  # Защита файлов
-  protected_files:
-    - ".workflow/plans/**"
-    - ".workflow/config/**"
-
-  # Настройки выполнения
   execution:
-    max_steps: 50
-    delay_between_stages: 1
-    timeout_per_stage: 300
+    max_steps: 5
+    delay_between_stages: 0
+    timeout_per_stage: 10
     log_file: ".workflow/logs/pipeline.log"
