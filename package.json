@@ -419,17 +419,17 @@
     "keybindings": [
       {
         "command": "workflow.runPipeline",
-        "key": "ctrl+shift+w r",
+        "key": "ctrl+alt+w r",
         "when": "workflow.cliInstalled && workflow.workflowFound"
       },
       {
         "command": "workflow.newTicket",
-        "key": "ctrl+shift+w n",
+        "key": "ctrl+alt+w n",
         "when": "workflow.cliInstalled && workflow.workflowFound"
       },
       {
         "command": "workflow.moveTicket",
-        "key": "ctrl+shift+w m",
+        "key": "ctrl+alt+w m",
         "when": "workflow.cliInstalled && workflow.workflowFound"
       }
     ],

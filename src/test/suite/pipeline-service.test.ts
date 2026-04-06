@@ -89,13 +89,49 @@ suite('PipelineService Suite', () => {
   });
 
   /**
+   * Test: start() resets currentStage to undefined before transitioning to Running
+   *
+   * Regression test for DEF-QA022-2: currentStage must be cleared before
+   * setState(Running) to avoid StatusBar briefly showing stale stage from
+   * the previous run.
+   */
+  test('start() resets currentStage to undefined before Running state', async () => {
+    // Simulate a previous run's stage lingering
+    (pipelineService as unknown as PipelineServiceTestAccess).setState(PipelineState.Idle);
+
+    // Track stage changes and state changes in order
+    const stageChanges: (string | undefined)[] = [];
+    const stateChanges: PipelineState[] = [];
+
+    pipelineService.onStageChange((stage) => {
+      stageChanges.push(stage);
+    });
+    pipelineService.onStateChange((state) => {
+      stateChanges.push(state);
+    });
+
+    await pipelineService.start();
+
+    // currentStage should be undefined after start
+    assert.strictEqual(pipelineService.getCurrentStage(), undefined);
+
+    // onStageChange should have fired with undefined before or at the same time as Running
+    assert.ok(stageChanges.length >= 1, 'onStageChange should have fired');
+    assert.strictEqual(stageChanges[0], undefined, 'First stage change should be undefined');
+
+    // State should transition to Running
+    assert.strictEqual(stateChanges.length, 1);
+    assert.strictEqual(stateChanges[0], PipelineState.Running);
+  });
+
+  /**
    * Test: stop() performs graceful shutdown
    */
   test('stop() performs graceful shutdown', async () => {
     await pipelineService.start();
-    
-    pipelineService.stop();
-    
+
+    await pipelineService.stop();
+
     assert.strictEqual(mockChild.killed, true);
     assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
   });
@@ -103,9 +139,9 @@ suite('PipelineService Suite', () => {
   /**
    * Test: stop() when no process is running
    */
-  test('stop() when no process is running does nothing', () => {
-    // Should not throw
-    pipelineService.stop();
+  test('stop() when no process is running does nothing', async () => {
+    // Should not throw, returns immediately
+    await pipelineService.stop();
     assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
   });
 
@@ -301,7 +337,7 @@ suite('PipelineService Suite', () => {
   });
 
   /**
-   * Test: start with continuous mode passes only run arg
+   * Test: start passes run arg
    */
   test('start passes run arg', async () => {
     let capturedArgs: readonly string[] | undefined;
@@ -658,10 +694,10 @@ suite('PipelineService Suite', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
     await pipelineService.start();
-    pipelineService.stop();
+    await pipelineService.stop();
 
     assert.strictEqual(mockChild.killed, true);
-    
+
     Object.defineProperty(process, 'platform', { value: originalPlatform });
   });
 
@@ -670,13 +706,328 @@ suite('PipelineService Suite', () => {
    */
   test('process exit with code 0 after stop does not override state', async () => {
     await pipelineService.start();
-    
-    pipelineService.stop();
-    
+
+    await pipelineService.stop();
+
     // Simulate process exit after stop
     mockChild.emit('close', 0);
-    
+
     assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
   });
+
+  /**
+   * Test: parseLine detects FAIL pattern and sets hasStageErrors
+   */
+  test('parseLine detects FAIL pattern and sets hasStageErrors', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLine('[2024-01-01T12:00:00] [ERROR] [stage] FAIL: stage execution failed');
+
+    // Access private hasStageErrors via any cast
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, true);
+  });
+
+  /**
+   * Test: parseLine detects ERROR pattern and sets hasStageErrors
+   */
+  test('parseLine detects ERROR pattern and sets hasStageErrors', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLine('[2024-01-01T12:00:00] [ERROR] [stage] ERROR: something went wrong');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, true);
+  });
+
+  /**
+   * Test: parseLine detects failed pattern and sets hasStageErrors
+   */
+  test('parseLine detects failed pattern and sets hasStageErrors', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLine('[2024-01-01T12:00:00] [WARN] [stage] stage failed with exit code 1');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, true);
+  });
+
+  /**
+   * Test: parseLine detects failure pattern and sets hasStageErrors
+   */
+  test('parseLine detects failure pattern and sets hasStageErrors', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLine('[2024-01-01T12:00:00] [ERROR] [stage] task failure detected');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, true);
+  });
+
+  /**
+   * Test: parseLine does not set hasStageErrors for normal messages
+   */
+  test('parseLine does not set hasStageErrors for normal messages', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLine('[2024-01-01T12:00:00] [INFO] [stage] task completed successfully');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, false);
+  });
+
+  /**
+   * Test: parseLineLegacy detects error patterns
+   */
+  test('parseLineLegacy detects error patterns', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLineLegacy('ERROR: stage execution failed');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, true);
+  });
+
+  /**
+   * Test: parseLineLegacy does not set hasStageErrors for normal messages
+   */
+  test('parseLineLegacy does not set hasStageErrors for normal messages', () => {
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    service.parseLineLegacy('INFO: task completed');
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, false);
+  });
+
+  /**
+   * Test: exit code 0 with hasStageErrors sets state to Error
+   */
+  test('exit code 0 with hasStageErrors sets state to Error', async () => {
+    await pipelineService.start();
+
+    // Simulate error detection during execution
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage] FAIL: stage failed');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    assert.strictEqual(pipelineService.getState(), PipelineState.Error);
+  });
+
+  /**
+   * Test: exit code 0 without errors sets state to Completed
+   */
+  test('exit code 0 without errors sets state to Completed', async () => {
+    await pipelineService.start();
+
+    // Simulate normal execution without errors
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+    service.parseStdout('[2024-01-01T12:00:00] [INFO] [stage] task completed');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    assert.strictEqual(pipelineService.getState(), PipelineState.Completed);
+  });
+
+  /**
+   * Test: hasStageErrors is reset on start
+   */
+  test('hasStageErrors is reset on start', async () => {
+    // First run with errors
+    await pipelineService.start();
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage] FAIL');
+    mockChild.emit('close', 0);
+
+    // Second run should reset hasStageErrors
+    await pipelineService.start();
+
+    const hasErrors = (pipelineService as any).hasStageErrors;
+    assert.strictEqual(hasErrors, false);
+  });
+
+  /**
+   * Test: exit code non-zero still sets Error regardless of hasStageErrors
+   */
+  test('exit code non-zero still sets Error regardless of hasStageErrors', async () => {
+    await pipelineService.start();
+
+    // Simulate error detection
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage] FAIL');
+
+    // Simulate process exit with non-zero code
+    mockChild.emit('close', 1);
+
+    assert.strictEqual(pipelineService.getState(), PipelineState.Error);
+  });
+
+  /**
+   * Test: retry edge case - error + retry + success = Completed
+   */
+  test('retry edge case - error + retry + success = Completed', async () => {
+    await pipelineService.start();
+
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    // Stage has an error
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage-a] FAIL: stage failed');
+
+    // Retry is triggered
+    service.parseStdout('[2024-01-01T12:01:00] [WARN] [stage-a] RETRY stage="stage-a" attempt=1/3');
+
+    // Stage completes successfully with status="success"
+    service.parseStdout('[2024-01-01T12:02:00] [INFO] [Runner] GOTO stage-a → stage-b status="success"');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    // Should be Completed, not Error
+    assert.strictEqual(pipelineService.getState(), PipelineState.Completed);
+  });
+
+  /**
+   * Test: retry edge case - error + retry + no success status = Error
+   */
+  test('retry edge case - error + retry + no success status = Error', async () => {
+    await pipelineService.start();
+
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    // Stage has an error
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage-a] FAIL: stage failed');
+
+    // Retry is triggered
+    service.parseStdout('[2024-01-01T12:01:00] [WARN] [stage-a] RETRY stage="stage-a" attempt=1/3');
+
+    // GOTO without status="success" (old format)
+    service.parseStdout('[2024-01-01T12:02:00] [INFO] [Runner] GOTO stage-b');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    // Should be Error because we don't know if retry succeeded
+    assert.strictEqual(pipelineService.getState(), PipelineState.Error);
+  });
+
+  /**
+   * Test: multiple errors with retry - only cleared when specific stage succeeds
+   */
+  test('multiple errors with retry - only cleared when specific stage succeeds', async () => {
+    await pipelineService.start();
+
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    // First stage has error
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage-a] FAIL: stage-a failed');
+    service.parseStdout('[2024-01-01T12:01:00] [WARN] [stage-a] RETRY stage="stage-a" attempt=1/3');
+
+    // Second stage also has error
+    service.parseStdout('[2024-01-01T12:02:00] [ERROR] [stage-b] FAIL: stage-b failed');
+    service.parseStdout('[2024-01-01T12:03:00] [WARN] [stage-b] RETRY stage="stage-b" attempt=1/3');
+
+    // Only stage-a succeeds
+    service.parseStdout('[2024-01-01T12:04:00] [INFO] [Runner] GOTO stage-a → stage-b status="success"');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    // Should still be Error because stage-b didn't succeed
+    assert.strictEqual(pipelineService.getState(), PipelineState.Error);
+  });
+
+  /**
+   * Test: all retries succeed - should be Completed
+   */
+  test('all retries succeed - should be Completed', async () => {
+    await pipelineService.start();
+
+    const service = pipelineService as unknown as PipelineServiceTestAccess;
+
+    // Stage-a has error and retry
+    service.parseStdout('[2024-01-01T12:00:00] [ERROR] [stage-a] FAIL: stage-a failed');
+    service.parseStdout('[2024-01-01T12:01:00] [WARN] [stage-a] RETRY stage="stage-a" attempt=1/3');
+
+    // Stage-b has error and retry
+    service.parseStdout('[2024-01-01T12:02:00] [ERROR] [stage-b] FAIL: stage-b failed');
+    service.parseStdout('[2024-01-01T12:03:00] [WARN] [stage-b] RETRY stage="stage-b" attempt=1/3');
+
+    // Both stages succeed
+    service.parseStdout('[2024-01-01T12:04:00] [INFO] [Runner] GOTO stage-a → stage-b status="success"');
+    service.parseStdout('[2024-01-01T12:05:00] [INFO] [Runner] GOTO stage-b → end status="success"');
+
+    // Simulate process exit with code 0
+    mockChild.emit('close', 0);
+
+    // Should be Completed
+    assert.strictEqual(pipelineService.getState(), PipelineState.Completed);
+  });
+
+  /**
+   * Test: stop() returns a Promise and can be awaited
+   */
+  test('stop() returns a Promise and can be awaited', async () => {
+    await pipelineService.start();
+
+    const result = pipelineService.stop();
+    assert.ok(result instanceof Promise);
+    await result;
+
+    assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
+  });
+
+  /**
+   * Test: stop() on non-Windows uses SIGTERM (no forceKillIfAlive)
+   */
+  test('stop() on non-Windows uses SIGTERM without force kill', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+
+    await pipelineService.start();
+    await pipelineService.stop();
+
+    assert.strictEqual(mockChild.killed, true);
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+  });
+
+  /**
+   * Test: start() emits stateChange with Running state
+   */
+  test('start() emits stateChange with Running state', async () => {
+    const stateChanges: PipelineState[] = [];
+    pipelineService.onStateChange((state) => {
+      stateChanges.push(state);
+    });
+
+    await pipelineService.start();
+
+    assert.strictEqual(stateChanges.length, 1);
+    assert.strictEqual(stateChanges[0], PipelineState.Running);
+    assert.strictEqual(pipelineService.getState(), PipelineState.Running);
+  });
+
+  /**
+   * Test: stop() emits stateChange with Idle state
+   */
+  test('stop() emits stateChange with Idle state', async () => {
+    const stateChanges: PipelineState[] = [];
+    pipelineService.onStateChange((state) => {
+      stateChanges.push(state);
+    });
+
+    await pipelineService.start();
+    const afterStart = stateChanges.length;
+    assert.strictEqual(stateChanges[afterStart - 1], PipelineState.Running);
+
+    await pipelineService.stop();
+    const afterStop = stateChanges.length;
+    assert.strictEqual(stateChanges[afterStop - 1], PipelineState.Idle);
+    assert.strictEqual(pipelineService.getState(), PipelineState.Idle);
+  });
+
 
 });

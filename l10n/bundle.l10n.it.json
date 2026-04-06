@@ -8,6 +8,8 @@
   "Current Execution": "Esecuzione corrente",
   "Stage": "Fase",
   "Agent": "Agente",
+  "Fallback": "Ripiego",
+  "Fallback Agent": "Agente di ripiego",
   "Ticket": "Ticket",
   "Retry": "Riprova",
   "WF: Error": "WF: Errore",

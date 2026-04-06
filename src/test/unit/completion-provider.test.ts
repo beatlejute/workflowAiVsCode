@@ -335,7 +335,7 @@ id: IMPL-001
 title: Test Ticket
 status: ready
 dependencies:
-  - 
+  -
 ---
 `;
 
@@ -345,6 +345,265 @@ dependencies:
       const completions = providerWithoutRoot.provideCompletionItems(document, position);
 
       assert.strictEqual(completions, undefined, 'Should return undefined without workflow root');
+    });
+
+    test('Should provide type completions in frontmatter', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type:
+status: ready
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(3, 6); // After "type: " (line 3, character 6)
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions for type field');
+      assert.ok(completions.length > 0, 'Should have at least one type completion');
+      // Verify completions contain task types from config (e.g., 'IMPL', 'FIX') or fallback defaults ('impl', 'fix')
+      const labels = completions.map(c => c.label as string);
+      const hasAnyType = labels.some(l => l.toLowerCase().includes('impl')) ||
+                         labels.some(l => l.toLowerCase().includes('fix'));
+      assert.ok(hasAnyType, `Should include type completions, got: ${labels.join(', ')}`);
+    });
+
+    test('Should provide priority completions in frontmatter', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type: fix
+priority:
+status: ready
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(4, 10); // After "priority: " (line 4, character 10)
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions for priority field');
+      const hasPriority1 = completions.some(c => c.label === '1');
+      const hasPriority3 = completions.some(c => c.label === '3');
+      assert.ok(hasPriority1, 'Should include priority 1');
+      assert.ok(hasPriority3, 'Should include priority 3');
+    });
+
+    test('Should provide status completions in frontmatter', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type: fix
+priority: 3
+status:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(5, 8); // After "status: " (line 5, character 8)
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions for status field');
+      const hasReady = completions.some(c => c.label === 'ready');
+      const hasInProgress = completions.some(c => c.label === 'in-progress');
+      const hasDone = completions.some(c => c.label === 'done');
+      assert.ok(hasReady, 'Should include ready status');
+      assert.ok(hasInProgress, 'Should include in-progress status');
+      assert.ok(hasDone, 'Should include done status');
+    });
+
+    test('Should provide depends_on completions in frontmatter', () => {
+      // Add test tickets
+      const testTicket1: Ticket = {
+        id: 'IMPL-DEP1',
+        title: 'Dependency Test 1',
+        status: TicketStatus.Done,
+        priority: 2,
+        type: 'IMPL',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: ['test'],
+        complexity: 'medium',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: ''
+      };
+
+      const testTicket2: Ticket = {
+        id: 'FIX-DEP2',
+        title: 'Dependency Test 2',
+        status: TicketStatus.InProgress,
+        priority: 3,
+        type: 'FIX',
+        dependencies: [],
+        conditions: [],
+        context: {},
+        tags: ['test'],
+        complexity: 'low',
+        parent_plan: '',
+        parent_task: '',
+        created_at: '2026-03-05T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        completed_at: ''
+      };
+
+      store.addTicket(testTicket1);
+      store.addTicket(testTicket2);
+
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type: fix
+priority: 3
+status: ready
+depends_on:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(6, 12); // After "depends_on: " (line 6, character 12)
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions for depends_on field');
+      const hasDep1 = completions.some(c => c.label === 'IMPL-DEP1');
+      const hasDep2 = completions.some(c => c.label === 'FIX-DEP2');
+      assert.ok(hasDep1, 'Should include IMPL-DEP1');
+      assert.ok(hasDep2, 'Should include FIX-DEP2');
+    });
+
+    test('Should not provide frontmatter completions outside frontmatter block', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+status: ready
+---
+
+# Test Ticket
+
+type:
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(8, 6); // In body text after frontmatter
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.strictEqual(completions, undefined, 'Should not provide frontmatter completions in body');
+    });
+
+    test('Should provide completions with correct sortText for frontmatter fields', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(3, 6);
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions');
+      if (completions.length > 0) {
+        assert.ok(
+          completions[0].sortText?.startsWith('0_'),
+          'Frontmatter completions should have high priority sortText'
+        );
+      }
+    });
+
+    test('Type completion should have Enum kind', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+type:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(3, 6);
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions');
+      if (completions.length > 0) {
+        assert.strictEqual(
+          completions[0].kind,
+          vscode.CompletionItemKind.Enum,
+          'Type completion should have Enum kind'
+        );
+      }
+    });
+
+    test('Priority completion should have EnumMember kind', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+priority:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(3, 10);
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions');
+      if (completions.length > 0) {
+        assert.strictEqual(
+          completions[0].kind,
+          vscode.CompletionItemKind.EnumMember,
+          'Priority completion should have EnumMember kind'
+        );
+      }
+    });
+
+    test('Status completion should have EnumMember kind', () => {
+      const content = `---
+id: IMPL-001
+title: Test Ticket
+status:
+---
+
+# Test Ticket
+`;
+
+      const document = createMockDocument(content, 'test.md');
+      const position = new vscode.Position(3, 8);
+
+      const completions = provider.provideCompletionItems(document, position);
+
+      assert.ok(completions, 'Should provide completions');
+      if (completions.length > 0) {
+        assert.strictEqual(
+          completions[0].kind,
+          vscode.CompletionItemKind.EnumMember,
+          'Status completion should have EnumMember kind'
+        );
+      }
     });
   });
 

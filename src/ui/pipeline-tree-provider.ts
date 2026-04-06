@@ -185,7 +185,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       currentState: this.currentState,
       currentStage: this.stateManager.getCurrentStage(),
       currentAgent: this.stateManager.getCurrentAgent(),
-      currentFallbackAgent: undefined,
+      currentFallbackAgent: this.stateManager.getCurrentFallbackAgent(),
       currentSkill: this.stateManager.getCurrentSkill(),
       currentTicket: this.stateManager.getCurrentTicket(),
       currentAttempt: this.stateManager.getCurrentAttempt(),
@@ -214,11 +214,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
 
     this.stateManager.reset();
     this.stateManager.setRunStartTime(Date.now());
-    this.historyManager.clear();
     this.currentRunLogFile = undefined;
     this.currentRunPlanId = planId;
     this.runStartTime = Date.now();
-    
+
     try {
       await this.pipelineService.start(planId);
       if (this.outputChannel) this.outputChannel.show(true);
@@ -229,12 +228,12 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     }
   }
 
-  stopPipeline(): void {
+  async stopPipeline(): Promise<void> {
     if (!this.pipelineService) {
       vscode.window.showErrorMessage(t('Pipeline service not available'));
       return;
     }
-    this.pipelineService.stop();
+    await this.pipelineService.stop();
     vscode.window.showInformationMessage(t('Pipeline stopped'));
   }
 

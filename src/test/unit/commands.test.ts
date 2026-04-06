@@ -16,6 +16,7 @@ import { WorkflowStore } from '../../data/workflow-store';
 import { TicketService } from '../../services/ticket-service';
 import { DependencyService } from '../../services/dependency-service';
 import { TicketStatus } from '../../data/types';
+import { safeLoad } from '../../utils/yaml-utils';
 
 suite('Command Handlers Tests', () => {
   let store: WorkflowStore;
@@ -80,6 +81,7 @@ statuses:
       command: "echo"
       args: ["test"]
       workdir: "."
+  default_agent: test-agent
   stages:
     execute:
       description: "Execute task"
@@ -254,10 +256,10 @@ TODO
     test('should copy ticket ID to clipboard', async () => {
       // Create a ticket
       const ticket = await ticketService.create('IMPL', 'Test Copy');
-      
+
       // Verify ID format
       assert.ok(ticket.id.match(/^IMPL-\d+$/));
-      
+
       // Clipboard testing requires VS Code runtime, so we just verify the ID is valid
       assert.strictEqual(typeof ticket.id, 'string');
       assert.ok(ticket.id.length > 0);

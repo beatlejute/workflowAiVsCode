@@ -125,6 +125,28 @@ suite('PipelineLogParser', () => {
     });
   });
 
+  suite('parse() - fallback pattern', () => {
+    test('should parse fallback switch message and extract agent', () => {
+      const line = '[2026-04-02T17:16:46] [WARN] [stage-alpha] Primary agent failed, switching to fallback: success-node';
+      const result = parser.parse(line);
+      assert.strictEqual(result.agent, 'success-node');
+      assert.strictEqual(result.isFallback, true);
+    });
+
+    test('should parse fallback with different agent names', () => {
+      const line = '[2026-04-02T17:16:46] [WARN] [stage-beta] Primary agent failed, switching to fallback: backup-agent';
+      const result = parser.parse(line);
+      assert.strictEqual(result.agent, 'backup-agent');
+      assert.strictEqual(result.isFallback, true);
+    });
+
+    test('should not set isFallback for non-fallback lines', () => {
+      const line = '[2026-04-02T17:16:46] [INFO] [stage-alpha] START stage="test" agent="qwen-code"';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isFallback, false);
+    });
+  });
+
   suite('parse() - context extraction', () => {
     test('should extract ticket_id from context line', () => {
       const line = '[2026-03-11T10:00:00] [INFO] [Runner] ticket_id: IMPL-042';

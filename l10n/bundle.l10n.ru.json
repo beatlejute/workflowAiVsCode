@@ -8,6 +8,8 @@
   "Current Execution": "Текущее выполнение",
   "Stage": "Этап",
   "Agent": "Агент",
+  "Fallback": "Фолбэк",
+  "Fallback Agent": "Фолбэк-агент",
   "Ticket": "Тикет",
   "Retry": "Повтор",
   "WF: Error": "WF: Ошибка",

@@ -22,7 +22,8 @@ import { DependencyService } from '../../services/dependency-service';
 import {
   TicketCodeLensProvider,
   WorkflowCodeLensProvider,
-  ConfigCodeLensProvider
+  ConfigCodeLensProvider,
+  PlanCodeLensProvider
 } from '../../ui/codelens-provider';
 import { PipelineCodeLensProvider } from '../../ui/pipeline-codelens-provider';
 import { Ticket, TicketStatus } from '../../data/types';
@@ -950,6 +951,147 @@ project:
       const lenses = provider.provideCodeLenses(document);
 
       assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses for invalid YAML');
+    });
+  });
+
+  suite('PlanCodeLensProvider', () => {
+    let provider: PlanCodeLensProvider;
+
+    setup(() => {
+      provider = new PlanCodeLensProvider();
+      provider.setWorkflowRoot(tempWorkflowRoot);
+    });
+
+    test('creates Decompose Plan CodeLens for workflow plan files', async () => {
+      // Create a plan file in .workflow/plans/current/
+      const planContent = `---
+id: PLAN-TEST-001
+title: Test Plan
+status: draft
+---
+
+# Test Plan
+`;
+      const plansDir = path.join(tempWorkflowRoot, 'plans', 'current');
+      fs.mkdirSync(plansDir, { recursive: true });
+      const planPath = path.join(plansDir, 'PLAN-TEST-001.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.ok(lenses.length >= 1, 'Should have at least 1 CodeLens');
+      const decomposeLens = lenses.find(l => l.command?.title?.includes('Decompose Plan'));
+      assert.ok(decomposeLens, 'Should have Decompose Plan CodeLens');
+      assert.strictEqual(decomposeLens!.command!.command, 'workflow.decomposePlan');
+      assert.deepStrictEqual(decomposeLens!.command!.arguments, ['PLAN-TEST-001']);
+    });
+
+    test('creates Run Pipeline CodeLens for approved plan files', async () => {
+      const planContent = `---
+id: PLAN-TEST-002
+title: Approved Plan
+status: approved
+---
+
+# Approved Plan
+`;
+      const plansDir = path.join(tempWorkflowRoot, 'plans', 'current');
+      fs.mkdirSync(plansDir, { recursive: true });
+      const planPath = path.join(plansDir, 'PLAN-TEST-002.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.ok(lenses.length >= 2, 'Should have at least 2 CodeLenses');
+      const runPipelineLens = lenses.find(l => l.command?.title?.includes('Run Pipeline'));
+      assert.ok(runPipelineLens, 'Should have Run Pipeline CodeLens');
+      assert.strictEqual(runPipelineLens!.command!.command, 'workflow.runPipelineForPlan');
+      assert.deepStrictEqual(runPipelineLens!.command!.arguments, ['PLAN-TEST-002']);
+      assert.ok(runPipelineLens!.command!.title.includes('$(play)'), 'Should have play icon');
+    });
+
+    test('creates Run Pipeline CodeLens for plan without status', async () => {
+      const planContent = `---
+id: PLAN-TEST-003
+title: Plan without status
+---
+
+# Plan without status
+`;
+      const plansDir = path.join(tempWorkflowRoot, 'plans', 'current');
+      fs.mkdirSync(plansDir, { recursive: true });
+      const planPath = path.join(plansDir, 'PLAN-TEST-003.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      const runPipelineLens = lenses.find(l => l.command?.title?.includes('Run Pipeline'));
+      assert.ok(runPipelineLens, 'Should have Run Pipeline CodeLens when status is missing');
+    });
+
+    test('does NOT create Run Pipeline CodeLens for non-approved plans', async () => {
+      const planContent = `---
+id: PLAN-TEST-004
+title: Draft Plan
+status: draft
+---
+
+# Draft Plan
+`;
+      const plansDir = path.join(tempWorkflowRoot, 'plans', 'current');
+      fs.mkdirSync(plansDir, { recursive: true });
+      const planPath = path.join(plansDir, 'PLAN-TEST-004.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      const runPipelineLens = lenses.find(l => l.command?.title?.includes('Run Pipeline'));
+      assert.strictEqual(runPipelineLens, undefined, 'Should NOT have Run Pipeline CodeLens for draft status');
+    });
+
+    test('creates Create Workflow Plan CodeLens for root plan files', async () => {
+      // Create a plan file in workspace root plans/ (not .workflow/)
+      const rootPlansDir = path.join(__dirname, '../../../../../tmp/test-workflow-codelens/plans');
+      fs.mkdirSync(rootPlansDir, { recursive: true });
+      const planContent = `# Root Plan
+`;
+      const planPath = path.join(rootPlansDir, 'PLAN-ROOT-001.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = provider.provideCodeLenses(document);
+
+      assert.ok(lenses.length >= 1, 'Should have at least 1 CodeLens');
+      const createLens = lenses.find(l => l.command?.title?.includes('Create Workflow Plan'));
+      assert.ok(createLens, 'Should have Create Workflow Plan CodeLens');
+      assert.strictEqual(createLens!.command!.command, 'workflow.createPlanFromFile');
+    });
+
+    test('returns empty array when workflow root not set', async () => {
+      const providerWithoutRoot = new PlanCodeLensProvider();
+      // Don't set workflow root
+
+      const planContent = `---
+id: PLAN-TEST-005
+title: Test Plan
+status: approved
+---
+
+# Test Plan
+`;
+      const plansDir = path.join(tempWorkflowRoot, 'plans', 'current');
+      fs.mkdirSync(plansDir, { recursive: true });
+      const planPath = path.join(plansDir, 'PLAN-TEST-005.md');
+      fs.writeFileSync(planPath, planContent);
+
+      const document = await vscode.workspace.openTextDocument(planPath);
+      const lenses = providerWithoutRoot.provideCodeLenses(document);
+
+      assert.strictEqual(lenses.length, 0, 'Should have 0 CodeLenses when workflow root not set');
     });
   });
 });

@@ -20,6 +20,7 @@ import { ParsedLogData } from '../ui/pipeline-log-parser';
 export interface PipelineExecutionState {
   currentStage?: string;
   currentAgent?: string;
+  currentFallbackAgent?: string;
   currentSkill?: string;
   currentTicket?: string;
   currentAttempt?: number;
@@ -47,6 +48,7 @@ export class PipelineStateManager {
   private state: PipelineExecutionState = {
     currentStage: undefined,
     currentAgent: undefined,
+    currentFallbackAgent: undefined,
     currentSkill: undefined,
     currentTicket: undefined,
     currentAttempt: undefined,
@@ -98,10 +100,25 @@ export class PipelineStateManager {
     // Handle START - stage start
     if (data.isStart) {
       if (data.stage) this.state.currentStage = data.stage;
-      if (data.agent) this.state.currentAgent = data.agent;
+      if (data.agent) {
+        // Если это fallback-агент, сохраняем отдельно
+        if (data.isFallback) {
+          this.state.currentFallbackAgent = data.agent;
+        } else {
+          this.state.currentAgent = data.agent;
+        }
+      }
       if (data.skill) this.state.currentSkill = data.skill;
       this.state.stageStartTime = Date.now();
       this.state.logStageStartTime = parseTimestamp(data.timestamp) || Date.now();
+      changed = true;
+    }
+
+    // Handle FALLBACK - preserve fallback agent even when not inside START
+    // Парсер устанавливает isFallback=true для сообщений "switching to fallback: <agent>"
+    // без isStart, поэтому нужна отдельная обработка
+    if (data.isFallback && data.agent && !data.isStart) {
+      this.state.currentFallbackAgent = data.agent;
       changed = true;
     }
 
@@ -176,6 +193,9 @@ export class PipelineStateManager {
     const gotoLogTime = parseTimestamp(data.timestamp) || Date.now();
     if (data.elapsed) {
       this.state.elapsed = data.elapsed;
+    } else if (this.state.stageStartTime) {
+      // Используем stageStartTime как надёжный fallback — он обновляется только при START
+      this.state.elapsed = formatMsToElapsed(Date.now() - this.state.stageStartTime);
     } else if (this.state.logStageStartTime) {
       this.state.elapsed = formatMsToElapsed(gotoLogTime - this.state.logStageStartTime);
     } else {
@@ -215,7 +235,8 @@ export class PipelineStateManager {
     this.state.ticketStatusHistory = [];
     this.state.currentOutputLines = [];
     this.state.currentStageReport = undefined;
-    this.state.stageStartTime = Date.now();
+    // stageStartTime НЕ сбрасываем здесь — он сбрасывается только при START новой стадии
+    // Это предотвращает видимый сброс таймера (3с→0с→1с) между GOTO и START
     this.state.logStageStartTime = gotoLogTime;
     this.state.stagesStarted++;
     this.state.gotos++;
@@ -234,6 +255,13 @@ export class PipelineStateManager {
    */
   getCurrentAgent(): string | undefined {
     return this.state.currentAgent;
+  }
+
+  /**
+   * Get current fallback agent
+   */
+  getCurrentFallbackAgent(): string | undefined {
+    return this.state.currentFallbackAgent;
   }
 
   /**
@@ -367,6 +395,7 @@ export class PipelineStateManager {
     this.state = {
       currentStage: undefined,
       currentAgent: undefined,
+      currentFallbackAgent: undefined,
       currentSkill: undefined,
       currentTicket: undefined,
       currentAttempt: undefined,

@@ -13,7 +13,7 @@ import {
   KanbanSortMode
 } from './ui/kanban-tree-provider';
 import { PipelineTreeProvider } from './ui/pipeline-tree-provider';
-import { PipelineService } from './services/pipeline-service';
+import { PipelineService, PipelineState } from './services/pipeline-service';
 import { TicketService } from './services/ticket-service';
 import { DependencyService } from './services/dependency-service';
 import { WorkflowStore } from './data/workflow-store';
@@ -22,6 +22,7 @@ import { TicketStatus } from './data/types';
 import { executeNewTicket } from './commands/new-ticket';
 import { executeNewPlan } from './commands/new-plan';
 import { executeShowStatistics } from './commands/show-statistics';
+import { executeCreatePlanFromFile } from './commands/create-plan-from-file';
 import {
   executeOpenPipelineConfig,
   executeOpenConfig,
@@ -606,7 +607,7 @@ export function registerCommands(
     'workflow.stopPipeline',
     async () => {
       try {
-        pipelineProvider.stopPipeline();
+        await pipelineProvider.stopPipeline();
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Stop Pipeline', {
@@ -807,6 +808,14 @@ export function registerCommands(
   );
 
   registry.register(
+    'workflow.createPlanFromFile',
+    async (...args: unknown[]) => {
+      const uri = args[0] as vscode.Uri | undefined;
+      await executeCreatePlanFromFile(store, uri, workspaceRoot ?? null);
+    }
+  );
+
+  registry.register(
     'workflow.showStatistics',
     async (_arg: unknown) => {
       await executeShowStatistics(store);
@@ -857,7 +866,7 @@ export function registerCommands(
         () => kanbanProviders.review.refresh(),
         () => kanbanProviders.done.refresh()
       ];
-      await executeRefreshAll(workspaceRoot ?? null, store, refreshCallbacks);
+      await executeRefreshAll(workspaceRoot ?? null, store, refreshCallbacks, pipelineProvider.getPipelineService() ?? undefined);
     }
   );
 
@@ -1221,27 +1230,15 @@ export function registerCommands(
           vscode.window.showErrorMessage(t('Pipeline config not found: {0}', pipelinePath));
           return;
         }
-        const pipelineContent = fs.readFileSync(pipelinePath, 'utf-8');
-        const pipelineData = safeLoad(pipelineContent) as { pipeline?: { default_agent?: string; agents?: Record<string, { command: string; args: string[]; workdir?: string }> } };
-        const defaultAgentId = pipelineData?.pipeline?.default_agent;
-        const agent = defaultAgentId ? pipelineData?.pipeline?.agents?.[defaultAgentId] : undefined;
-        if (!agent) {
-          vscode.window.showErrorMessage(t('Default agent not configured in pipeline.yaml'));
+
+        // Check if pipeline is already running
+        if (pipelineService.getState() === PipelineState.Running) {
+          vscode.window.showWarningMessage(t('Pipeline is already running. Please stop it first.'));
           return;
         }
 
-        const prompt = `run --plan ${planId}`;
-        const agentArgs = agent.args.map((a: string) => `"${a}"`).join(' ');
-        const agentCommand = `${agent.command} ${agentArgs} "${prompt}"`;
-
-        const terminalEnv: Record<string, string | null> = { CLAUDECODE: null };
-        const terminal = vscode.window.createTerminal({
-          name: `Pipeline ${planId}`,
-          cwd: workspaceRoot,
-          env: terminalEnv
-        });
-        terminal.show();
-        terminal.sendText(agentCommand);
+        // Use PipelineService instead of direct terminal
+        await pipelineProvider.startPipeline(planId);
       } catch (error) {
         if (errorHandler) {
           errorHandler.handleError(error, 'Run Pipeline For Plan', {

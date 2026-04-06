@@ -28,14 +28,15 @@ export interface ParsedLogData {
   reportInfo?: ReportInfo;
   planId?: string;
   outputLine?: string;
-  isRetry: boolean;
-  isGoto: boolean;
-  isStart: boolean;
-  isMoveTicket: boolean;
-  isCreateReport: boolean;
-  isError: boolean;
-  isTimeout: boolean;
-  isComplete: boolean;
+  isRetry?: boolean;
+  isGoto?: boolean;
+  isStart?: boolean;
+  isMoveTicket?: boolean;
+  isCreateReport?: boolean;
+  isError?: boolean;
+  isTimeout?: boolean;
+  isComplete?: boolean;
+  isFallback?: boolean;
   timestamp?: string;
   errorMessage?: string;
   timeoutSeconds?: number;
@@ -70,7 +71,7 @@ export class PipelineLogParser {
     if (!baseMatch) return this.parseLegacy(line);
 
     const [, timestamp, , _stage, message] = baseMatch;
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false };
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false, isFallback: false };
     result.timestamp = timestamp;
 
     // ERROR stage="X" message="..."
@@ -113,6 +114,8 @@ export class PipelineLogParser {
           const params = JSON.parse(gotoNewMatch[3]);
           if (params.ticket_id && /^[A-Z]+-\d+$/.test(params.ticket_id)) result.ticket = params.ticket_id;
           if (params.target) result.gotoTarget = params.target;
+          // Парсим elapsed из params если есть (формат: "5.2s", "1m30s", etc.)
+          if (params.elapsed && /^[\d.]+[smh]/.test(params.elapsed)) result.elapsed = params.elapsed;
         } catch { /* ignore */ }
       }
       result.statusTransition = this.ticketStatusHistory.length > 0 ? this.ticketStatusHistory.join(' → ') : result.gotoTarget ? `→ ${result.gotoTarget}` : undefined;
@@ -170,6 +173,14 @@ export class PipelineLogParser {
       return result;
     }
 
+    // Parse fallback switch: Primary agent failed, switching to fallback: <agentId>
+    const fallbackMatch = message.match(/switching to fallback:\s*(\S+)/);
+    if (fallbackMatch) {
+      result.agent = fallbackMatch[1];
+      result.isFallback = true;
+      return result;
+    }
+
     // Context ticket_id / plan_id
     const ticketMatch = message.match(/^\s*ticket_id:\s*([A-Z]+-\d+)/);
     if (ticketMatch) { result.ticket = ticketMatch[1]; return result; }
@@ -192,7 +203,7 @@ export class PipelineLogParser {
    * Legacy parser for old format
    */
   private parseLegacy(line: string): ParsedLogData {
-    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false };
+    const result: ParsedLogData = { isRetry: false, isGoto: false, isStart: false, isMoveTicket: false, isCreateReport: false, isError: false, isTimeout: false, isComplete: false, isFallback: false };
 
     if (line.includes('[GOTO]')) {
       result.isGoto = true;

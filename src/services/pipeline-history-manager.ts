@@ -30,6 +30,7 @@ export interface PersistedHistoryItem {
  */
 export interface RunHistoryEntry {
   runNumber: number;
+  timestamp: number;
   date: string;
   result: 'success' | 'error' | 'stopped';
   reports: ReportInfo[];
@@ -82,6 +83,7 @@ export class PipelineHistoryManager {
       
       this.runHistory = entries.map(e => ({
         runNumber: e.runNumber,
+        timestamp: e.timestamp,
         date: new Date(e.timestamp).toLocaleString(),
         result: e.result,
         reports: e.reports || [],
@@ -105,13 +107,13 @@ export class PipelineHistoryManager {
     try {
       const persisted = this.backfillService.toPersistedItems(this.runHistory.map(item => ({
         runNumber: item.runNumber,
-        timestamp: new Date(item.date).getTime(),
+        timestamp: item.timestamp,
         result: item.result,
         reports: item.reports || [],
         logFile: item.logFile,
         planId: item.planId
       })));
-      
+
       const toSave = persisted.length > 50 ? persisted.slice(0, 50) : persisted;
       await this.context.workspaceState.update('pipelineHistory', toSave);
     } catch (error) {
@@ -124,19 +126,21 @@ export class PipelineHistoryManager {
    */
   addRun(result: 'success' | 'error' | 'stopped', reports: ReportInfo[], logFile?: string, planId?: string): void {
     this.runCounter++;
+    const timestamp = Date.now();
     this.runHistory.unshift({
       runNumber: this.runCounter,
-      date: new Date().toLocaleString(),
+      timestamp,
+      date: new Date(timestamp).toLocaleString(),
       result,
       reports,
       logFile,
       planId
     });
-    
+
     if (this.runHistory.length > 50) {
       this.runHistory = this.runHistory.slice(0, 50);
     }
-    
+
     this.save();
   }
 

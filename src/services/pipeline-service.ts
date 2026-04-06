@@ -30,6 +30,7 @@ export interface ParsedLogEntry {
   type: 'goto' | 'start' | 'info' | 'ctx' | 'raw';
   raw: string;
   stage?: string;
+  fromStage?: string; // For GOTO: the completed stage (new format with arrow)
   agent?: string;
   ticket?: string;
   elapsed?: string;
@@ -50,6 +51,11 @@ export type StateChangeListener = (state: PipelineState) => void;
  */
 export type LogListener = (log: string) => void;
 
+/**
+ * Event emitter type for stage changes (GOTO)
+ */
+export type StageChangeListener = (stage: string | undefined) => void;
+
 
 /**
  * PipelineService - Manages workflow run execution
@@ -64,6 +70,8 @@ export class PipelineService extends EventEmitter {
   private currentTicket: string | undefined;
   private retryCount: number = 0;
   private stopping = false;
+  private hasStageErrors = false;
+  private stageWithRetryError: string | undefined; // Track which stage had error+retry
   private spawnFn: SpawnFunction;
   private workflowRoot: string | undefined;
   private progress?: vscode.Progress<{ message?: string; increment?: number }>;
@@ -72,6 +80,9 @@ export class PipelineService extends EventEmitter {
   private totalStages: number = 0;
   private completedStages: number = 0;
   private fallbackUsed = false;
+
+  private readonly _onStageChange = new vscode.EventEmitter<string | undefined>();
+  readonly onStageChange = this._onStageChange.event;
 
   /**
    * Create PipelineService
@@ -149,13 +160,18 @@ export class PipelineService extends EventEmitter {
       throw new Error('Pipeline is already running');
     }
 
-    this.setState(PipelineState.Running);
+    // Reset state before transitioning to Running to avoid showing stale stage
     this.stopping = false;
     this.retryCount = 0;
     this.fallbackUsed = false;
+    this.hasStageErrors = false;
+    this.stageWithRetryError = undefined;
     this.currentStage = undefined;
+    this._onStageChange.fire(undefined);
     this.currentAgent = undefined;
     this.currentTicket = undefined;
+
+    this.setState(PipelineState.Running);
 
     const args = ['run'];
     if (planId) {
@@ -178,11 +194,11 @@ export class PipelineService extends EventEmitter {
           this.progress = progress;
           this.startTime = Date.now();
           this.completedStages = 0;
-          
+
           // Handle cancellation
           token.onCancellationRequested(() => {
             this.emit('log', '[PIPELINE] Cancellation requested\n');
-            this.stop();
+            this.stop().catch(() => { /* stop errors are non-critical */ });
           });
 
           this.progressCancellationToken = new vscode.CancellationTokenSource();
@@ -245,7 +261,13 @@ export class PipelineService extends EventEmitter {
         this.stopping = false;
         return;
       }
-      if (code === 0) {
+
+      // Check for stage errors even if exit code is 0
+      // CLI may exit with 0 even when a stage fails (e.g., exit 1 in script)
+      if (code === 0 && this.hasStageErrors) {
+        this.reportProgress('Pipeline failed', 100);
+        this.setState(PipelineState.Error);
+      } else if (code === 0) {
         this.reportProgress('Pipeline completed', 100);
         this.setState(PipelineState.Completed);
       } else {
@@ -276,9 +298,14 @@ export class PipelineService extends EventEmitter {
   }
 
   /**
-   * Stop pipeline execution (graceful shutdown via SIGTERM)
+   * Stop pipeline execution (graceful shutdown → force kill)
+   *
+   * Windows two-level kill:
+   *   1. taskkill /T /F (kill process tree)
+   *   2. Wait 1s, check if process is still alive
+   *   3. If alive — PowerShell Stop-Process -Force as fallback
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.childProcess) {
       return;
     }
@@ -287,19 +314,43 @@ export class PipelineService extends EventEmitter {
     const pid = this.childProcess.pid;
 
     if (process.platform === 'win32' && pid) {
-      // On Windows, kill the entire process tree because shell: true
-      // spawns cmd.exe and SIGTERM only kills the shell, not the child
+      // Level 1: kill the entire process tree (shell: true spawns cmd.exe)
       try {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
       } catch {
         // Process may have already exited
       }
+
+      // Level 2: wait and verify, then force kill if still alive
+      await this.forceKillIfAlive(pid);
     } else {
       this.childProcess.kill('SIGTERM');
     }
 
     this.childProcess = null;
     this.setState(PipelineState.Idle);
+  }
+
+  /**
+   * Check if process is still alive and force kill if needed (Windows fallback)
+   */
+  private async forceKillIfAlive(pid: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    try {
+      process.kill(pid, 0);
+      // Process is still alive — use PowerShell force kill
+      try {
+        execSync(
+          `powershell -Command "Stop-Process -Id ${pid} -Force"`,
+          { stdio: 'ignore' }
+        );
+      } catch {
+        // PowerShell may also fail if process died between checks
+      }
+    } catch {
+      // Process is already dead — nothing to do
+    }
   }
 
   /**
@@ -319,10 +370,15 @@ export class PipelineService extends EventEmitter {
       // not from generic log lines where stage is just the logger name (e.g. "Runner")
       if (parsed.stage && (parsed.type === 'goto' || parsed.type === 'start')) {
         this.currentStage = parsed.stage;
+        this._onStageChange.fire(this.currentStage);
       }
-      if (parsed.type === 'goto' && parsed.stage) {
-        this.completedStages++;
-        this.updateStageProgress(parsed.stage, parsed.elapsed);
+      if (parsed.type === 'goto') {
+        // completedStages++ counts the completed fromStage, not the current toStage
+        const completedStage = parsed.fromStage || parsed.stage;
+        if (completedStage) {
+          this.completedStages++;
+          this.updateStageProgress(completedStage, parsed.elapsed);
+        }
       }
       if (parsed.agent) {
         this.currentAgent = parsed.agent;
@@ -361,14 +417,40 @@ export class PipelineService extends EventEmitter {
     const [, timestamp, level, stage, message] = baseMatch;
 
     // Parse GOTO: [timestamp] [INFO] [stage] GOTO next-stage
-    const gotoMatch = message.match(/^GOTO\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    // New format: GOTO fromStage → toStage status="success"
+    // Old format: GOTO next-stage (elapsed: 1.2s)
+    const gotoMatch = message.match(/^GOTO\s+(\S+)\s*→\s*(\S+)(?:\s+status="([^"]*)")?(?:\s*\(elapsed:\s*([^)]+)\))?/);
     if (gotoMatch) {
+      const fromStage = gotoMatch[1];
+      const toStage = gotoMatch[2];
+      const status = gotoMatch[3]; // "success" or undefined
+
+      // Retry edge case: if a stage had error+retry and now completes successfully, clear hasStageErrors
+      // Status "success" on GOTO means the fromStage completed successfully
+      if (status === 'success' && this.stageWithRetryError === fromStage) {
+        this.hasStageErrors = false;
+        this.stageWithRetryError = undefined;
+      }
+
       return {
         type: 'goto',
         raw: line,
         timestamp,
-        stage: gotoMatch[1],
-        elapsed: gotoMatch[2]
+        stage: toStage, // toStage is the current active stage
+        fromStage: fromStage, // fromStage is the completed stage
+        elapsed: gotoMatch[4]
+      };
+    }
+
+    // Legacy format without arrow: GOTO next-stage (elapsed: 1.2s)
+    const legacyGotoMatch = message.match(/^GOTO\s+(\S+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
+    if (legacyGotoMatch) {
+      return {
+        type: 'goto',
+        raw: line,
+        timestamp,
+        stage: legacyGotoMatch[1],
+        elapsed: legacyGotoMatch[2]
       };
     }
 
@@ -388,6 +470,8 @@ export class PipelineService extends EventEmitter {
     // Parse RETRY: [timestamp] [WARN] [stage] RETRY stage="X" attempt=N/M
     const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);
     if (retryMatch) {
+      // Mark this stage as having a retry scenario - error will be cleared if stage succeeds
+      this.stageWithRetryError = retryMatch[1];
       return {
         type: 'info',
         raw: line,
@@ -395,6 +479,18 @@ export class PipelineService extends EventEmitter {
         stage: retryMatch[1],
         retry: parseInt(retryMatch[2], 10),
         maxAttempts: parseInt(retryMatch[3], 10)
+      };
+    }
+
+    // Parse fallback switch: [timestamp] [WARN] [stage] Primary agent failed, switching to fallback: <agentId>
+    const fallbackMatch = message.match(/switching to fallback:\s*(\S+)/);
+    if (fallbackMatch) {
+      return {
+        type: 'info',
+        raw: line,
+        timestamp,
+        stage,
+        agent: fallbackMatch[1]
       };
     }
 
@@ -406,6 +502,11 @@ export class PipelineService extends EventEmitter {
         timestamp,
         stage
       };
+    }
+
+    // Detect stage errors: look for FAIL/ERROR patterns in the message
+    if (/(FAIL|ERROR|failed|failure)/i.test(message)) {
+      this.hasStageErrors = true;
     }
 
     // Warn/Error level
@@ -424,10 +525,13 @@ export class PipelineService extends EventEmitter {
     // Try [GOTO] pattern: [GOTO] stage-name (elapsed: 1.2s)
     const gotoMatch = line.match(/\[GOTO\]\s+([^\s(]+)(?:\s*\(elapsed:\s*([^)]+)\))?/);
     if (gotoMatch) {
+      const stage = gotoMatch[1];
+      // Legacy format doesn't have status, so we can't clear hasStageErrors here
+      // It will be cleared on next successful pipeline completion without errors
       return {
         type: 'goto',
         raw: line,
-        stage: gotoMatch[1],
+        stage,
         elapsed: gotoMatch[2]
       };
     }
@@ -449,6 +553,8 @@ export class PipelineService extends EventEmitter {
     // Try [INFO] with retry only: [INFO] retry: N/M
     const retryOnlyMatch = line.match(/\[INFO\]\s*retry:\s*(\d+)\/(\d+)/);
     if (retryOnlyMatch) {
+      // Mark this stage as having a retry scenario - we don't know the stage name in legacy format
+      this.stageWithRetryError = 'unknown';
       return {
         type: 'info',
         raw: line,
@@ -466,6 +572,11 @@ export class PipelineService extends EventEmitter {
         stage: ctxMatch[1].trim(),
         elapsed: ctxMatch[2].trim()
       };
+    }
+
+    // Detect stage errors in legacy format
+    if (/(FAIL|ERROR|failed|failure)/i.test(line)) {
+      this.hasStageErrors = true;
     }
 
     // Defensive parsing: fallback to raw log for unknown format
@@ -510,8 +621,9 @@ export class PipelineService extends EventEmitter {
    * Dispose resources
    */
   dispose(): void {
-    this.stop();
+    this.stop().catch(() => { /* stop errors are non-critical */ });
     this.removeAllListeners();
+    this._onStageChange.dispose();
     if (this.progressCancellationToken) {
       this.progressCancellationToken.dispose();
       this.progressCancellationToken = undefined;

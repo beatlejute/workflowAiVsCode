@@ -195,7 +195,7 @@ suite('commands/index Tests', () => {
   suite('executeFocusKanban', () => {
     test('executes kanban focus command', async () => {
       await executeFocusKanban();
-      assert.ok(executedCommands.some(c => c.includes('wf-kanban-backlog')));
+      assert.ok(executedCommands.includes('wf-kanban-backlog.focus'));
     });
   });
 

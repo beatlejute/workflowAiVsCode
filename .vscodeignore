@@ -1,6 +1,9 @@
 # Workflow directories (dev only)
 .workflow/
 
+# Test workspace and sandbox (dev only)
+tmp/
+
 # Test files
 src/test/
 dist/test/

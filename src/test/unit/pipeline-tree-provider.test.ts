@@ -30,6 +30,7 @@ import {
   StageResult
 } from '../../ui/pipeline-tree-provider';
 import { PipelineService, PipelineState } from '../../services/pipeline-service';
+import { PipelineStateManager, parseElapsedToMs, formatMsToElapsed } from '../../services/pipeline-state-manager';
 
 // Interface for accessing private historyManager in tests
 interface PipelineTreeProviderWithHistory {
@@ -177,6 +178,7 @@ statuses:
       assert.strictEqual(item.label, 'analyze-report');
       assert.ok((item.description as string).includes('⏱ 15s'));
       assert.ok((item.description as string).includes('Agent: analyst-agent'));
+      assert.ok((item.description as string).includes('Fallback: fallback-agent'));
       assert.ok((item.description as string).includes('Ticket: IMPL-001'));
       assert.ok((item.description as string).includes('Attempt: 1/3'));
     });
@@ -423,8 +425,8 @@ statuses:
 
     test('History with entries displays count', () => {
       const history: RunHistoryEntry[] = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] },
-        { runNumber: 2, date: '2026-03-05 11:00', result: 'error', reports: [] }
+        { runNumber: 1, timestamp: Date.now() - 100000, date: '2026-03-05 10:00', result: 'success', reports: [] },
+        { runNumber: 2, timestamp: Date.now() - 50000, date: '2026-03-05 11:00', result: 'error', reports: [] }
       ];
 
       const item = new HistoryTreeItem(history);
@@ -434,6 +436,7 @@ statuses:
     test('Tooltip shows last 10 runs in table format', () => {
       const history: RunHistoryEntry[] = Array.from({ length: 15 }, (_, i) => ({
         runNumber: i + 1,
+        timestamp: Date.now() - (15 - i) * 100000,
         date: `2026-03-05 ${10 + i}:00`,
         result: (i % 2 === 0 ? 'success' : 'error') as 'success' | 'error',
         reports: []
@@ -455,6 +458,7 @@ statuses:
     test('Success run displays checkmark', () => {
       const entry: RunHistoryEntry = {
         runNumber: 1,
+        timestamp: Date.now(),
         date: '2026-03-05 10:00',
         result: 'success',
         reports: []
@@ -469,6 +473,7 @@ statuses:
     test('Error run displays error icon', () => {
       const entry: RunHistoryEntry = {
         runNumber: 2,
+        timestamp: Date.now(),
         date: '2026-03-05 11:00',
         result: 'error',
         reports: []
@@ -481,6 +486,7 @@ statuses:
     test('Tooltip contains all run details', () => {
       const entry: RunHistoryEntry = {
         runNumber: 3,
+        timestamp: Date.now(),
         date: '2026-03-05 12:00',
         result: 'success',
         reports: []
@@ -674,8 +680,8 @@ statuses:
 
       // Add some history entries
       (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] },
-        { runNumber: 2, date: '2026-03-05 11:00', result: 'error', reports: [{ id: 'RPT-001', path: '/path/to/report.md' }] }
+        { runNumber: 1, timestamp: 1709632800000, date: '2026-03-05 10:00', result: 'success', reports: [] },
+        { runNumber: 2, timestamp: 1709636400000, date: '2026-03-05 11:00', result: 'error', reports: [{ id: 'RPT-001', path: '/path/to/report.md' }] }
       ];
 
       await provider.saveHistoryToStorage();
@@ -706,6 +712,7 @@ statuses:
       // Add 60 history entries
       (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = Array.from({ length: 60 }, (_, i) => ({
         runNumber: i + 1,
+        timestamp: 1709632800000 + i * 3600000,
         date: `2026-03-05 ${10 + Math.floor(i / 10)}:${i % 10}0`,
         result: 'success' as const,
         reports: []
@@ -751,7 +758,7 @@ statuses:
 
       provider.setContext(mockContext);
       (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
+        { runNumber: 1, timestamp: 1709632800000, date: '2026-03-05 10:00', result: 'success', reports: [] }
       ];
 
       // Should not throw
@@ -774,7 +781,7 @@ statuses:
 
       // Don't set context
       (provider as unknown as PipelineTreeProviderWithHistory).historyManager.runHistory = [
-        { runNumber: 1, date: '2026-03-05 10:00', result: 'success', reports: [] }
+        { runNumber: 1, timestamp: 1709632800000, date: '2026-03-05 10:00', result: 'success', reports: [] }
       ];
 
       await provider.saveHistoryToStorage();
@@ -784,7 +791,6 @@ statuses:
   });
 
   suite('PipelineStateManager Stage Elapsed Tests', () => {
-    const { PipelineStateManager } = require('../../services/pipeline-state-manager');
 
     test('getStageStartTime returns undefined initially', () => {
       const sm = new PipelineStateManager();
@@ -947,7 +953,6 @@ statuses:
   });
 
   suite('parseElapsedToMs and formatMsToElapsed Tests', () => {
-    const { parseElapsedToMs, formatMsToElapsed } = require('../../services/pipeline-state-manager');
 
     test('parseElapsedToMs parses seconds', () => {
       assert.strictEqual(parseElapsedToMs('5s'), 5000);
@@ -987,5 +992,62 @@ statuses:
     test('formatMsToElapsed handles zero', () => {
       assert.strictEqual(formatMsToElapsed(0), '0s');
     });
+
+    // FIX-048: Monotonic timer tests
+    test('timer is monotonic — elapsed does not decrease between GOTOs without explicit elapsed', async () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+
+      // Wait 600ms to ensure elapsed >= 1s (formatMsToElapsed rounds down to seconds)
+      await new Promise(r => setTimeout(r, 600));
+
+      // First GOTO without explicit elapsed — should use Date.now() - stageStartTime
+      sm.process({ isGoto: true, gotoStage: 'stage-2' });
+      const elapsed1 = sm.getElapsed();
+      assert.ok(elapsed1, 'First GOTO should have elapsed');
+      const ms1 = parseElapsedToMs(elapsed1);
+      assert.ok(ms1 >= 0, `First elapsed should be >= 0, got ${ms1}ms (${elapsed1})`);
+
+      // Wait another 600ms
+      await new Promise(r => setTimeout(r, 600));
+
+      // Second GOTO without explicit elapsed — elapsed should be >= first
+      sm.process({ isGoto: true, gotoStage: 'stage-3' });
+      const elapsed2 = sm.getElapsed();
+      assert.ok(elapsed2, 'Second GOTO should have elapsed');
+      const ms2 = parseElapsedToMs(elapsed2);
+      assert.ok(ms2 >= ms1, `Second elapsed (${ms2}ms / ${elapsed2}) should be >= first (${ms1}ms / ${elapsed1}) — timer must be monotonic`);
+    }).timeout(5000);
+
+    test('completed stages have non-zero elapsed when GOTO has no explicit elapsed', async () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+
+      // Wait to ensure elapsed >= 1s
+      await new Promise(r => setTimeout(r, 1100));
+
+      // GOTO to stage-2 — stage-1 should be completed with non-zero elapsed
+      sm.process({ isGoto: true, gotoStage: 'stage-2' });
+      const stages = sm.getCompletedStages();
+      assert.strictEqual(stages.length, 1);
+      assert.ok(stages[0].elapsed, 'Completed stage should have elapsed');
+      const ms = parseElapsedToMs(stages[0].elapsed);
+      assert.ok(ms >= 1000, `Completed stage elapsed should be >= 1s, got ${ms}ms (${stages[0].elapsed}) — no 0s for completed stages`);
+    }).timeout(5000);
+
+    test('stageStartTime is NOT reset on GOTO (FIX-048)', () => {
+      const sm = new PipelineStateManager();
+      sm.process({ isStart: true, stage: 'stage-1', agent: 'agent' });
+      const startTimeBeforeGoto = (sm as any).state.stageStartTime;
+      assert.ok(startTimeBeforeGoto, 'stageStartTime should be set after START');
+
+      // GOTO should NOT reset stageStartTime
+      sm.process({ isGoto: true, gotoStage: 'stage-2' });
+      const startTimeAfterGoto = (sm as any).state.stageStartTime;
+
+      assert.strictEqual(startTimeBeforeGoto, startTimeAfterGoto,
+        'stageStartTime must NOT change on GOTO (FIX-048: prevents timer reset 3s→0s→1s)');
+    });
   });
+
 });

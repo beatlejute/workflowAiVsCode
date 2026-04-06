@@ -91,10 +91,11 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
 
     const elapsedInfo = stageElapsed ? `⏱ ${stageElapsed}` : '';
     const agentInfo = agent ? `${t('Agent')}: ${agent}` : '';
+    const fallbackAgentInfo = fallbackAgent ? `${t('Fallback')}: ${fallbackAgent}` : '';
     const ticketInfo = ticket ? `${t('Ticket')}: ${ticket}` : '';
     const attemptInfo = attempt && maxAttempts ? `${t('Attempt')}: ${attempt}/${maxAttempts}` : '';
 
-    this.description = [elapsedInfo, agentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
+    this.description = [elapsedInfo, agentInfo, fallbackAgentInfo, ticketInfo, attemptInfo].filter(Boolean).join(' | ');
     this.tooltip = createCurrentStageTooltip(
       stage, agent, fallbackAgent, skill, ticket, attempt, maxAttempts, stageElapsed
     );

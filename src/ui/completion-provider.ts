@@ -25,6 +25,7 @@ import { STATUS_ICONS } from '../constants/ticket-constants';
  * Provides autocomplete for:
  * - dependencies field: ticket IDs
  * - conditions.value field: ticket IDs
+ * - frontmatter fields: type, priority, status, depends_on
  */
 export class TicketCompletionProvider implements vscode.CompletionItemProvider {
   private readonly store: WorkflowStore;
@@ -54,6 +55,16 @@ export class TicketCompletionProvider implements vscode.CompletionItemProvider {
 
     const line = document.lineAt(position).text;
     const lineText = line.substring(0, position.character);
+
+    // Check if we're in frontmatter block
+    const frontmatterInfo = this.getFrontmatterInfo(document);
+    if (frontmatterInfo && position.line >= frontmatterInfo.startLine && position.line <= frontmatterInfo.endLine) {
+      // Check if we're in a frontmatter field
+      const frontmatterCompletions = this.getFrontmatterCompletions(lineText, frontmatterInfo);
+      if (frontmatterCompletions) {
+        return frontmatterCompletions;
+      }
+    }
 
     // Check if we're in dependencies or conditions field
     const inDependencies = this.isInField(lineText, 'dependencies');
@@ -124,6 +135,174 @@ export class TicketCompletionProvider implements vscode.CompletionItemProvider {
     // Match ticket IDs like IMPL-001, FIX-001, IMPL-TEST, etc.
     const idMatch = frontmatterText.match(/^id:\s*["']?([A-Z]+-\w+)["']?/m);
     return idMatch ? idMatch[1] : null;
+  }
+
+  /**
+   * Get frontmatter block information
+   * @returns Object with startLine and endLine, or null if not in frontmatter
+   */
+  private getFrontmatterInfo(document: vscode.TextDocument): { startLine: number; endLine: number } | null {
+    const content = document.getText();
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!frontmatterMatch) {
+      return null;
+    }
+
+    // Count lines before frontmatter content
+    const linesBefore = content.substring(0, frontmatterMatch.index).split('\n').length - 1;
+    const frontmatterContent = frontmatterMatch[1];
+    const frontmatterLines = frontmatterContent.split('\n').length;
+
+    // startLine is the line after opening ---, endLine is the line before closing ---
+    return {
+      startLine: linesBefore + 1,
+      endLine: linesBefore + frontmatterLines
+    };
+  }
+
+  /**
+   * Get completions for frontmatter fields
+   */
+  private getFrontmatterCompletions(lineText: string, _frontmatterInfo: { startLine: number; endLine: number }): vscode.CompletionItem[] | undefined {
+    // Check which field we're in
+    const typeMatch = lineText.match(/^\s*type:\s*/i);
+    const priorityMatch = lineText.match(/^\s*priority:\s*/i);
+    const statusMatch = lineText.match(/^\s*status:\s*/i);
+    const dependsOnMatch = lineText.match(/^\s*depends_on:\s*/i);
+
+    if (typeMatch) {
+      return this.getTaskTypeCompletions();
+    } else if (priorityMatch) {
+      return this.getPriorityCompletions();
+    } else if (statusMatch) {
+      return this.getStatusCompletions();
+    } else if (dependsOnMatch) {
+      return this.getDependsOnCompletions();
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Get task type completions from config
+   */
+  private getTaskTypeCompletions(): vscode.CompletionItem[] {
+    const config = this.store.getConfig();
+    const items: vscode.CompletionItem[] = [];
+
+    if (config && config.task_types) {
+      for (const [typeId, typeConfig] of Object.entries(config.task_types)) {
+        const item = new vscode.CompletionItem(typeId, vscode.CompletionItemKind.Enum);
+        item.detail = typeConfig.description;
+        item.documentation = new vscode.MarkdownString(
+          `**${t('Type')}: ${typeId}**\n\n${typeConfig.description}\n\n**${t('Prefix')}:** ${typeConfig.prefix}`
+        );
+        item.sortText = `0_${typeId}`; // High priority for frontmatter completions
+        items.push(item);
+      }
+    } else {
+      // Fallback for empty config
+      const defaultTypes = ['impl', 'fix', 'review', 'docs', 'arch', 'qa'];
+      for (const type of defaultTypes) {
+        const item = new vscode.CompletionItem(type, vscode.CompletionItemKind.Enum);
+        item.detail = `${t('Type')} - ${type}`;
+        item.sortText = `0_${type}`;
+        items.push(item);
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Get priority completions from config
+   */
+  private getPriorityCompletions(): vscode.CompletionItem[] {
+    const config = this.store.getConfig();
+    const items: vscode.CompletionItem[] = [];
+
+    if (config && config.priorities) {
+      for (const [priorityNum, priorityConfig] of Object.entries(config.priorities)) {
+        const num = parseInt(priorityNum, 10);
+        const item = new vscode.CompletionItem(num.toString(), vscode.CompletionItemKind.EnumMember);
+        const detail = typeof priorityConfig === 'string' ? priorityConfig : (priorityConfig as { name?: string }).name || '';
+        item.detail = `P${num}: ${detail}`;
+        item.documentation = new vscode.MarkdownString(
+          `**${t('Priority')}: ${num}**\n\n${detail}`
+        );
+        item.sortText = `0_${num}`;
+        items.push(item);
+      }
+    } else {
+      // Fallback for empty config
+      const defaultPriorities = [
+        { num: 1, name: 'critical' },
+        { num: 2, name: 'high' },
+        { num: 3, name: 'medium' },
+        { num: 4, name: 'low' },
+        { num: 5, name: 'someday' }
+      ];
+      for (const p of defaultPriorities) {
+        const item = new vscode.CompletionItem(p.num.toString(), vscode.CompletionItemKind.EnumMember);
+        item.detail = `P${p.num}: ${p.name}`;
+        item.sortText = `0_${p.num}`;
+        items.push(item);
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Get status completions from config
+   */
+  private getStatusCompletions(): vscode.CompletionItem[] {
+    const config = this.store.getConfig();
+    const items: vscode.CompletionItem[] = [];
+
+    if (config && config.statuses) {
+      for (const [statusId, statusConfig] of Object.entries(config.statuses)) {
+        const item = new vscode.CompletionItem(statusId, vscode.CompletionItemKind.EnumMember);
+        const detail = typeof statusConfig === 'string' ? statusConfig : statusConfig.description || '';
+        item.detail = detail;
+        item.documentation = new vscode.MarkdownString(
+          `**${t('Status')}: ${statusId}**\n\n${detail}`
+        );
+        item.sortText = `0_${statusId}`;
+        items.push(item);
+      }
+    } else {
+      // Fallback for empty config
+      const defaultStatuses = ['backlog', 'ready', 'in-progress', 'blocked', 'review', 'done'];
+      for (const status of defaultStatuses) {
+        const item = new vscode.CompletionItem(status, vscode.CompletionItemKind.EnumMember);
+        item.detail = `${t('Status')} - ${status}`;
+        item.sortText = `0_${status}`;
+        items.push(item);
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Get depends_on completions (array of ticket IDs)
+   */
+  private getDependsOnCompletions(): vscode.CompletionItem[] {
+    const tickets = this.store.getTickets();
+    const items: vscode.CompletionItem[] = [];
+
+    for (const ticket of tickets) {
+      const item = new vscode.CompletionItem(ticket.id, vscode.CompletionItemKind.Reference);
+      item.detail = `${ticket.title} (${ticket.status})`;
+      item.documentation = new vscode.MarkdownString(
+        `**${ticket.title}**\n\n${t('Status')}: ${STATUS_ICONS[ticket.status]} ${ticket.status}\n\n${t('Priority')}: ${ticket.priority}`
+      );
+      item.sortText = `0_${ticket.id}`;
+      items.push(item);
+    }
+
+    return items;
   }
 }
 

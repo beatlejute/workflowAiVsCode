@@ -60,6 +60,13 @@ export class StatusBar implements vscode.Disposable {
       this.render();
     });
 
+    // Subscribe to pipeline stage changes (GOTO events)
+    this.disposables.push(
+      this.pipelineService.onStageChange(() => {
+        this.render();
+      })
+    );
+
     // Subscribe to store changes
     // WorkflowStore.onDidChange returns a function, we need to wrap it in a disposable
     this.store.onDidChange(() => {

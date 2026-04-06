@@ -371,6 +371,22 @@ export class PlanCodeLensProvider implements vscode.CodeLensProvider {
   }
 
   /**
+   * Extract plan status from document frontmatter
+   * Returns status string or undefined if not found
+   */
+  private extractPlanStatus(document: vscode.TextDocument): string | undefined {
+    const content = document.getText();
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!frontmatterMatch) {
+      return undefined;
+    }
+
+    const frontmatterText = frontmatterMatch[1];
+    const statusMatch = frontmatterText.match(/^status:\s*["']?([a-zA-Z-]+)["']?/m);
+    return statusMatch ? statusMatch[1] : undefined;
+  }
+
+  /**
    * Provide CodeLenses for a plan .md file
    */
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -390,21 +406,32 @@ export class PlanCodeLensProvider implements vscode.CodeLensProvider {
                        /\/plans\/[^/]+\.md$/.test(normalizedPath);
 
     if (isWorkflowPlan) {
-      // Extract planId from filename (e.g., PLAN-013.md → PLAN-013)
+      // Extract planId from filename (e.g., PLAN-013.md → PLAN-013, PLAN-TEST-001.md → PLAN-TEST-001)
       const fileNameOnly = path.basename(fileName);
-      const planIdMatch = fileNameOnly.match(/^([A-Z]+-\d+)\.md$/);
+      const planIdMatch = fileNameOnly.match(/^([A-Z]+(?:-[A-Z]+)*-\d+)\.md$/);
       if (planIdMatch) {
         const planId = planIdMatch[1];
         const range = new vscode.Range(0, 0, 0, 0);
         const title = `$(symbol-method) ${t('Decompose Plan')}`;
-        
+
         const command: vscode.Command = {
           title,
           command: 'workflow.decomposePlan',
           arguments: [planId]
         };
-        
+
         lenses.push(new vscode.CodeLens(range, command));
+
+        // Add "Run Pipeline" CodeLens for approved plans
+        const planStatus = this.extractPlanStatus(document);
+        if (!planStatus || planStatus === 'approved') {
+          const runPipelineLens = new vscode.CodeLens(range, {
+            title: '$(play) Run Pipeline',
+            command: 'workflow.runPipelineForPlan',
+            arguments: [planId]
+          });
+          lenses.push(runPipelineLens);
+        }
       }
     } else if (isRootPlan) {
       // Root plan file - "Create Workflow Plan" action

@@ -25,6 +25,7 @@ class MockPipelineService {
   private currentTicket: string | undefined;
   private retryCount: number = 0;
   private stateChangeListeners: ((state: PipelineState) => void)[] = [];
+  private stageChangeListeners: ((stage: string | undefined) => void)[] = [];
 
   getState(): PipelineState {
     return this.currentState;
@@ -55,6 +56,9 @@ class MockPipelineService {
 
   setStage(stage: string): void {
     this.currentStage = stage;
+    for (const listener of this.stageChangeListeners) {
+      listener(stage);
+    }
   }
 
   setAgent(agent: string): void {
@@ -76,6 +80,18 @@ class MockPipelineService {
         const index = this.stateChangeListeners.indexOf(listener);
         if (index > -1) {
           this.stateChangeListeners.splice(index, 1);
+        }
+      }
+    };
+  }
+
+  onStageChange(listener: (stage: string | undefined) => void): vscode.Disposable {
+    this.stageChangeListeners.push(listener);
+    return {
+      dispose: () => {
+        const index = this.stageChangeListeners.indexOf(listener);
+        if (index > -1) {
+          this.stageChangeListeners.splice(index, 1);
         }
       }
     };

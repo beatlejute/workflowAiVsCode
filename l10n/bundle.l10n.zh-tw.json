@@ -8,6 +8,8 @@
   "Current Execution": "當前執行",
   "Stage": "階段",
   "Agent": "代理",
+  "Fallback": "回退",
+  "Fallback Agent": "回退代理",
   "Ticket": "工單",
   "Retry": "重試",
   "WF: Error": "WF: 錯誤",

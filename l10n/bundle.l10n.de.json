@@ -8,6 +8,8 @@
   "Current Execution": "Aktuelle Ausführung",
   "Stage": "Stufe",
   "Agent": "Agent",
+  "Fallback": "Fallback",
+  "Fallback Agent": "Fallback-Agent",
   "Ticket": "Ticket",
   "Retry": "Wiederholen",
   "WF: Error": "WF: Fehler",

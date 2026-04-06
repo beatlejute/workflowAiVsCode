@@ -8,6 +8,8 @@
   "Current Execution": "現在の実行",
   "Stage": "ステージ",
   "Agent": "エージェント",
+  "Fallback": "フォールバック",
+  "Fallback Agent": "フォールバックエージェント",
   "Ticket": "チケット",
   "Retry": "再試行",
   "WF: Error": "WF: エラー",

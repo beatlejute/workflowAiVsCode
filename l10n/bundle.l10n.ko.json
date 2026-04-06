@@ -8,6 +8,8 @@
   "Current Execution": "현재 실행",
   "Stage": "단계",
   "Agent": "에이전트",
+  "Fallback": "폴백",
+  "Fallback Agent": "폴백 에이전트",
   "Ticket": "티켓",
   "Retry": "다시 시도",
   "WF: Error": "WF: 오류",

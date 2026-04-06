@@ -25,7 +25,9 @@ interface MockPipelineService {
   getCurrentTicket: () => string | undefined;
   getRetryCount: () => number;
   onStateChange: (listener: (s: PipelineState) => void) => { dispose: () => void };
+  onStageChange: (listener: (stage: string | undefined) => void) => vscode.Disposable;
   _fireStateChange: (s: PipelineState) => void;
+  _fireStageChange: (stage: string | undefined) => void;
 }
 
 interface MockStore {
@@ -44,6 +46,7 @@ interface StatusBarItemState {
 // Create mock PipelineService
 function createMockPipelineService(state: PipelineState = PipelineState.Idle, overrides: Record<string, unknown> = {}): MockPipelineService {
   const stateChangeListeners: ((state: PipelineState) => void)[] = [];
+  const stageChangeListeners: ((stage: string | undefined) => void)[] = [];
   return {
     getState: () => state,
     getCurrentStage: () => overrides.currentStage as string | undefined,
@@ -54,8 +57,15 @@ function createMockPipelineService(state: PipelineState = PipelineState.Idle, ov
       stateChangeListeners.push(listener);
       return { dispose: () => {} };
     },
+    onStageChange: (listener: (stage: string | undefined) => void) => {
+      stageChangeListeners.push(listener);
+      return { dispose: () => {} };
+    },
     _fireStateChange: (s: PipelineState) => {
       stateChangeListeners.forEach(l => l(s));
+    },
+    _fireStageChange: (stage: string | undefined) => {
+      stageChangeListeners.forEach(l => l(stage));
     }
   };
 }
@@ -244,6 +254,28 @@ suite('StatusBar Tests', () => {
       assert.ok(item.text.length > 0);
       statusBar.dispose();
     });
+
+    test('re-renders on stage change (GOTO event) and shows new stage', () => {
+      // Start with Running state, no stage
+      pipelineService = createMockPipelineService(PipelineState.Running, {
+        currentStage: undefined
+      });
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      let item = getStatusBarItem(statusBar);
+      const initialText = item.text;
+
+      // Simulate GOTO event: stage changes to 'execute-task'
+      pipelineService.getCurrentStage = () => 'execute-task';
+      pipelineService._fireStageChange('execute-task');
+
+      item = getStatusBarItem(statusBar);
+      // After GOTO, text should contain the new stage name
+      assert.ok(
+        item.text.includes('execute-task') || item.text !== initialText,
+        `StatusBar text should update to show new stage after GOTO. Initial: "${initialText}", After: "${item.text}"`
+      );
+      statusBar.dispose();
+    });
   });
 
   suite('show/hide', () => {
@@ -334,6 +366,98 @@ suite('StatusBar Tests', () => {
       assert.strictEqual(subscriptions.length, 1);
       // Cleanup
       (subscriptions[0] as { dispose: () => void }).dispose();
+    });
+  });
+
+  suite('PipelineService Integration - Stage Error Detection', () => {
+    test('StatusBar shows Error when PipelineService has stage error', () => {
+      // Simulate PipelineService with Error state (stage error detected)
+      pipelineService = createMockPipelineService(PipelineState.Error);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      const item = getStatusBarItem(statusBar);
+
+      // Verify Error state is displayed
+      assert.ok(item.text.includes('Error') || item.text.includes('error'));
+      assert.ok(item.color !== undefined, 'Error color should be set');
+      statusBar.dispose();
+    });
+
+    test('StatusBar shows Completed when pipeline succeeds without stage errors', () => {
+      // Simulate PipelineService with Completed state (no stage errors)
+      pipelineService = createMockPipelineService(PipelineState.Completed);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      const item = getStatusBarItem(statusBar);
+
+      // Verify Completed state is displayed
+      assert.ok(item.text.includes('Completed') || item.text.includes('check'));
+      assert.strictEqual(item.color, undefined);
+      statusBar.dispose();
+    });
+
+    test('StatusBar transitions from Running to Error on stage failure', () => {
+      // Start with Running state
+      pipelineService = createMockPipelineService(PipelineState.Running, {
+        currentStage: 'execute-task'
+      });
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      let item = getStatusBarItem(statusBar);
+
+      // Verify Running state
+      assert.ok(item.text.includes('Running') || item.text.includes('loading'));
+
+      // Simulate transition to Error state (stage failure detected)
+      pipelineService.getState = () => PipelineState.Error;
+      pipelineService._fireStateChange(PipelineState.Error);
+
+      item = getStatusBarItem(statusBar);
+      assert.ok(item.text.includes('Error') || item.text.includes('error'));
+      assert.ok(item.color !== undefined);
+      statusBar.dispose();
+    });
+
+    test('StatusBar transitions from Running to Completed on success', () => {
+      // Start with Running state
+      pipelineService = createMockPipelineService(PipelineState.Running, {
+        currentStage: 'execute-task'
+      });
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      let item = getStatusBarItem(statusBar);
+
+      // Verify Running state
+      assert.ok(item.text.includes('Running') || item.text.includes('loading'));
+
+      // Simulate transition to Completed state (all stages succeeded)
+      pipelineService.getState = () => PipelineState.Completed;
+      pipelineService._fireStateChange(PipelineState.Completed);
+
+      item = getStatusBarItem(statusBar);
+      assert.ok(item.text.includes('Completed') || item.text.includes('check'));
+      assert.strictEqual(item.color, undefined);
+      statusBar.dispose();
+    });
+
+    test('StatusBar shows retry count during Running state', () => {
+      // Simulate Running state with retry
+      pipelineService = createMockPipelineService(PipelineState.Running, {
+        currentStage: 'execute-task',
+        retryCount: 2
+      });
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      const item = getStatusBarItem(statusBar);
+
+      // Verify retry count is displayed
+      assert.ok(item.text.includes('retry') || item.text.includes('2'));
+      statusBar.dispose();
+    });
+
+    test('StatusBar tooltip contains error information in Error state', () => {
+      pipelineService = createMockPipelineService(PipelineState.Error);
+      const statusBar = new StatusBar(pipelineService as unknown as PipelineService, store as unknown as WorkflowStore);
+      const item = getStatusBarItem(statusBar);
+
+      const tooltipValue = (item.tooltip as { value: string } | undefined)?.value || '';
+      assert.ok(tooltipValue.length > 0, 'Tooltip should contain error information');
+      statusBar.dispose();
     });
   });
 });

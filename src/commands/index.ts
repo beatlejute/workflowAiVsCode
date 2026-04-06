@@ -12,6 +12,8 @@ import { t } from '../i18n';
 import { WorkflowStore } from '../data/workflow-store';
 import { TicketsTreeProvider } from '../ui/sidebar-tree-provider';
 import { KanbanTreeProvider } from '../ui/kanban-tree-provider';
+import { PipelineService } from '../services/pipeline-service';
+import { updateContextKeys } from '../utils/extension-helpers';
 
 /**
  * Execute workflow.openPipelineConfig command
@@ -65,7 +67,7 @@ export async function executeFocusTicketsView(): Promise<void> {
  * Execute workflow.focusKanban command
  */
 export async function executeFocusKanban(): Promise<void> {
-  await vscode.commands.executeCommand('workbench.view.workflow-kanban.wf-kanban-backlog');
+  await vscode.commands.executeCommand('wf-kanban-backlog.focus');
 }
 
 /**
@@ -74,8 +76,12 @@ export async function executeFocusKanban(): Promise<void> {
 export async function executeRefreshAll(
   workflowRoot: string | null,
   store: WorkflowStore,
-  refreshCallbacks: Array<() => void>
+  refreshCallbacks: Array<() => void>,
+  pipelineService?: PipelineService
 ): Promise<void> {
+  // Update context keys before refresh to prevent WELCOME view flickering
+  await updateContextKeys(pipelineService);
+
   if (workflowRoot) {
     await store.refresh(workflowRoot);
   }

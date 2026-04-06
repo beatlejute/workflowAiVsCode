@@ -8,6 +8,8 @@
   "Current Execution": "Execução atual",
   "Stage": "Estágio",
   "Agent": "Agente",
+  "Fallback": "Contingência",
+  "Fallback Agent": "Agente de contingência",
   "Ticket": "Ticket",
   "Retry": "Tentar novamente",
   "WF: Error": "WF: Erro",
