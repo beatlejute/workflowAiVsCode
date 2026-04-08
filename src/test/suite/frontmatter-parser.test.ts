@@ -15,7 +15,7 @@ suite('FrontmatterParser Suite', () => {
   suite('parse<T>() function', () => {
     
     test('should parse a real ticket from IMPL-001.md', () => {
-      const ticketPath = path.join(process.cwd(), '.workflow/tickets/done/IMPL-001.md');
+      const ticketPath = path.join(process.cwd(), '.workflow/tickets/archive/IMPL-001.md');
       const content = fs.readFileSync(ticketPath, 'utf-8');
       
       const result = parse<Ticket>(content);
@@ -169,7 +169,7 @@ Body`;
   suite('Roundtrip tests', () => {
     
     test('roundtrip: parse → serialize → parse should produce identical result for ticket', () => {
-      const ticketPath = path.join(process.cwd(), '.workflow/tickets/done/IMPL-001.md');
+      const ticketPath = path.join(process.cwd(), '.workflow/tickets/archive/IMPL-001.md');
       const originalContent = fs.readFileSync(ticketPath, 'utf-8');
       
       const first = parse<Ticket>(originalContent);

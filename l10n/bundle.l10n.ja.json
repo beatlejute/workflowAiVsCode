@@ -226,5 +226,14 @@
   "No current plans available": "現在のプランはありません",
   "Select plan to decompose": "分解するプランを選択",
   "Decomposing plan {0}...": "プラン {0} を分解中...",
-  "Pipeline is running": "パイプライン実行中"
+  "Pipeline is running": "パイプライン実行中",
+  "workflow.togglePlanTemplate.title": "テンプレートを切り替え",
+  "Template {0} {1}": "テンプレート {0} {1}",
+  "enabled": "有効",
+  "disabled": "無効",
+  "No template provided": "テンプレートが提供されていません",
+  "Template file not found: {0}": "テンプレートファイルが見つかりません: {0}",
+  "Invalid template file format": "テンプレートファイルの形式が無効です",
+  "Failed to toggle template. Check Output channel for details.": "テンプレートの切り替えに失敗しました。Outputチャネルを確認してください。",
+  "Failed to toggle template: {0}": "テンプレートの切り替えに失敗しました: {0}"
 }

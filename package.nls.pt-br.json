@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "REGISTROS",
   "command.filterTicketsByPlan.title": "Filtrar por plano",
   "command.clearTicketFilter.title": "Limpar filtro",
+  "command.togglePlanTemplate.title": "Alternar modelo",
   "command.sortKanbanByDate.title": "Ordenar por data",
   "command.toggleSortDirection.title": "Alternar direção da classificação",
   "command.sortTicketsByPriority.title": "Ordenar tickets por prioridade",

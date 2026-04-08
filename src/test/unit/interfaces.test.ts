@@ -11,7 +11,7 @@ import * as assert from 'assert';
 import { IStore, type StoreChangeListener } from '../../interfaces/IStore';
 import { ITicketService } from '../../interfaces/ITicketService';
 import { IFileWatcher } from '../../interfaces/IFileWatcher';
-import { Ticket, Plan, Report, TicketStatus, WorkflowConfig, PipelineConfig } from '../../data/types';
+import { Ticket, Plan, Report, TicketStatus, WorkflowConfig, PipelineConfig, PlanTemplate } from '../../data/types';
 import { StoreChangeEvent } from '../../data/workflow-store';
 
 /**
@@ -25,6 +25,7 @@ class MockStore implements IStore {
   private pipeline: PipelineConfig | undefined;
   private workflowRoot: string | null = null;
   private listeners: ((event: StoreChangeEvent) => void)[] = [];
+  private planTemplates: Map<string, PlanTemplate> = new Map();
 
   onDidChange(listener: StoreChangeListener): void {
     this.listeners.push(listener);
@@ -171,6 +172,7 @@ class MockStore implements IStore {
     this.tickets.clear();
     this.plans.clear();
     this.reports = [];
+    this.planTemplates.clear();
     this.config = undefined;
     this.pipeline = undefined;
     this.workflowRoot = null;
@@ -190,6 +192,35 @@ class MockStore implements IStore {
       hasConfig: !!this.config,
       hasPipeline: !!this.pipeline
     };
+  }
+
+  addPlanTemplate(template: PlanTemplate): void {
+    this.planTemplates.set(template.id, template);
+    this.emitEvent({ type: 'plan-template', id: template.id, operation: 'add' });
+  }
+
+  updatePlanTemplate(id: string, template: PlanTemplate): void {
+    if (!this.planTemplates.has(id)) {
+      throw new Error(`Plan template ${id} not found`);
+    }
+    this.planTemplates.set(id, template);
+    this.emitEvent({ type: 'plan-template', id, operation: 'update' });
+  }
+
+  removePlanTemplate(id: string): void {
+    if (!this.planTemplates.has(id)) {
+      throw new Error(`Plan template ${id} not found`);
+    }
+    this.planTemplates.delete(id);
+    this.emitEvent({ type: 'plan-template', id, operation: 'delete' });
+  }
+
+  getPlanTemplates(): PlanTemplate[] {
+    return Array.from(this.planTemplates.values());
+  }
+
+  getPlanTemplateById(id: string): PlanTemplate | undefined {
+    return this.planTemplates.get(id);
   }
 
   private emitEvent(event: StoreChangeEvent): void {

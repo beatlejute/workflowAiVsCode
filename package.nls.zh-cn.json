@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "日志",
   "command.filterTicketsByPlan.title": "按计划筛选",
   "command.clearTicketFilter.title": "清除筛选",
+  "command.togglePlanTemplate.title": "切换模板",
   "command.sortKanbanByDate.title": "按日期排序",
   "command.toggleSortDirection.title": "切换排序方向",
   "command.sortTicketsByPriority.title": "按优先级排序工单",

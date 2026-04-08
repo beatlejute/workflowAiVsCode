@@ -64,6 +64,7 @@
   "command.copyTicketId.title": "Copy Ticket ID",
   "command.filterTicketsByPlan.title": "Filter by Plan",
   "command.clearTicketFilter.title": "Clear Filter",
+  "command.togglePlanTemplate.title": "Toggle template",
   "category.workflow": "WF",
   "config.title": "Workflow",
   "config.cliPath.description": "Custom path to the workflow CLI executable",

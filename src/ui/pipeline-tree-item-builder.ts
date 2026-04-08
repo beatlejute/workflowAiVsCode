@@ -87,7 +87,13 @@ export class CurrentStageTreeItem extends PipelineTreeItem {
       'current-stage'
     );
 
-    this.iconPath = new vscode.ThemeIcon('gear~spin');
+    if (fallbackAgent) {
+      this.iconPath = new vscode.ThemeIcon('arrow-swap~spin', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
+    } else if (attempt && maxAttempts && attempt > 1) {
+      this.iconPath = new vscode.ThemeIcon('debug-restart~spin', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
+    } else {
+      this.iconPath = new vscode.ThemeIcon('gear~spin');
+    }
 
     const elapsedInfo = stageElapsed ? `⏱ ${stageElapsed}` : '';
     const agentInfo = agent ? `${t('Agent')}: ${agent}` : '';
@@ -125,9 +131,9 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     public readonly result: StageResult = success === false ? StageResult.Error : StageResult.Success
   ) {
     const icon = getStageResultIcon(result);
-    const label = `${icon} ${stage}`;
-    // Use stable id based on stage name and logLineHint so VSCode can
-    // track the same tree item across refresh() cycles
+    const gotoMarker = (statusChange && result === StageResult.Success) ? '\u21a9\ufe0f' : '';
+    const reportMarker = reportInfo ? '\ud83d\udcca' : '';
+    const label = `${icon}${gotoMarker}${reportMarker} ${stage}`;
     const stableIndex = typeof logLineHint === 'number' ? logLineHint : 0;
     super(
       label,
@@ -220,7 +226,9 @@ export class HistoryItemTreeItem extends PipelineTreeItem {
     public readonly entry: RunHistoryEntry
   ) {
     const icon = entry.result === 'success' ? '✅' : entry.result === 'error' ? '❌' : '⏹️';
-    const label = `${icon} #${entry.runNumber}`;
+    const planMarker = entry.planId ? '📋' : '';
+    const reportMarker = (entry.reports && entry.reports.length > 0) ? '📄' : '';
+    const label = `${icon}${planMarker}${reportMarker} #${entry.runNumber}`;
     const hasReports = entry.reports && entry.reports.length > 0;
     super(
       label,

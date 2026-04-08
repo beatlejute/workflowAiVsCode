@@ -154,266 +154,225 @@
         "icon": "$(file)"
       },
       {
-        "command": "workflow.moveTicketFromMenu",
-        "title": "%command.moveTicketFromMenu.title%",
+        "command": "workflow.togglePlanTemplate",
+        "title": "%command.togglePlanTemplate.title%",
         "category": "%category.workflow%",
-        "icon": "$(arrow-right)"
-      },
-      {
-        "command": "workflow.editTicket",
-        "title": "%command.editTicket.title%",
-        "category": "%category.workflow%",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "workflow.moveTicketNext",
-        "title": "%command.moveTicketNext.title%",
-        "category": "%category.workflow%",
-        "icon": "$(arrow-right)"
-      },
-      {
-        "command": "workflow.showTicketDependencies",
-        "title": "%command.showTicketDependencies.title%",
-        "category": "%category.workflow%",
-        "icon": "$(git-pull-request)"
-      },
-      {
-        "command": "workflow.refreshTickets",
-        "title": "%command.refreshTickets.title%",
-        "category": "%category.workflow%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "workflow.sortKanbanByPriority",
-        "title": "%command.sortKanbanByPriority.title%",
-        "category": "%category.workflow%",
-        "icon": "$(sort-precedence)"
-      },
-      {
-        "command": "workflow.sortKanbanById",
-        "title": "%command.sortKanbanById.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-enum)"
-      },
-      {
-        "command": "workflow.sortKanbanByTitle",
-        "title": "%command.sortKanbanByTitle.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-string)"
-      },
-      {
-        "command": "workflow.sortKanbanByDate",
-        "title": "%command.sortKanbanByDate.title%",
-        "category": "%category.workflow%",
-        "icon": "$(calendar)"
-      },
-      {
-        "command": "workflow.toggleSortDirection",
-        "title": "%command.toggleSortDirection.title%",
-        "category": "%category.workflow%",
-        "icon": "$(arrow-up)"
-      },
-      {
-        "command": "workflow.sortTicketsByPriority",
-        "title": "%command.sortTicketsByPriority.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-numeric)"
-      },
-      {
-        "command": "workflow.sortTicketsById",
-        "title": "%command.sortTicketsById.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-enum)"
-      },
-      {
-        "command": "workflow.sortTicketsByTitle",
-        "title": "%command.sortTicketsByTitle.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-string)"
-      },
-      {
-        "command": "workflow.sortTicketsByDate",
-        "title": "%command.sortTicketsByDate.title%",
-        "category": "%category.workflow%",
-        "icon": "$(calendar)"
+        "icon": "$(toggle-on)"
       },
       {
         "command": "workflow.runPipeline",
-        "title": "%command.runPipeline.title%",
-        "category": "%category.workflow%",
+        "title": "Run Pipeline",
+        "category": "Workflow",
         "icon": "$(play)"
       },
       {
         "command": "workflow.stopPipeline",
-        "title": "%command.stopPipeline.title%",
-        "category": "%category.workflow%",
-        "icon": "$(stop)"
+        "title": "Stop Pipeline",
+        "category": "Workflow",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "workflow.runPipelineForPlan",
+        "title": "Run Pipeline for Plan",
+        "category": "Workflow",
+        "icon": "$(play)"
       },
       {
         "command": "workflow.showPipelineOutput",
-        "title": "%command.showPipelineOutput.title%",
-        "category": "%category.workflow%",
+        "title": "Show Pipeline Output",
+        "category": "Workflow",
         "icon": "$(output)"
       },
       {
         "command": "workflow.clearPipelineHistory",
-        "title": "%command.clearPipelineHistory.title%",
-        "category": "%category.workflow%",
+        "title": "Clear Pipeline History",
+        "category": "Workflow",
         "icon": "$(clear-all)"
       },
       {
-        "command": "workflow.decomposePlan",
-        "title": "%command.decomposePlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(symbol-method)"
+        "command": "workflow.openPipelineConfig",
+        "title": "Open Pipeline Config",
+        "category": "Workflow",
+        "icon": "$(settings-gear)"
       },
       {
-        "command": "workflow.createPlanFromFile",
-        "title": "%command.createPlanFromFile.title%",
-        "category": "%category.workflow%",
-        "icon": "$(add)"
-      },
-      {
-        "command": "workflow.runPipelineForPlan",
-        "title": "%command.runPipelineForPlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(play)"
-      },
-      {
-        "command": "workflow.archivePlan",
-        "title": "%command.archivePlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(archive)"
-      },
-      {
-        "command": "workflow.unarchivePlan",
-        "title": "%command.unarchivePlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(reply)"
-      },
-      {
-        "command": "workflow.init",
-        "title": "%command.init.title%",
-        "category": "%category.workflow%"
-      },
-      {
-        "command": "workflow.installCli",
-        "title": "%command.installCli.title%",
-        "category": "%category.workflow%"
+        "command": "workflow.openConfig",
+        "title": "Open Workflow Config",
+        "category": "Workflow",
+        "icon": "$(tools)"
       },
       {
         "command": "workflow.newTicket",
-        "title": "%command.newTicket.title%",
-        "category": "%category.workflow%",
+        "title": "New Ticket",
+        "category": "Workflow",
         "icon": "$(add)"
       },
       {
         "command": "workflow.newPlan",
-        "title": "%command.newPlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(add)"
+        "title": "New Plan",
+        "category": "Workflow",
+        "icon": "$(new-file)"
       },
       {
         "command": "workflow.moveTicket",
-        "title": "%command.moveTicket.title%",
-        "category": "%category.workflow%",
+        "title": "Move Ticket",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.moveTicketNext",
+        "title": "Move to Next Stage",
+        "category": "Workflow",
         "icon": "$(arrow-right)"
       },
       {
+        "command": "workflow.moveTicketFromMenu",
+        "title": "Move Ticket to...",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.showTicketDependencies",
+        "title": "Show Ticket Dependencies",
+        "category": "Workflow"
+      },
+      {
         "command": "workflow.showDependencies",
-        "title": "%command.showDependencies.title%",
-        "category": "%category.workflow%",
-        "icon": "$(git-pull-request)"
+        "title": "Show Dependencies",
+        "category": "Workflow"
       },
       {
         "command": "workflow.showStatistics",
-        "title": "%command.showStatistics.title%",
-        "category": "%category.workflow%",
-        "icon": "$(graph)"
-      },
-      {
-        "command": "workflow.openPipelineConfig",
-        "title": "%command.openPipelineConfig.title%",
-        "category": "%category.workflow%",
-        "icon": "$(gear)"
-      },
-      {
-        "command": "workflow.openConfig",
-        "title": "%command.openConfig.title%",
-        "category": "%category.workflow%",
-        "icon": "$(settings-gear)"
-      },
-      {
-        "command": "workflow.focusTicketsView",
-        "title": "%command.focusTicketsView.title%",
-        "category": "%category.workflow%",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "workflow.focusKanban",
-        "title": "%command.focusKanban.title%",
-        "category": "%category.workflow%",
-        "icon": "$(layout)"
-      },
-      {
-        "command": "workflow.refreshAll",
-        "title": "%command.refreshAll.title%",
-        "category": "%category.workflow%",
-        "icon": "$(refresh)"
+        "title": "Show Statistics",
+        "category": "Workflow"
       },
       {
         "command": "workflow.copyTicketId",
-        "title": "%command.copyTicketId.title%",
-        "category": "%category.workflow%",
-        "icon": "$(copy)"
+        "title": "Copy Ticket ID",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.refreshTickets",
+        "title": "Refresh Tickets",
+        "category": "Workflow",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workflow.refreshAll",
+        "title": "Refresh All",
+        "category": "Workflow",
+        "icon": "$(refresh)"
       },
       {
         "command": "workflow.filterTicketsByPlan",
-        "title": "%command.filterTicketsByPlan.title%",
-        "category": "%category.workflow%",
+        "title": "Filter Tickets by Plan",
+        "category": "Workflow",
         "icon": "$(filter)"
       },
       {
         "command": "workflow.clearTicketFilter",
-        "title": "%command.clearTicketFilter.title%",
-        "category": "%category.workflow%",
+        "title": "Clear Ticket Filter",
+        "category": "Workflow",
         "icon": "$(clear-all)"
       },
       {
-        "command": "workflow.openHistoryLog",
-        "title": "%command.openHistoryLog.title%",
-        "category": "%category.workflow%",
-        "icon": "$(output)"
+        "command": "workflow.sortTicketsByPriority",
+        "title": "Sort Tickets by Priority",
+        "category": "Workflow"
       },
       {
-        "command": "workflow.openHistoryPlan",
-        "title": "%command.openHistoryPlan.title%",
-        "category": "%category.workflow%",
-        "icon": "$(file)"
+        "command": "workflow.sortTicketsById",
+        "title": "Sort Tickets by ID",
+        "category": "Workflow"
       },
       {
-        "command": "workflow.openStageTicket",
-        "title": "%command.openStageTicket.title%",
-        "category": "%category.workflow%",
-        "icon": "$(file)"
+        "command": "workflow.sortTicketsByTitle",
+        "title": "Sort Tickets by Title",
+        "category": "Workflow"
       },
       {
-        "command": "workflow.openStageLog",
-        "title": "%command.openStageLog.title%",
-        "category": "%category.workflow%",
-        "icon": "$(output)"
+        "command": "workflow.sortTicketsByDate",
+        "title": "Sort Tickets by Date",
+        "category": "Workflow"
       },
       {
-        "command": "workflow.openStageReport",
-        "title": "%command.openStageReport.title%",
-        "category": "%category.workflow%",
-        "icon": "$(file)"
+        "command": "workflow.sortKanbanByPriority",
+        "title": "Sort Kanban by Priority",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.sortKanbanById",
+        "title": "Sort Kanban by ID",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.sortKanbanByTitle",
+        "title": "Sort Kanban by Title",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.sortKanbanByDate",
+        "title": "Sort Kanban by Date",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.toggleSortDirection",
+        "title": "Toggle Sort Direction",
+        "category": "Workflow",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "workflow.decomposePlan",
+        "title": "Decompose Plan",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.archivePlan",
+        "title": "Archive Plan",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.unarchivePlan",
+        "title": "Unarchive Plan",
+        "category": "Workflow"
       },
       {
         "command": "workflow.createPlanFromFile",
-        "title": "%command.createPlanFromFile.title%",
-        "category": "%category.workflow%",
-        "icon": "$(add)"
+        "title": "Create Plan from File",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.focusTicketsView",
+        "title": "Focus Tickets View",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.focusKanban",
+        "title": "Focus Kanban",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.openHistoryLog",
+        "title": "Open History Log",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.openHistoryPlan",
+        "title": "Open History Plan",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.openStageTicket",
+        "title": "Open Stage Ticket",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.openStageLog",
+        "title": "Open Stage Log",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflow.openStageReport",
+        "title": "Open Stage Report",
+        "category": "Workflow"
       }
     ],
     "keybindings": [
@@ -670,6 +629,11 @@
           "command": "workflow.unarchivePlan",
           "when": "view == workflow-sidebar.plans && viewItem == plan-archive && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_archive"
+        },
+        {
+          "command": "workflow.togglePlanTemplate",
+          "when": "viewItem =~ /^plan-template/",
+          "group": "inline"
         },
         {
           "command": "workflow.openHistoryLog",

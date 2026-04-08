@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "ログ",
   "command.filterTicketsByPlan.title": "プランでフィルタ",
   "command.clearTicketFilter.title": "フィルタをクリア",
+  "command.togglePlanTemplate.title": "テンプレートを切り替え",
   "command.sortKanbanByDate.title": "日付順に並べ替え",
   "command.toggleSortDirection.title": "並べ替え方向を切り替え",
   "command.sortTicketsByPriority.title": "チケットを優先度順に並べ替え",

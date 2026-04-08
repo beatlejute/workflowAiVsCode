@@ -12,6 +12,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as vscode from 'vscode';
 import { WorkflowStore } from '../../data/workflow-store';
 import {
   TicketsTreeProvider,
@@ -23,9 +24,10 @@ import {
   PlanTreeItem,
   ReportTreeItem,
   StatusGroupTreeItem,
-  PlanGroupTreeItem
+  PlanGroupTreeItem,
+  PlanTemplateTreeItem
 } from '../../ui/sidebar-tree-provider';
-import { Ticket, TicketStatus, Plan, Report } from '../../data/types';
+import { Ticket, TicketStatus, Plan, Report, PlanTemplate } from '../../data/types';
 
 suite('SidebarTreeProvider Suite', () => {
 
@@ -93,18 +95,19 @@ suite('SidebarTreeProvider Suite', () => {
   }
 
   /**
-   * Create test plan
+   * Create test plan with custom status
    */
-  function createTestPlan(
+  function createTestPlanWithStatus(
     id: string,
     title: string,
+    status: string,
     completed: boolean = false
   ): Plan {
     const now = new Date().toISOString();
     return {
       id,
       title,
-      status: completed ? 'completed' : 'active',
+      status,
       author: 'test',
       created_at: now,
       updated_at: now,
@@ -113,6 +116,22 @@ suite('SidebarTreeProvider Suite', () => {
       related_reports: [],
       folder: completed ? 'archive' : 'current'
     };
+  }
+
+  /**
+   * Create test plan
+   */
+  function createTestPlan(
+    id: string,
+    title: string,
+    completed: boolean = false
+  ): Plan {
+    return createTestPlanWithStatus(
+      id,
+      title,
+      completed ? 'completed' : 'active',
+      completed
+    );
   }
 
   /**
@@ -129,6 +148,29 @@ suite('SidebarTreeProvider Suite', () => {
       type: 'summary',
       created_at: createdAt,
       summary: 'Test report'
+    };
+  }
+
+  /**
+   * Create test plan template
+   */
+  function createTestPlanTemplate(
+    id: string,
+    title: string,
+    enabled: boolean,
+    triggerType: 'daily' | 'weekly' | 'date_after' | 'interval_days' = 'daily'
+  ): PlanTemplate {
+    const now = new Date().toISOString();
+    return {
+      id,
+      title,
+      type: 'template',
+      trigger: {
+        type: triggerType,
+        params: { time: '09:00' }
+      },
+      last_triggered: now,
+      enabled
     };
   }
 
@@ -356,9 +398,221 @@ suite('SidebarTreeProvider Suite', () => {
       const item = new PlanTreeItem(plan, workflowRoot, true);
 
       assert.strictEqual(item.label, 'PLAN-001');
-      assert.strictEqual(item.description, 'Test Plan');
+      assert.strictEqual(item.description, '[active] Test Plan');
       assert.strictEqual(item.itemType, 'plan');
       assert.ok(item.command);
+    });
+
+    test('PlanTreeItem should show status in description', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Test Plan', 'active', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+
+      assert.strictEqual(item.description, '[active] Test Plan');
+    });
+
+    test('PlanTreeItem should use decomposing icon when isDecomposing is true', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Test Plan', 'active', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true, true);
+
+      assert.ok(item.iconPath);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'loading~spin');
+    });
+
+    test('PlanTreeItem should use status icon when not decomposing', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Test Plan', 'draft', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true, false);
+
+      assert.ok(item.iconPath);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'edit');
+    });
+  });
+
+  suite('getPlanStatusIcon', () => {
+    test('should return edit icon for draft status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Draft Plan', 'draft');
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'edit');
+    });
+
+    test('should return check-all icon with green color for approved status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Approved Plan', 'approved');
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'check-all');
+      assert.ok(icon.color);
+    });
+
+    test('should return play-circle icon with blue color for active status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Active Plan', 'active');
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'play-circle');
+      assert.ok(icon.color);
+    });
+
+    test('should return pass-filled icon with green color for completed status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Completed Plan', 'completed', true);
+      const item = new PlanTreeItem(plan, workflowRoot, false);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'pass-filled');
+      assert.ok(icon.color);
+    });
+
+    test('should return archive icon for archived status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Archived Plan', 'archived', true);
+      const item = new PlanTreeItem(plan, workflowRoot, false);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'archive');
+    });
+
+    test('should return notebook icon for unknown status (fallback)', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Unknown Plan', 'unknown-status');
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'notebook');
+    });
+
+    test('decomposing should have priority over status icon', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Decomposing Plan', 'active');
+      const item = new PlanTreeItem(plan, workflowRoot, true, true);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'loading~spin');
+    });
+  });
+
+  suite('PlanTemplateTreeItem', () => {
+    test('TC22: enabled template should have green calendar icon', () => {
+      const template = createTestPlanTemplate('TPL-001', 'Daily Plan', true, 'daily');
+      const item = new PlanTemplateTreeItem(template, workflowRoot);
+
+      assert.ok(item.iconPath);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'calendar');
+      assert.ok(icon.color);
+    });
+
+    test('TC23: disabled template should have gray calendar icon', () => {
+      const template = createTestPlanTemplate('TPL-001', 'Disabled Plan', false, 'daily');
+      const item = new PlanTemplateTreeItem(template, workflowRoot);
+
+      assert.ok(item.iconPath);
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'calendar');
+      assert.ok(icon.color);
+    });
+
+    test('TC24: tooltip should contain trigger type, params, last_triggered', () => {
+      const template = createTestPlanTemplate('TPL-001', 'Test Template', true, 'daily');
+      const item = new PlanTemplateTreeItem(template, workflowRoot);
+
+      assert.ok(item.tooltip);
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('daily'));
+      assert.ok(tooltip.value.includes('09:00'));
+      assert.ok(tooltip.value.includes('last_triggered') || tooltip.value.includes('Last Triggered'));
+    });
+
+    test('TC25: contextValue should be correct for enabled/disabled', () => {
+      const enabledTemplate = createTestPlanTemplate('TPL-001', 'Enabled', true);
+      const disabledTemplate = createTestPlanTemplate('TPL-002', 'Disabled', false);
+
+      const enabledItem = new PlanTemplateTreeItem(enabledTemplate, workflowRoot);
+      const disabledItem = new PlanTemplateTreeItem(disabledTemplate, workflowRoot);
+
+      assert.strictEqual(enabledItem.contextValue, 'plan-template-enabled');
+      assert.strictEqual(disabledItem.contextValue, 'plan-template-disabled');
+    });
+
+    test('should have command to open template file', () => {
+      const template = createTestPlanTemplate('TPL-001', 'Test Template', true);
+      const item = new PlanTemplateTreeItem(template, workflowRoot);
+
+      assert.ok(item.command);
+      assert.strictEqual(item.command.command, 'vscode.open');
+      assert.ok(item.command.arguments);
+      assert.strictEqual(item.command.arguments.length, 1);
+    });
+
+    test('description should show trigger type for enabled templates', () => {
+      const enabledTemplate = createTestPlanTemplate('TPL-001', 'Weekly Plan', true, 'weekly');
+      const disabledTemplate = createTestPlanTemplate('TPL-002', 'Disabled Plan', false);
+
+      const enabledItem = new PlanTemplateTreeItem(enabledTemplate, workflowRoot);
+      const disabledItem = new PlanTemplateTreeItem(disabledTemplate, workflowRoot);
+
+      const enabledDesc = enabledItem.description as string;
+      const disabledDesc = disabledItem.description as string;
+      assert.ok(enabledDesc.includes('[weekly]'));
+      assert.ok(disabledDesc.includes('[disabled]'));
+    });
+  });
+
+  suite('PlansTreeProvider Templates', () => {
+    test('TC26: should show Templates group with library icon', async () => {
+      const provider = new PlansTreeProvider(store);
+      provider.setWorkflowRoot(workflowRoot);
+
+      store.addPlanTemplate(createTestPlanTemplate('TPL-001', 'Template 1', true));
+      store.addPlanTemplate(createTestPlanTemplate('TPL-002', 'Template 2', false));
+
+      const groups = await provider.getChildren() as PlanGroupTreeItem[];
+
+      const templatesGroup = groups.find(g => g.groupType === 'templates');
+      assert.ok(templatesGroup);
+      assert.strictEqual(templatesGroup.count, 2);
+      assert.strictEqual(templatesGroup.label, 'Templates (2)');
+
+      assert.ok(templatesGroup.iconPath);
+      const icon = templatesGroup.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'library');
+    });
+
+    test('should return templates for Templates group', async () => {
+      const provider = new PlansTreeProvider(store);
+      provider.setWorkflowRoot(workflowRoot);
+
+      store.addPlanTemplate(createTestPlanTemplate('TPL-001', 'Template A', true));
+      store.addPlanTemplate(createTestPlanTemplate('TPL-002', 'Template B', false));
+
+      const groups = await provider.getChildren() as PlanGroupTreeItem[];
+      const templatesGroup = groups.find(g => g.groupType === 'templates')!;
+
+      const templates = await provider.getChildren(templatesGroup) as PlanTemplateTreeItem[];
+
+      assert.strictEqual(templates.length, 2);
+      assert.strictEqual(templates[0].template.id, 'TPL-001');
+      assert.strictEqual(templates[1].template.id, 'TPL-002');
+    });
+
+    test('should refresh on store plan-template event', async () => {
+      const provider = new PlansTreeProvider(store);
+      provider.setWorkflowRoot(workflowRoot);
+
+      let refreshCount = 0;
+      provider.onDidChangeTreeData(() => {
+        refreshCount++;
+      });
+
+      store.addPlanTemplate(createTestPlanTemplate('TPL-001', 'New Template', true));
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      assert.strictEqual(refreshCount, 1);
+    });
+
+    test('should not show Templates group when no templates', async () => {
+      const provider = new PlansTreeProvider(store);
+      provider.setWorkflowRoot(workflowRoot);
+
+      store.addPlan(createTestPlan('PLAN-001', 'Current Plan', false));
+
+      const groups = await provider.getChildren() as PlanGroupTreeItem[];
+
+      const templatesGroup = groups.find(g => g.groupType === 'templates');
+      assert.strictEqual(templatesGroup, undefined);
     });
   });
 

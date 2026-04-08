@@ -19,7 +19,8 @@ import {
   ReviewEntry,
   WorkflowConfig,
   PipelineConfig,
-  TicketStatus
+  TicketStatus,
+  PlanTemplate
 } from './types';
 import { parse as parseFrontmatter } from './frontmatter-parser';
 import { ConfigManager } from './config-manager';
@@ -28,7 +29,7 @@ import { IStore } from '../interfaces/IStore';
 /**
  * Event types that can be emitted by the store
  */
-export type StoreEventType = 'ticket' | 'plan' | 'report' | 'config';
+export type StoreEventType = 'ticket' | 'plan' | 'report' | 'config' | 'plan-template';
 
 /**
  * Operation types for store changes
@@ -57,6 +58,7 @@ export class WorkflowStore implements IStore {
   private reports: Report[] = [];
   private config: WorkflowConfig | undefined;
   private pipeline: PipelineConfig | undefined;
+  private planTemplates: Map<string, PlanTemplate> = new Map();
 
   // Event handling
   private readonly eventEmitter: EventEmitter = new EventEmitter();
@@ -90,6 +92,7 @@ export class WorkflowStore implements IStore {
     this.tickets.clear();
     this.plans.clear();
     this.reports = [];
+    this.planTemplates.clear();
 
     // Load configuration first
     try {
@@ -121,10 +124,14 @@ export class WorkflowStore implements IStore {
     // Scan reports
     await this.scanReports(workflowRoot);
 
+    // Scan plan templates
+    await this.scanPlanTemplates(workflowRoot);
+
     // Emit single batched refresh event
     this.emitEvent({ type: 'ticket', operation: 'refresh' });
     this.emitEvent({ type: 'plan', operation: 'refresh' });
     this.emitEvent({ type: 'report', operation: 'refresh' });
+    this.emitEvent({ type: 'plan-template', operation: 'refresh' });
     if (this.config || this.pipeline) {
       this.emitEvent({ type: 'config', operation: 'refresh' });
     }
@@ -256,7 +263,37 @@ export class WorkflowStore implements IStore {
     } catch (error) {
       // Folder may not exist - skip silently
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error(`Failed to scan reports:`, error);
+          console.error(`Failed to scan reports:`, error);
+      }
+    }
+  }
+
+  /**
+   * Scan plan templates from plans/templates folder
+   */
+  private async scanPlanTemplates(workflowRoot: string): Promise<void> {
+    const templatesDir = path.join(workflowRoot, 'plans', 'templates');
+
+    try {
+      const entries = await fs.readdir(templatesDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
+          const filePath = path.join(templatesDir, entry.name);
+          try {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const { frontmatter } = parseFrontmatter<PlanTemplate>(content);
+            if (!frontmatter.id) { continue; }
+            this.planTemplates.set(frontmatter.id, frontmatter);
+          } catch (error) {
+            console.error(`Failed to parse plan template ${filePath}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      // Folder may not exist - skip silently
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(`Failed to scan plan templates:`, error);
       }
     }
   }
@@ -606,10 +643,59 @@ export class WorkflowStore implements IStore {
   }
 
   /**
-   * Get plans from archive folder only
+   * Get archived plans only
    */
   getArchivedPlans(): Plan[] {
     return Array.from(this.plans.values()).filter(p => p.folder === 'archive');
+  }
+
+  /**
+   * Get all plan templates
+   */
+  getPlanTemplates(): PlanTemplate[] {
+    return Array.from(this.planTemplates.values());
+  }
+
+  /**
+   * Get a plan template by ID
+   */
+  getPlanTemplateById(id: string): PlanTemplate | undefined {
+    return this.planTemplates.get(id);
+  }
+
+  /**
+   * Update a plan template in the store
+   */
+  updatePlanTemplate(id: string, template: PlanTemplate): void {
+    if (!this.planTemplates.has(id)) {
+      throw new Error(`Plan template ${id} not found for update`);
+    }
+    this.planTemplates.set(id, template);
+    this.emitEvent({ type: 'plan-template', id, operation: 'update' });
+  }
+
+  /**
+   * Add a new plan template to the store
+   */
+  addPlanTemplate(template: PlanTemplate): void {
+    const isNew = !this.planTemplates.has(template.id);
+    this.planTemplates.set(template.id, template);
+    this.emitEvent({
+      type: 'plan-template',
+      id: template.id,
+      operation: isNew ? 'add' : 'update'
+    });
+  }
+
+  /**
+   * Remove a plan template from the store
+   */
+  removePlanTemplate(id: string): void {
+    if (!this.planTemplates.has(id)) {
+      throw new Error(`Plan template ${id} not found for removal`);
+    }
+    this.planTemplates.delete(id);
+    this.emitEvent({ type: 'plan-template', id, operation: 'delete' });
   }
 
   /**
@@ -654,6 +740,7 @@ export class WorkflowStore implements IStore {
     this.tickets.clear();
     this.plans.clear();
     this.reports = [];
+    this.planTemplates.clear();
     this.config = undefined;
     this.pipeline = undefined;
     this.workflowRoot = null;

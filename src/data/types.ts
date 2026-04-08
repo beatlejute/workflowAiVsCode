@@ -183,3 +183,29 @@ export interface ValidationError {
   field: string;
   message: string;
 }
+
+/**
+ * Trigger type for plan templates
+ */
+export interface PlanTemplateTrigger {
+  type: 'daily' | 'weekly' | 'date_after' | 'interval_days';
+  params: Record<string, unknown>;
+}
+
+/**
+ * Plan template interface representing a reusable workflow plan template
+ */
+export interface PlanTemplate {
+  id: string;
+  title: string;
+  type: 'template';
+  trigger: PlanTemplateTrigger;
+  last_triggered: string;
+  enabled: boolean;
+  plan_prefix?: string;
+  plan_author?: string;
+  plan_status?: string;
+  ticket_type_by_task?: Record<string, string>;
+  ticket_prefix?: string;
+  agent?: string;
+}

@@ -64,6 +64,7 @@
   "command.copyTicketId.title": "Copia ID ticket",
   "command.filterTicketsByPlan.title": "Filtra per piano",
   "command.clearTicketFilter.title": "Cancella filtro",
+  "command.togglePlanTemplate.title": "Alterna modello",
   "category.workflow": "WF",
   "config.title": "Workflow",
   "config.cliPath.description": "Percorso personalizzato all'eseguibile workflow CLI",

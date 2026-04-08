@@ -163,6 +163,43 @@ statuses:
   });
 
   suite('CurrentStageTreeItem Tests', () => {
+    test('TC1: CurrentStage without fallback/retry displays gear~spin icon', () => {
+      const item = new CurrentStageTreeItem('execute-task', 'agent-001', undefined, 'skill', 'IMPL-001', 1, 3, '5s');
+
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'gear~spin');
+    });
+
+    test('TC2: CurrentStage with fallbackAgent displays arrow-swap~spin icon', () => {
+      const item = new CurrentStageTreeItem('execute-task', 'agent-001', 'fallback-agent', 'skill', 'IMPL-001', 1, 3, '5s');
+
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'arrow-swap~spin');
+      assert.ok(icon.color, 'Should have ThemeColor');
+    });
+
+    test('TC3: CurrentStage with attempt > 1 displays debug-restart~spin icon', () => {
+      const item = new CurrentStageTreeItem('execute-task', 'agent-001', undefined, 'skill', 'IMPL-001', 2, 3, '5s');
+
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'debug-restart~spin');
+      assert.ok(icon.color, 'Should have ThemeColor');
+    });
+
+    test('TC4: CurrentStage with fallback + retry displays arrow-swap~spin (priority)', () => {
+      const item = new CurrentStageTreeItem('execute-task', 'agent-001', 'fallback-agent', 'skill', 'IMPL-001', 2, 3, '5s');
+
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'arrow-swap~spin', 'Fallback has priority over retry');
+    });
+
+    test('TC5: CurrentStage with attempt = 1 displays gear~spin (not retry)', () => {
+      const item = new CurrentStageTreeItem('execute-task', 'agent-001', undefined, 'skill', 'IMPL-001', 1, 3, '5s');
+
+      const icon = item.iconPath as vscode.ThemeIcon;
+      assert.strictEqual(icon.id, 'gear~spin', 'attempt=1 is not a retry');
+    });
+
     test('Displays stage with agent and ticket', () => {
       const item = new CurrentStageTreeItem(
         'analyze-report',
@@ -373,6 +410,100 @@ statuses:
 
       assert.ok((item.label as string).includes('⏱️'));
     });
+
+    test('TC6: Completed success without statusChange has no GOTO marker', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5s',
+        true,
+        'IMPL-001',
+        'agent',
+        undefined
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('execute-task'));
+      assert.ok(!label.includes('↩️'));
+    });
+
+    test('TC7: Completed success with statusChange has GOTO marker', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5s',
+        true,
+        'IMPL-001',
+        'agent',
+        undefined,
+        'todo → in_progress'
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('↩️'));
+      assert.ok(label.includes('execute-task'));
+    });
+
+    test('TC8: Completed stage with reportInfo has report marker', () => {
+      const item = new CompletedStageTreeItem(
+        'create-report',
+        '3s',
+        true,
+        'IMPL-002',
+        'agent',
+        undefined,
+        undefined,
+        undefined,
+        { path: '/path/to/report.md', id: 'RPT-001' }
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('📊'));
+      assert.ok(label.includes('create-report'));
+    });
+
+    test('TC9: Completed error with statusChange has no GOTO marker (not Success)', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '2s',
+        false,
+        'FIX-001',
+        'agent',
+        undefined,
+        'todo → in_progress',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        StageResult.Error
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('❌'));
+      assert.ok(!label.includes('↩️'));
+      assert.ok(label.includes('execute-task'));
+    });
+
+    test('TC10: Completed success with statusChange and reportInfo has both markers', () => {
+      const item = new CompletedStageTreeItem(
+        'create-report',
+        '3s',
+        true,
+        'IMPL-003',
+        'agent',
+        undefined,
+        'todo → done',
+        undefined,
+        { path: '/path/to/report.md', id: 'RPT-003' }
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('↩️'));
+      assert.ok(label.includes('📊'));
+      assert.ok(label.includes('create-report'));
+    });
   });
 
   suite('StatisticsTreeItem Tests', () => {
@@ -499,6 +630,73 @@ statuses:
       assert.ok(value.includes('**Run 3**'));
       assert.ok(value.includes('Date'));
       assert.ok(value.includes('Result'));
+    });
+
+    test('TC11: History without planId/reports shows label without markers', () => {
+      const entry: RunHistoryEntry = {
+        runNumber: 1,
+        timestamp: Date.now(),
+        date: '2026-03-05 10:00',
+        result: 'success',
+        reports: []
+      };
+
+      const item = new HistoryItemTreeItem(entry);
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('#1'));
+      assert.ok(!label.includes('📋'));
+      assert.ok(!label.includes('📄'));
+    });
+
+    test('TC12: History with planId shows 📋 marker', () => {
+      const entry: RunHistoryEntry = {
+        runNumber: 2,
+        timestamp: Date.now(),
+        date: '2026-03-05 11:00',
+        result: 'success',
+        reports: [],
+        planId: 'PLAN-001'
+      };
+
+      const item = new HistoryItemTreeItem(entry);
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('📋'));
+      assert.ok(!label.includes('📄'));
+    });
+
+    test('TC13: History with reports shows 📄 marker', () => {
+      const entry: RunHistoryEntry = {
+        runNumber: 3,
+        timestamp: Date.now(),
+        date: '2026-03-05 12:00',
+        result: 'success',
+        reports: [{ id: 'RPT-001', path: '/path/to/report.md' }]
+      };
+
+      const item = new HistoryItemTreeItem(entry);
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(!label.includes('📋'));
+      assert.ok(label.includes('📄'));
+    });
+
+    test('TC14: History with planId and reports shows both markers', () => {
+      const entry: RunHistoryEntry = {
+        runNumber: 4,
+        timestamp: Date.now(),
+        date: '2026-03-05 13:00',
+        result: 'error',
+        reports: [{ id: 'RPT-002', path: '/path/to/report2.md' }],
+        planId: 'PLAN-002'
+      };
+
+      const item = new HistoryItemTreeItem(entry);
+      const label = item.label as string;
+      assert.ok(label.includes('❌'));
+      assert.ok(label.includes('📋'));
+      assert.ok(label.includes('📄'));
     });
   });
 
@@ -1046,7 +1244,7 @@ statuses:
       const startTimeAfterGoto = (sm as any).state.stageStartTime;
 
       assert.strictEqual(startTimeBeforeGoto, startTimeAfterGoto,
-        'stageStartTime must NOT change on GOTO (FIX-048: prevents timer reset 3s→0s→1s)');
+        'stageStartTime must NOT change on GOTO (FIX-048: prevents timer reset 3s to 0s to 1s)');
     });
   });
 

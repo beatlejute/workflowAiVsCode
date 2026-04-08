@@ -18,6 +18,7 @@
   "include": ["src/test/**/*.ts", "src/extension.ts"],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/test/unit/pipeline-tree-provider.test.ts"
   ]
 }

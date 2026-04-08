@@ -15,7 +15,7 @@ import { t } from '../i18n';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus, Plan, Report, ReviewEntry } from '../data/types';
+import { Ticket, TicketStatus, Plan, Report, ReviewEntry, PlanTemplate } from '../data/types';
 import { getReviewBadges, extractPlanId } from './utils';
 
 /**
@@ -43,7 +43,7 @@ let sidebarPerfMetrics = {
 /**
  * Tree item types for sidebar navigation
  */
-export type TreeItemType = 'ticket' | 'plan' | 'report' | 'status-group' | 'plan-group' | 'skill' | 'log' | 'filter-info';
+export type TreeItemType = 'ticket' | 'plan' | 'plan-template' | 'report' | 'status-group' | 'plan-group' | 'skill' | 'log' | 'filter-info';
 
 /**
  * Base tree item for all sidebar items
@@ -167,7 +167,7 @@ export class PlanTreeItem extends SidebarTreeItem {
     isDecomposing: boolean = false
   ) {
     const label = plan.id;
-    const description = plan.title;
+    const description = `[${plan.status}] ${plan.title}`;
     const groupId = isCurrent ? 'current' : 'archive';
     super(label, vscode.TreeItemCollapsibleState.None, 'plan', plan.id);
 
@@ -175,7 +175,7 @@ export class PlanTreeItem extends SidebarTreeItem {
     this.tooltip = `${plan.id}: ${plan.title}\n${t('Status')}: ${plan.status}`;
     this.iconPath = isDecomposing
       ? new vscode.ThemeIcon('loading~spin')
-      : new vscode.ThemeIcon('notebook');
+      : getPlanStatusIcon(plan.status);
     this.contextValue = isCurrent ? 'plan-current' : 'plan-archive';
 
     // Command to open plan file on click
@@ -198,17 +198,73 @@ export class PlanTreeItem extends SidebarTreeItem {
  */
 export class PlanGroupTreeItem extends SidebarTreeItem {
   constructor(
-    public readonly groupType: 'current' | 'archive',
+    public readonly groupType: 'current' | 'archive' | 'templates',
     public readonly count: number
   ) {
-    const label = groupType === 'current' ? t('Current') : t('Archive');
-    const state = groupType === 'current'
+    const label = groupType === 'templates' ? t('Templates') : (groupType === 'current' ? t('Current') : t('Archive'));
+    const state = groupType === 'current' || groupType === 'templates'
       ? vscode.TreeItemCollapsibleState.Expanded
       : vscode.TreeItemCollapsibleState.Collapsed;
     super(`${label} (${count})`, state, 'plan-group', groupType);
 
     this.contextValue = 'plan-group';
+    this.iconPath = groupType === 'templates'
+      ? new vscode.ThemeIcon('library')
+      : undefined;
   }
+}
+
+/**
+ * Tree item representing a plan template
+ */
+export class PlanTemplateTreeItem extends SidebarTreeItem {
+  constructor(
+    public readonly template: PlanTemplate,
+    workflowRoot: string
+  ) {
+    const label = template.id;
+    const description = template.enabled
+      ? `[${template.trigger.type}] ${template.title}`
+      : `[disabled] ${template.title}`;
+    super(label, vscode.TreeItemCollapsibleState.None, 'plan-template', template.id);
+
+    this.description = description;
+    this.tooltip = buildPlanTemplateTooltip(template);
+    this.iconPath = template.enabled
+      ? new vscode.ThemeIcon('calendar', new vscode.ThemeColor('terminal.ansiGreen'))
+      : new vscode.ThemeIcon('calendar', new vscode.ThemeColor('disabledForeground'));
+    this.contextValue = template.enabled ? 'plan-template-enabled' : 'plan-template-disabled';
+
+    const templatePath = path.join(workflowRoot, 'plans', 'templates', `${template.id}.md`);
+    this.command = {
+      command: 'vscode.open',
+      title: t('Open Template'),
+      arguments: [vscode.Uri.file(templatePath)]
+    };
+  }
+}
+
+/**
+ * Build a rich tooltip for a plan template tree item
+ */
+function buildPlanTemplateTooltip(template: PlanTemplate): vscode.MarkdownString {
+  const md = new vscode.MarkdownString();
+  md.isTrusted = true;
+
+  md.appendMarkdown(`**${template.id}: ${template.title}**\n\n`);
+  md.appendMarkdown(`| ${t('Field')} | ${t('Value')} |\n|---|---|\n`);
+  md.appendMarkdown(`| **${t('Trigger')}** | ${template.trigger.type} |\n`);
+  
+  const paramsStr = JSON.stringify(template.trigger.params, null, 2).replace(/\n/g, ' ');
+  md.appendMarkdown(`| **${t('Params')}** | ${paramsStr} |\n`);
+  
+  const lastTriggered = template.last_triggered || t('Never');
+  md.appendMarkdown(`| **${t('Last Triggered')}** | ${lastTriggered} |\n`);
+  
+  const enabled = template.enabled ? t('Yes') : t('No');
+  md.appendMarkdown(`| **${t('Enabled')}** | ${enabled} |\n`);
+
+  return md;
 }
 
 /**
@@ -293,8 +349,25 @@ function getTicketIcon(priority: number): vscode.ThemeIcon {
 }
 
 /**
- * Get ticket file path based on status
+ * Get theme icon based on plan status
  */
+function getPlanStatusIcon(status: string): vscode.ThemeIcon {
+  switch (status) {
+    case 'draft':
+      return new vscode.ThemeIcon('edit');
+    case 'approved':
+      return new vscode.ThemeIcon('check-all', new vscode.ThemeColor('terminal.ansiGreen'));
+    case 'active':
+      return new vscode.ThemeIcon('play-circle', new vscode.ThemeColor('notificationsInfoIcon.foreground'));
+    case 'completed':
+      return new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('terminal.ansiGreen'));
+    case 'archived':
+      return new vscode.ThemeIcon('archive');
+    default:
+      return new vscode.ThemeIcon('notebook');
+  }
+}
+
 function getTicketPath(ticket: Ticket, workflowRoot: string): string {
   return path.join(
     workflowRoot,
@@ -556,7 +629,7 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   constructor(private readonly store: WorkflowStore) {
     // Subscribe to store change events for reactive updates
     store.onDidChange((event: StoreChangeEvent) => {
-      if (event.type === 'plan') {
+      if (event.type === 'plan' || event.type === 'plan-template') {
         this.refresh();
       }
     });
@@ -614,7 +687,7 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
     }
 
     if (element.itemType === 'plan-group') {
-      // Plan group level: show plans in that group
+      // Plan group level: show plans/templates in that group
       const planGroup = element as PlanGroupTreeItem;
       return this.getPlansForGroup(planGroup.groupType);
     }
@@ -623,10 +696,11 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   }
 
   /**
-   * Get plan groups (current/archive) with counts
+   * Get plan groups (current/archive/templates) with counts
    */
   private getPlanGroups(): Thenable<SidebarTreeItem[]> {
     const plans = this.store.getPlans();
+    const templates = this.store.getPlanTemplates();
     
     const currentPlans = plans.filter(p => p.folder === 'current');
     const archivedPlans = plans.filter(p => p.folder === 'archive');
@@ -637,6 +711,10 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
       groups.push(new PlanGroupTreeItem('current', currentPlans.length));
     }
     
+    if (templates.length > 0) {
+      groups.push(new PlanGroupTreeItem('templates', templates.length));
+    }
+    
     if (archivedPlans.length > 0) {
       groups.push(new PlanGroupTreeItem('archive', archivedPlans.length));
     }
@@ -645,14 +723,21 @@ export class PlansTreeProvider implements vscode.TreeDataProvider<SidebarTreeIte
   }
 
   /**
-   * Get plans for a specific group
+   * Get plans or templates for a specific group
    */
-  private getPlansForGroup(groupType: 'current' | 'archive'): Thenable<SidebarTreeItem[]> {
+  private getPlansForGroup(groupType: 'current' | 'archive' | 'templates'): Thenable<SidebarTreeItem[]> {
+    if (groupType === 'templates') {
+      const templates = this.store.getPlanTemplates();
+      templates.sort((a, b) => a.id.localeCompare(b.id));
+      return Promise.resolve(
+        templates.map(
+          template => new PlanTemplateTreeItem(template, this.workflowRoot!)
+        )
+      );
+    }
+
     const plans = this.store.getPlans();
-    
     const filteredPlans = plans.filter(p => p.folder === groupType);
-    
-    // Sort by ID
     filteredPlans.sort((a, b) => a.id.localeCompare(b.id));
     
     const items = filteredPlans.map(

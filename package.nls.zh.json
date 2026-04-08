@@ -64,6 +64,7 @@
   "command.copyTicketId.title": "复制工单 ID",
   "command.filterTicketsByPlan.title": "按计划筛选",
   "command.clearTicketFilter.title": "清除筛选",
+  "command.togglePlanTemplate.title": "切换模板",
   "category.workflow": "WF",
   "config.title": "工作流",
   "config.cliPath.description": "workflow CLI 可执行文件的自定义路径",

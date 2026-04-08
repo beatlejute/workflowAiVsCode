@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "PROTOKOLLE",
   "command.filterTicketsByPlan.title": "Nach Plan filtern",
   "command.clearTicketFilter.title": "Filter löschen",
+  "command.togglePlanTemplate.title": "Vorlage umschalten",
   "command.sortKanbanByDate.title": "Nach Datum sortieren",
   "command.toggleSortDirection.title": "Sortierrichtung umschalten",
   "command.sortTicketsByPriority.title": "Tickets nach Priorität sortieren",

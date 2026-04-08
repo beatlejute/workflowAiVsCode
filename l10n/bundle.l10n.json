@@ -226,5 +226,14 @@
   "No current plans available": "No current plans available",
   "Select plan to decompose": "Select plan to decompose",
   "Decomposing plan {0}...": "Decomposing plan {0}...",
-  "Pipeline is running": "Pipeline is running"
+  "Pipeline is running": "Pipeline is running",
+  "workflow.togglePlanTemplate.title": "Toggle template",
+  "Template {0} {1}": "Template {0} {1}",
+  "enabled": "enabled",
+  "disabled": "disabled",
+  "No template provided": "No template provided",
+  "Template file not found: {0}": "Template file not found: {0}",
+  "Invalid template file format": "Invalid template file format",
+  "Failed to toggle template. Check Output channel for details.": "Failed to toggle template. Check Output channel for details.",
+  "Failed to toggle template: {0}": "Failed to toggle template: {0}"
 }

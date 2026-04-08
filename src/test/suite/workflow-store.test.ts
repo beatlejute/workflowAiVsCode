@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { WorkflowStore, StoreChangeEvent } from '../../data/workflow-store';
-import { Ticket, TicketStatus, Plan, Report } from '../../data/types';
+import { Ticket, TicketStatus, Plan, Report, PlanTemplate } from '../../data/types';
 
 suite('WorkflowStore Suite', () => {
 
@@ -54,6 +54,7 @@ suite('WorkflowStore Suite', () => {
     // Create plan folders
     fs.mkdirSync(path.join(plansDir, 'current'), { recursive: true });
     fs.mkdirSync(path.join(plansDir, 'archive'), { recursive: true });
+    fs.mkdirSync(path.join(plansDir, 'templates'), { recursive: true });
 
     // Create reports folder
     fs.mkdirSync(reportsDir, { recursive: true });
@@ -1403,6 +1404,226 @@ reporting:
 
       const ticket = store.getTicketById('RAPID-001');
       assert.ok(ticket, 'Should find ticket after rapid updates');
+    });
+  });
+
+  suite('Plan Template Operations', () => {
+
+    test('TC27: getPlanTemplates() should return loaded templates from plans/templates/', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      // Create plan template files
+      const templatesDir = path.join(plansDir, 'templates');
+      
+      const template1: PlanTemplate = {
+        id: 'TPL-001',
+        title: 'Weekly Sprint Template',
+        type: 'template',
+        trigger: {
+          type: 'weekly',
+          params: { day: 'monday', time: '09:00' }
+        },
+        last_triggered: '',
+        enabled: true,
+        plan_prefix: 'SPRINT',
+        plan_author: 'System',
+        plan_status: 'active',
+        ticket_type_by_task: { 'implementation': 'IMPL', 'documentation': 'DOCS' },
+        ticket_prefix: 'TASK',
+        agent: 'default'
+      };
+
+      const template2: PlanTemplate = {
+        id: 'TPL-002',
+        title: 'Daily Standup Template',
+        type: 'template',
+        trigger: {
+          type: 'daily',
+          params: { time: '10:00' }
+        },
+        last_triggered: '2026-04-01T10:00:00Z',
+        enabled: false
+      };
+
+      const yaml1 = yaml.dump(template1, { indent: 2 });
+      const yaml2 = yaml.dump(template2, { indent: 2 });
+
+      fs.writeFileSync(path.join(templatesDir, 'TPL-001.md'), `---\n${yaml1}---\n## Weekly Sprint Template`, 'utf-8');
+      fs.writeFileSync(path.join(templatesDir, 'TPL-002.md'), `---\n${yaml2}---\n## Daily Standup Template`, 'utf-8');
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const templates = store.getPlanTemplates();
+      assert.strictEqual(templates.length, 2, 'Should load 2 plan templates');
+
+      const tpl1 = store.getPlanTemplateById('TPL-001');
+      assert.ok(tpl1, 'Should find TPL-001');
+      assert.strictEqual(tpl1?.title, 'Weekly Sprint Template');
+      assert.strictEqual(tpl1?.trigger.type, 'weekly');
+      assert.strictEqual(tpl1?.enabled, true);
+      assert.strictEqual(tpl1?.plan_prefix, 'SPRINT');
+
+      const tpl2 = store.getPlanTemplateById('TPL-002');
+      assert.ok(tpl2, 'Should find TPL-002');
+      assert.strictEqual(tpl2?.trigger.type, 'daily');
+      assert.strictEqual(tpl2?.enabled, false);
+    });
+
+    test('should handle missing templates folder gracefully', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await assert.doesNotReject(async () => {
+        await store.refresh(path.join(testDir, '.workflow'));
+      });
+
+      const templates = store.getPlanTemplates();
+      assert.strictEqual(templates.length, 0, 'Should have no templates when folder missing');
+    });
+
+    test('addPlanTemplate should add template and emit event', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const template: PlanTemplate = {
+        id: 'TPL-NEW',
+        title: 'New Template',
+        type: 'template',
+        trigger: { type: 'daily', params: {} },
+        last_triggered: '',
+        enabled: true
+      };
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      store.addPlanTemplate(template);
+
+      const templates = store.getPlanTemplates();
+      assert.strictEqual(templates.length, 1, 'Should have 1 template');
+      assert.ok(store.getPlanTemplateById('TPL-NEW'), 'Should find new template');
+
+      const addEvent = events.find(e => e.type === 'plan-template' && e.operation === 'add');
+      assert.ok(addEvent, 'Should emit add event');
+      assert.strictEqual(addEvent?.id, 'TPL-NEW', 'Event id should match template id');
+    });
+
+    test('updatePlanTemplate should update template and emit event', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const template: PlanTemplate = {
+        id: 'TPL-UPDATE',
+        title: 'Original Title',
+        type: 'template',
+        trigger: { type: 'daily', params: {} },
+        last_triggered: '',
+        enabled: true
+      };
+
+      store.addPlanTemplate(template);
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      const updatedTemplate: PlanTemplate = { ...template, title: 'Updated Title', enabled: false };
+      store.updatePlanTemplate('TPL-UPDATE', updatedTemplate);
+
+      const found = store.getPlanTemplateById('TPL-UPDATE');
+      assert.strictEqual(found?.title, 'Updated Title', 'Template should be updated');
+      assert.strictEqual(found?.enabled, false, 'Template enabled should be updated');
+
+      const updateEvent = events.find(e => e.type === 'plan-template' && e.operation === 'update');
+      assert.ok(updateEvent, 'Should emit update event');
+    });
+
+    test('updatePlanTemplate should throw if template not found', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      assert.throws(
+        () => store.updatePlanTemplate('NONEXISTENT', {} as PlanTemplate),
+        /Plan template NONEXISTENT not found/
+      );
+    });
+
+    test('removePlanTemplate should remove template and emit event', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const template: PlanTemplate = {
+        id: 'TPL-REMOVE',
+        title: 'Template to Remove',
+        type: 'template',
+        trigger: { type: 'daily', params: {} },
+        last_triggered: '',
+        enabled: true
+      };
+
+      store.addPlanTemplate(template);
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      store.removePlanTemplate('TPL-REMOVE');
+
+      const templates = store.getPlanTemplates();
+      assert.strictEqual(templates.length, 0, 'Should have no templates after removal');
+      assert.strictEqual(store.getPlanTemplateById('TPL-REMOVE'), undefined, 'Template should be removed');
+
+      const deleteEvent = events.find(e => e.type === 'plan-template' && e.operation === 'delete');
+      assert.ok(deleteEvent, 'Should emit delete event');
+      assert.strictEqual(deleteEvent?.id, 'TPL-REMOVE', 'Event id should match template id');
+    });
+
+    test('removePlanTemplate should throw if template not found', async () => {
+      createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      assert.throws(
+        () => store.removePlanTemplate('NONEXISTENT'),
+        /Plan template NONEXISTENT not found/
+      );
+    });
+
+    test('clear should clear plan templates', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      const templatesDir = path.join(plansDir, 'templates');
+      const template: PlanTemplate = {
+        id: 'TPL-CLEAR',
+        title: 'Template',
+        type: 'template',
+        trigger: { type: 'daily', params: {} },
+        last_triggered: '',
+        enabled: true
+      };
+      const yamlContent = yaml.dump(template, { indent: 2 });
+      fs.writeFileSync(path.join(templatesDir, 'TPL-CLEAR.md'), `---\n${yamlContent}---\n## Template`, 'utf-8');
+
+      await store.refresh(path.join(testDir, '.workflow'));
+      assert.strictEqual(store.getPlanTemplates().length, 1, 'Should have 1 template before clear');
+
+      store.clear();
+      assert.strictEqual(store.getPlanTemplates().length, 0, 'Should have 0 templates after clear');
     });
   });
 });

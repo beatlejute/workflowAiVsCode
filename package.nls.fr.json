@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "JOURNAUX",
   "command.filterTicketsByPlan.title": "Filtrer par plan",
   "command.clearTicketFilter.title": "Effacer le filtre",
+  "command.togglePlanTemplate.title": "Basculer le modèle",
   "command.sortKanbanByDate.title": "Trier par date",
   "command.toggleSortDirection.title": "Basculer la direction du tri",
   "command.sortTicketsByPriority.title": "Trier les tickets par priorité",

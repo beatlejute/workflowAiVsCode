@@ -17,7 +17,7 @@ import { IFileWatcher } from '../interfaces/IFileWatcher';
  * Change classification result
  */
 interface ClassifiedChange {
-  entityType: 'ticket' | 'plan' | 'report' | 'config';
+  entityType: 'ticket' | 'plan' | 'report' | 'config' | 'plan-template';
   id?: string;
   status?: TicketStatus;
 }
@@ -126,6 +126,13 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
       return { entityType: 'plan', id };
     }
 
+    // Check for plan templates: plans/templates/{ID}.md
+    if (pathParts[0] === 'plans' && pathParts[1] === 'templates' && pathParts.length >= 3) {
+      const fileName = pathParts[2];
+      const id = fileName.replace('.md', '');
+      return { entityType: 'plan-template', id };
+    }
+
     // Check for reports: reports/{ID}.md
     if (pathParts[0] === 'reports' && pathParts.length >= 2) {
       const fileName = pathParts[1];
@@ -158,6 +165,10 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
         await this.store.updateFile(uri.fsPath, 'create');
         return;
       }
+      if (classification.entityType === 'plan-template') {
+        this.scheduleRefresh(this.debounceDelayCreateDelete);
+        return;
+      }
     }
 
     this.scheduleRefresh(this.debounceDelayCreateDelete);
@@ -179,6 +190,10 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
         await this.store.updateFile(uri.fsPath, 'change');
         return;
       }
+      if (classification.entityType === 'plan-template') {
+        this.scheduleRefresh(this.debounceDelayChange);
+        return;
+      }
     }
 
     this.scheduleRefresh(this.debounceDelayChange);
@@ -198,6 +213,10 @@ export class FileWatcherService implements vscode.Disposable, IFileWatcher {
       // Use incremental update for known entity types
       if (classification.entityType === 'ticket' || classification.entityType === 'plan' || classification.entityType === 'report') {
         await this.store.updateFile(uri.fsPath, 'delete');
+        return;
+      }
+      if (classification.entityType === 'plan-template') {
+        this.scheduleRefresh(this.debounceDelayCreateDelete);
         return;
       }
     }

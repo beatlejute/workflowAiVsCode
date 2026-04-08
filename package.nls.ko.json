@@ -84,6 +84,7 @@
   "views.sidebar.logs.name": "로그",
   "command.filterTicketsByPlan.title": "계획으로 필터링",
   "command.clearTicketFilter.title": "필터 지우기",
+  "command.togglePlanTemplate.title": "템플릿 전환",
   "command.sortKanbanByDate.title": "날짜별 정렬",
   "command.toggleSortDirection.title": "정렬 방향 전환",
   "command.sortTicketsByPriority.title": "티켓을 우선순위별로 정렬",

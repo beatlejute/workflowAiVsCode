@@ -23,6 +23,7 @@ import { executeNewTicket } from './commands/new-ticket';
 import { executeNewPlan } from './commands/new-plan';
 import { executeShowStatistics } from './commands/show-statistics';
 import { executeCreatePlanFromFile } from './commands/create-plan-from-file';
+import { executeTogglePlanTemplate } from './commands/toggle-plan-template';
 import {
   executeOpenPipelineConfig,
   executeOpenConfig,
@@ -1249,6 +1250,14 @@ export function registerCommands(
           vscode.window.showErrorMessage(t('Pipeline failed for plan {0}: {1}', planId, message));
         }
       }
+    }
+  );
+
+  // workflow.togglePlanTemplate — toggles enabled state of a plan template
+  registry.register(
+    'workflow.togglePlanTemplate',
+    async (arg: unknown) => {
+      await executeTogglePlanTemplate(store, plansProvider, arg);
     }
   );
 

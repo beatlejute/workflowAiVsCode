@@ -7,7 +7,7 @@
  * @see WorkflowStore - Implementation of this interface
  */
 
-import { Ticket, Plan, Report, WorkflowConfig, PipelineConfig, TicketStatus } from '../data/types';
+import { Ticket, Plan, Report, WorkflowConfig, PipelineConfig, TicketStatus, PlanTemplate } from '../data/types';
 import { StoreChangeEvent } from '../data/workflow-store';
 
 /**
@@ -126,6 +126,36 @@ export interface IStore {
    * Get plans from archive folder only
    */
   getArchivedPlans(): Plan[];
+
+  // ==================== Plan Template Operations ====================
+
+  /**
+   * Add a new plan template to the store
+   * Emits an 'add' event for the template
+   */
+  addPlanTemplate(template: PlanTemplate): void;
+
+  /**
+   * Update an existing plan template
+   * Emits an 'update' event for the template
+   */
+  updatePlanTemplate(id: string, template: PlanTemplate): void;
+
+  /**
+   * Remove a plan template from the store
+   * Emits a 'delete' event for the template
+   */
+  removePlanTemplate(id: string): void;
+
+  /**
+   * Get all plan templates
+   */
+  getPlanTemplates(): PlanTemplate[];
+
+  /**
+   * Get a plan template by ID
+   */
+  getPlanTemplateById(id: string): PlanTemplate | undefined;
 
   // ==================== Report Operations ====================
 
