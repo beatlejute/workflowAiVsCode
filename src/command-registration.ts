@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { safeLoad } from './utils/yaml-utils';
+import * as fsPromises from 'fs/promises';
+import { safeLoad, safeDump } from './utils/yaml-utils';
+import { parse as parseFrontmatter } from './data/frontmatter-parser';
 import {
   TicketsTreeProvider,
   PlansTreeProvider,
@@ -1206,6 +1208,219 @@ export function registerCommands(
         } else {
           const message = error instanceof Error ? error.message : 'Unknown error';
           vscode.window.showErrorMessage(t('Failed to unarchive plan {0}: {1}', planId, message));
+        }
+      }
+    }
+  );
+
+  // workflow.approvePlan — changes plan status from draft to approved
+  registry.register(
+    'workflow.approvePlan',
+    async (arg?: unknown) => {
+      const planId = resolvePlanId(arg);
+      if (!planId || !workspaceRoot) {
+        vscode.window.showErrorMessage(t('Plan ID not available or workflow not found'));
+        return;
+      }
+      const planPath = path.join(workspaceRoot, 'plans', 'current', `${planId}.md`);
+      if (!fs.existsSync(planPath)) {
+        vscode.window.showErrorMessage(t('Plan {0} not found', planId));
+        return;
+      }
+      try {
+        // Read and parse current file
+        const content = await fsPromises.readFile(planPath, 'utf-8');
+        const { frontmatter: rawFrontmatter, body } = parseFrontmatter(content);
+        const frontmatter = rawFrontmatter as Record<string, unknown>;
+
+        // Validate current status
+        if (frontmatter.status !== 'draft') {
+          const currentStatus = String(frontmatter.status || 'unknown');
+          vscode.window.showWarningMessage(
+            t('Plan {0} has status "{1}", expected "draft". Only draft plans can be approved.', planId, currentStatus)
+          );
+          return;
+        }
+
+        // Merge: update only status and updated_at, preserve all other fields
+        const updatedFrontmatter = {
+          ...frontmatter,
+          status: 'approved',
+          updated_at: new Date().toISOString()
+        };
+
+        // Generate new content with updated frontmatter
+        const updatedYaml = safeDump(updatedFrontmatter, { indent: 2 }).trimEnd();
+        const newContent = `---\n${updatedYaml}\n---\n${body}`;
+
+        // Atomic write: write to temp file then rename
+        const tmpPath = planPath + '.tmp';
+        await fsPromises.writeFile(tmpPath, newContent, 'utf-8');
+        await fsPromises.rename(tmpPath, planPath);
+
+        // Refresh store
+        await store.refresh(workspaceRoot);
+
+        vscode.window.showInformationMessage(t('Plan {0} approved', planId));
+      } catch (error) {
+        // Clean up temp file if it exists
+        try {
+          await fsPromises.unlink(planPath + '.tmp');
+        } catch { /* ignore */ }
+
+        if (errorHandler) {
+          errorHandler.handleError(error, 'Approve Plan', {
+            userMessage: t('Failed to approve plan {0}. Check Output channel for details.', planId)
+          });
+        } else {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          vscode.window.showErrorMessage(t('Failed to approve plan {0}: {1}', planId, message));
+        }
+      }
+    }
+  );
+
+  // workflow.revertPlanToDraft — changes plan status from approved to draft
+  registry.register(
+    'workflow.revertPlanToDraft',
+    async (arg?: unknown) => {
+      const planId = resolvePlanId(arg);
+      if (!planId || !workspaceRoot) {
+        vscode.window.showErrorMessage(t('Plan ID not available or workflow not found'));
+        return;
+      }
+      const planPath = path.join(workspaceRoot, 'plans', 'current', `${planId}.md`);
+      if (!fs.existsSync(planPath)) {
+        vscode.window.showErrorMessage(t('Plan {0} not found', planId));
+        return;
+      }
+      try {
+        // Read and parse current file
+        const content = await fsPromises.readFile(planPath, 'utf-8');
+        const { frontmatter: rawFrontmatter, body } = parseFrontmatter(content);
+        const frontmatter = rawFrontmatter as Record<string, unknown>;
+
+        // Validate current status
+        const currentStatus = String(frontmatter.status || '');
+
+        // Check if already draft - no-op
+        if (currentStatus === 'draft') {
+          vscode.window.showInformationMessage(t('Plan {0} is already in draft status', planId));
+          return;
+        }
+
+        // Check if active/completed - refuse with warning
+        if (currentStatus === 'active' || currentStatus === 'completed') {
+          vscode.window.showWarningMessage(
+            t('Cannot revert plan in "{0}" status. Use archive instead.', currentStatus)
+          );
+          return;
+        }
+
+        // Only approved -> draft is allowed
+        if (currentStatus !== 'approved') {
+          vscode.window.showWarningMessage(
+            t('Plan {0} has status "{1}". Only approved plans can be reverted to draft.', planId, currentStatus)
+          );
+          return;
+        }
+
+        // Merge: update only status and updated_at, preserve all other fields
+        const updatedFrontmatter = {
+          ...frontmatter,
+          status: 'draft',
+          updated_at: new Date().toISOString()
+        };
+
+        // Generate new content with updated frontmatter
+        const updatedYaml = safeDump(updatedFrontmatter, { indent: 2 }).trimEnd();
+        const newContent = `---\n${updatedYaml}\n---\n${body}`;
+
+        // Atomic write: write to temp file then rename
+        const tmpPath = planPath + '.tmp';
+        await fsPromises.writeFile(tmpPath, newContent, 'utf-8');
+        await fsPromises.rename(tmpPath, planPath);
+
+        // Refresh store
+        await store.refresh(workspaceRoot);
+
+        vscode.window.showInformationMessage(t('Plan {0} reverted to draft', planId));
+      } catch (error) {
+        // Clean up temp file if it exists
+        try {
+          await fsPromises.unlink(planPath + '.tmp');
+        } catch { /* ignore */ }
+
+        if (errorHandler) {
+          errorHandler.handleError(error, 'Revert Plan To Draft', {
+            userMessage: t('Failed to revert plan {0}. Check Output channel for details.', planId)
+          });
+        } else {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          vscode.window.showErrorMessage(t('Failed to revert plan {0}: {1}', planId, message));
+        }
+      }
+    }
+  );
+
+  // workflow.createPlanFromTemplate — creates new plan from template
+  registry.register(
+    'workflow.createPlanFromTemplate',
+    async (arg?: unknown) => {
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage(t('Workflow not found'));
+        return;
+      }
+
+      // Resolve template path from tree item or URI
+      let templatePath: string | undefined;
+      if (arg && typeof arg === 'object') {
+        const item = arg as Record<string, unknown>;
+        // From tree item with template object
+        if (item.template && typeof item.template === 'object') {
+          const template = item.template as Record<string, unknown>;
+          if (typeof template.id === 'string') {
+            templatePath = path.join(workspaceRoot, 'plans', 'templates', `${template.id}.md`);
+          }
+        }
+        // From URI
+        if (!templatePath && item.fsPath && typeof item.fsPath === 'string') {
+          templatePath = item.fsPath;
+        }
+      }
+
+      if (!templatePath) {
+        vscode.window.showErrorMessage(t('Template not found'));
+        return;
+      }
+
+      if (!fs.existsSync(templatePath)) {
+        vscode.window.showErrorMessage(t('Template file not found: {0}', templatePath));
+        return;
+      }
+
+      try {
+        const planService = new PlanService(store, workspaceRoot);
+        const { plan, filePath } = await planService.createFromTemplate(templatePath);
+
+        // Open the new plan file in the editor
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc);
+
+        // Refresh store
+        await store.refresh(workspaceRoot);
+
+        vscode.window.showInformationMessage(t('Plan {0} created from template', plan.id));
+      } catch (error) {
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'EEXIST') {
+          vscode.window.showErrorMessage(t('A plan with this ID already exists. Please try again.'));
+        } else if (errorHandler) {
+          errorHandler.handleError(error, 'Create Plan From Template', {
+            userMessage: t('Failed to create plan from template. Check Output channel for details.')
+          });
+        } else {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          vscode.window.showErrorMessage(t('Failed to create plan from template: {0}', message));
         }
       }
     }

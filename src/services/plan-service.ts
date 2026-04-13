@@ -15,6 +15,7 @@ import * as path from 'path';
 import { WorkflowStore } from '../data/workflow-store';
 import { Plan, Ticket, TicketStatus } from '../data/types';
 import { parse as parseFrontmatter } from '../data/frontmatter-parser';
+import { safeDump } from '../utils/yaml-utils';
 
 /**
  * Plan progress information
@@ -161,11 +162,110 @@ export class PlanService {
   }
 
   /**
+   * Create a new plan from a template file
+   *
+   * - Reads template from plans/templates/
+   * - Generates next PLAN-{NNN} id
+   * - Replaces frontmatter fields (id, status, created_at, updated_at, completed_at)
+   * - Writes to plans/current/ with flag 'wx' (fail-if-exists)
+   * - Returns the created plan and file path
+   *
+   * @param templatePath - Absolute path to the template .md file
+   * @returns Object with created plan and file path
+   */
+  async createFromTemplate(templatePath: string): Promise<{ plan: Plan; filePath: string }> {
+    // Read template content
+    const content = await fs.readFile(templatePath, 'utf-8');
+    const { frontmatter: templateFm, body } = parseFrontmatter<Record<string, unknown>>(content);
+
+    // Generate next plan ID
+    const nextId = await this.generateNextPlanId();
+    const now = new Date().toISOString();
+
+    // Build new plan frontmatter: merge template fields with overrides
+    const newPlanFrontmatter: Record<string, unknown> = {
+      ...templateFm,
+      id: nextId,
+      status: 'draft',
+      created_at: now,
+      updated_at: now,
+      completed_at: ''
+    };
+
+    // Build Plan object for store
+    const newPlan: Plan = {
+      id: nextId,
+      title: (newPlanFrontmatter.title as string) || 'Untitled Plan',
+      status: 'draft',
+      author: (newPlanFrontmatter.author as string) || 'unknown',
+      created_at: now,
+      updated_at: now,
+      completed_at: '',
+      previous_plan: (newPlanFrontmatter.previous_plan as string) || '',
+      related_reports: (newPlanFrontmatter.related_reports as string[]) || []
+    };
+
+    // Generate file content
+    const frontmatterYaml = this.generateFrontmatterYamlFromObject(newPlanFrontmatter);
+    const fileContent = `---\n${frontmatterYaml}---\n${body}`;
+
+    // Save to plans/current/ with wx flag (fail-if-exists)
+    const plansDir = path.join(this.workflowRoot, 'plans', 'current');
+    const filePath = path.join(plansDir, nextId + '.md');
+
+    // Ensure directory exists
+    await fs.mkdir(plansDir, { recursive: true });
+
+    // Write file with wx flag (atomic fail-if-exists)
+    await fs.writeFile(filePath, fileContent, { encoding: 'utf-8', flag: 'wx' });
+
+    // Update store
+    this.store.addPlan(newPlan);
+
+    return { plan: newPlan, filePath };
+  }
+
+  /**
    * Generate plan file content from frontmatter and body
    */
   private generatePlanFileContent(plan: Plan, body: string): string {
     const frontmatterYaml = this.generateFrontmatterYaml(plan);
     return '---\n' + frontmatterYaml + '---\n' + body;
+  }
+
+  /**
+   * Generate YAML frontmatter from a generic object (for template-based plans)
+   */
+  private generateFrontmatterYamlFromObject(frontmatter: Record<string, unknown>): string {
+    const lines: string[] = [];
+
+    for (const [key, value] of Object.entries(frontmatter)) {
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          lines.push(key + ': []');
+        } else {
+          lines.push(key + ':');
+          for (const item of value) {
+            lines.push('  - ' + item);
+          }
+        }
+      } else if (typeof value === 'string') {
+        lines.push(key + ': "' + value + '"');
+      } else if (typeof value === 'object' && value !== null) {
+        // Nested objects — use safeDump
+        const nested = safeDump(value, { indent: 2 }).trimEnd();
+        lines.push(key + ':');
+        for (const line of nested.split('\n')) {
+          lines.push('  ' + line);
+        }
+      } else if (value === undefined || value === null) {
+        lines.push(key + ': ""');
+      } else {
+        lines.push(key + ': ' + value);
+      }
+    }
+
+    return lines.join('\n') + '\n';
   }
 
   /**
@@ -325,6 +425,151 @@ export class PlanService {
     const percentage = total === 0 ? 0 : Math.round((done / total) * 100);
 
     return { total, done, percentage };
+  }
+
+  /**
+   * Approve a plan (change status from draft to approved)
+   *
+   * - Validates current status is 'draft'
+   - Updates status to 'approved' and updated_at to now
+   - Preserves unknown frontmatter fields (merge)
+   - Atomic write: temp file + fs.rename
+   *
+   * @param id - Plan ID to approve
+   * @returns Approved plan
+   * @throws Error if plan not found or not in draft status
+   */
+  async approve(id: string): Promise<Plan> {
+    const plan = this.getById(id);
+
+    if (!plan) {
+      throw new Error('Plan ' + id + ' not found');
+    }
+
+    if (plan.status !== 'draft') {
+      throw new Error('Plan ' + id + ' is not in draft status. Current status: ' + plan.status);
+    }
+
+    const now = new Date().toISOString();
+
+    const planFolder = plan.folder || 'current';
+
+    // Read current file to get body and preserve unknown frontmatter fields
+    const planPath = path.join(this.workflowRoot, 'plans', planFolder, id + '.md');
+    let body = '';
+    let unknownFields: Record<string, unknown> = {};
+
+    try {
+      const content = await fs.readFile(planPath, 'utf-8');
+      const { frontmatter, body: parsedBody } = parseFrontmatter<Record<string, unknown>>(content);
+      body = parsedBody;
+
+      // Extract unknown fields (not in Plan interface)
+      const knownFields = new Set([
+        'id', 'title', 'status', 'author', 'created_at', 'updated_at',
+        'completed_at', 'previous_plan', 'related_reports', 'folder'
+      ]);
+
+      for (const [key, value] of Object.entries(frontmatter)) {
+        if (!knownFields.has(key)) {
+          unknownFields[key] = value;
+        }
+      }
+    } catch {
+      // If file not found, use empty body
+      body = '';
+    }
+
+    // Update plan in memory
+    const approvedPlan: Plan = {
+      ...plan,
+      status: 'approved',
+      updated_at: now
+    };
+
+    // Generate new content with updated frontmatter
+    const newContent = this.generatePlanFileContentWithUnknownFields(approvedPlan, body, unknownFields);
+
+    // Atomic write: temp file + rename
+    const tempPath = planPath + '.tmp';
+    await fs.writeFile(tempPath, newContent, 'utf-8');
+    await fs.rename(tempPath, planPath);
+
+    // Update store
+    this.store.updatePlan(id, approvedPlan);
+
+    return approvedPlan;
+  }
+
+  /**
+   * Generate plan file content with additional unknown fields preserved
+   */
+  private generatePlanFileContentWithUnknownFields(
+    plan: Plan,
+    body: string,
+    unknownFields: Record<string, unknown>
+  ): string {
+    const frontmatterYaml = this.generateFrontmatterYamlWithUnknownFields(plan, unknownFields);
+    return '---\n' + frontmatterYaml + '---\n' + body;
+  }
+
+  /**
+   * Generate YAML frontmatter with unknown fields preserved
+   */
+  private generateFrontmatterYamlWithUnknownFields(
+    plan: Plan,
+    unknownFields: Record<string, unknown>
+  ): string {
+    const lines: string[] = [];
+
+    // Add unknown fields first (preserve order)
+    for (const [key, value] of Object.entries(unknownFields)) {
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          lines.push(key + ': []');
+        } else {
+          lines.push(key + ':');
+          for (const item of value) {
+            lines.push('  - ' + item);
+          }
+        }
+      } else if (typeof value === 'string') {
+        lines.push(key + ': "' + value + '"');
+      } else if (typeof value === 'object' && value !== null) {
+        const nested = safeDump(value, { indent: 2 }).trimEnd();
+        lines.push(key + ':');
+        for (const line of nested.split('\n')) {
+          lines.push('  ' + line);
+        }
+      } else if (value === undefined || value === null) {
+        lines.push(key + ': ""');
+      } else {
+        lines.push(key + ': ' + value);
+      }
+    }
+
+    // Add known plan fields
+    lines.push('id: "' + plan.id + '"');
+    lines.push('title: "' + plan.title + '"');
+    lines.push('status: ' + plan.status);
+    lines.push('author: ' + plan.author);
+    lines.push('');
+    lines.push('created_at: "' + plan.created_at + '"');
+    lines.push('updated_at: "' + plan.updated_at + '"');
+    lines.push('completed_at: "' + plan.completed_at + '"');
+    lines.push('');
+    lines.push('previous_plan: "' + plan.previous_plan + '"');
+
+    if (plan.related_reports && plan.related_reports.length > 0) {
+      lines.push('related_reports:');
+      for (const report of plan.related_reports) {
+        lines.push('  - ' + report);
+      }
+    } else {
+      lines.push('related_reports: []');
+    }
+
+    return lines.join('\n') + '\n';
   }
 
   // ==================== Archive Operation ====================

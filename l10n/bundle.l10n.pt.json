@@ -235,5 +235,12 @@
   "Template file not found: {0}": "Arquivo de modelo não encontrado: {0}",
   "Invalid template file format": "Formato de arquivo de modelo inválido",
   "Failed to toggle template. Check Output channel for details.": "Erro ao alternar modelo. Canal Output para detalhes.",
-  "Failed to toggle template: {0}": "Erro ao alternar modelo: {0}"
+  "Failed to toggle template: {0}": "Erro ao alternar modelo: {0}",
+  "Plan {0} approved": "Plano {0} aprovado",
+  "Plan {0} reverted to draft": "Plano {0} voltou ao rascunho",
+  "Plan is already in draft": "O plano já está no rascunho",
+  "Cannot revert plan in status {0}, use archive instead": "Não é possível voltar ao rascunho no estado {0}, use arquivamento",
+  "Plan must be in draft to approve": "O plano deve estar no rascunho para ser aprovado",
+  "Plan {0} already exists": "O plano {0} já existe",
+  "Plan {0} created from template": "Plano {0} criado a partir do modelo"
 }

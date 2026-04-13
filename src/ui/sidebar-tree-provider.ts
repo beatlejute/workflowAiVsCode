@@ -176,7 +176,19 @@ export class PlanTreeItem extends SidebarTreeItem {
     this.iconPath = isDecomposing
       ? new vscode.ThemeIcon('loading~spin')
       : getPlanStatusIcon(plan.status);
-    this.contextValue = isCurrent ? 'plan-current' : 'plan-archive';
+
+    // Split contextValue based on plan status for conditional menu items
+    if (isCurrent) {
+      if (plan.status === 'draft') {
+        this.contextValue = 'plan-current-draft';
+      } else if (plan.status === 'approved') {
+        this.contextValue = 'plan-current-approved';
+      } else {
+        this.contextValue = 'plan-current'; // fallback for active, completed, etc.
+      }
+    } else {
+      this.contextValue = 'plan-archive';
+    }
 
     // Command to open plan file on click
     const planPath = path.join(

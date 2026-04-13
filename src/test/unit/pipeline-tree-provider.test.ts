@@ -440,11 +440,11 @@ statuses:
 
       const label = item.label as string;
       assert.ok(label.includes('✅'));
-      assert.ok(label.includes('↩️'));
+      assert.ok(label.includes('▶️'));
       assert.ok(label.includes('execute-task'));
     });
 
-    test('TC8: Completed stage with reportInfo has report marker', () => {
+    test('TC8: Completed stage with reportInfo does NOT add duplicate report marker in label (uses getGotoStatusIcon)', () => {
       const item = new CompletedStageTreeItem(
         'create-report',
         '3s',
@@ -459,8 +459,9 @@ statuses:
 
       const label = item.label as string;
       assert.ok(label.includes('✅'));
-      assert.ok(label.includes('📊'));
       assert.ok(label.includes('create-report'));
+      const reportMarkerCount = (label.match(/📊/g) || []).length;
+      assert.strictEqual(reportMarkerCount, 0, 'report marker should NOT be in label - it comes from getGotoStatusIcon');
     });
 
     test('TC9: Completed error with statusChange has no GOTO marker (not Success)', () => {
@@ -485,7 +486,7 @@ statuses:
       assert.ok(label.includes('execute-task'));
     });
 
-    test('TC10: Completed success with statusChange and reportInfo has both markers', () => {
+    test('TC10: Completed success with statusChange and reportInfo has GOTO marker but NOT duplicate report marker in label', () => {
       const item = new CompletedStageTreeItem(
         'create-report',
         '3s',
@@ -500,9 +501,10 @@ statuses:
 
       const label = item.label as string;
       assert.ok(label.includes('✅'));
-      assert.ok(label.includes('↩️'));
-      assert.ok(label.includes('📊'));
+      assert.ok(label.includes('✔️'));
       assert.ok(label.includes('create-report'));
+      const reportMarkerCount = (label.match(/📊/g) || []).length;
+      assert.strictEqual(reportMarkerCount, 1, 'getGotoStatusIcon returns type icon 📊 for create-report stage');
     });
   });
 

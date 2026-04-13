@@ -57,6 +57,37 @@ suite('PipelineLogParser', () => {
       const result = parser.parse(line);
       assert.strictEqual(result.isGoto, false);
     });
+
+    test('should extract report_id from GOTO params and set isCreateReport', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [create-report] GOTO create-report → done status="passed" params={"ticket_id":"IMPL-001","target":"done","report_id":"REPORT-001"}';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isGoto, true);
+      assert.strictEqual(result.isCreateReport, true);
+      assert.ok(result.reportInfo);
+      assert.strictEqual(result.reportInfo!.id, 'REPORT-001');
+      assert.strictEqual(result.reportInfo!.path, '.workflow/reports/REPORT-001.md');
+    });
+
+    test('should extract report_id from analyze-report GOTO', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [analyze-report] GOTO analyze-report → done status="passed" params={"ticket_id":"IMPL-002","target":"done","report_id":"ANL-REPORT-050"}';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isCreateReport, true);
+      assert.strictEqual(result.reportInfo!.id, 'ANL-REPORT-050');
+    });
+
+    test('should not set isCreateReport when report_id is not string', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] GOTO execute-task → done status="passed" params={"ticket_id":"IMPL-001","report_id":123}';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isCreateReport, undefined);
+      assert.strictEqual(result.reportInfo, undefined);
+    });
+
+    test('should not extract report_id from non-report stages', () => {
+      const line = '[2026-03-11T10:00:00] [INFO] [execute-task] GOTO execute-task → done status="passed" params={"ticket_id":"IMPL-001","target":"done","report_id":"REPORT-001"}';
+      const result = parser.parse(line);
+      assert.strictEqual(result.isCreateReport, true);
+      assert.ok(result.reportInfo);
+    });
   });
 
   suite('parse() - START pattern', () => {

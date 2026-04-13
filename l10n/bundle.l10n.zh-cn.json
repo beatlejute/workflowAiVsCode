@@ -235,5 +235,12 @@
   "Template file not found: {0}": "找不到模板文件: {0}",
   "Invalid template file format": "模板文件格式无效",
   "Failed to toggle template. Check Output channel for details.": "切换模板失败。请查看Output频道了解详情。",
-  "Failed to toggle template: {0}": "切换模板失败: {0}"
+  "Failed to toggle template: {0}": "切换模板失败: {0}",
+  "Plan {0} approved": "计划 {0} 已批准",
+  "Plan {0} reverted to draft": "计划 {0} 已退回草稿",
+  "Plan is already in draft": "计划已在草稿中",
+  "Cannot revert plan in status {0}, use archive instead": "无法在状态 {0} 下退回草稿，请使用归档",
+  "Plan must be in draft to approve": "计划必须处于草稿状态才能批准",
+  "Plan {0} already exists": "计划 {0} 已存在",
+  "Plan {0} created from template": "已从模板创建计划 {0}"
 }

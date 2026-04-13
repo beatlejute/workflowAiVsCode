@@ -234,6 +234,22 @@ export class PipelineStateManager {
     // Reset for next stage
     this.state.ticketStatusHistory = [];
     this.state.currentOutputLines = [];
+
+    // Fallback report detection: if no reportInfo but stage is a report stage, try to find report
+    if (!this.state.currentStageReport && prevStage) {
+      const isReportStage = prevStage === 'create-report' || 
+                           prevStage === 'analyze-report' || 
+                           prevStage.endsWith('-report');
+      if (isReportStage && this.state.currentTicket) {
+        const reportId = this.state.currentTicket.replace(/^[A-Z]+-(\d+)$/, 'REPORT-$1');
+        const fs = require('fs');
+        const reportPath = `.workflow/reports/${reportId}.md`;
+        if (fs.existsSync(reportPath)) {
+          this.state.currentStageReport = { id: reportId, path: reportPath };
+        }
+      }
+    }
+
     this.state.currentStageReport = undefined;
     // stageStartTime НЕ сбрасываем здесь — он сбрасывается только при START новой стадии
     // Это предотвращает видимый сброс таймера (3с→0с→1с) между GOTO и START

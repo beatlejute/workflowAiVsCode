@@ -235,5 +235,12 @@
   "Template file not found: {0}": "Fichier modèle non trouvé: {0}",
   "Invalid template file format": "Format de fichier modèle invalide",
   "Failed to toggle template. Check Output channel for details.": "Échec du basculement du modèle. Voir le canal Output.",
-  "Failed to toggle template: {0}": "Échec du basculement du modèle: {0}"
+  "Failed to toggle template: {0}": "Échec du basculement du modèle: {0}",
+  "Plan {0} approved": "Plan {0} approuvé",
+  "Plan {0} reverted to draft": "Plan {0} revenu au brouillon",
+  "Plan is already in draft": "Le plan est déjà au brouillon",
+  "Cannot revert plan in status {0}, use archive instead": "Impossible de revenir au brouillon dans le statut {0}, utilisez l'archive",
+  "Plan must be in draft to approve": "Le plan doit être en brouillon pour être approuvé",
+  "Plan {0} already exists": "Le plan {0} existe déjà",
+  "Plan {0} created from template": "Plan {0} créé à partir du modèle"
 }

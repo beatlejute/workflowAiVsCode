@@ -604,3 +604,47 @@ suite('parseTimestamp()', () => {
     assert.ok(result! > 0);
   });
 });
+
+suite('Fallback report detection', () => {
+  let manager: PipelineStateManager;
+
+  setup(() => {
+    manager = new PipelineStateManager();
+  });
+
+  test('should detect report from GOTO params for create-report stage', () => {
+    manager.process({ isStart: true, stage: 'create-report' });
+    manager.process({ isGoto: true, gotoStage: 'done', ticket: 'IMPL-001', isCreateReport: true, reportInfo: { id: 'REPORT-001', path: '.workflow/reports/REPORT-001.md' } });
+    const stages = manager.getCompletedStages();
+    assert.strictEqual(stages.length, 1);
+    assert.strictEqual(stages[0].stage, 'create-report');
+    assert.ok(stages[0].reportInfo);
+    assert.strictEqual(stages[0].reportInfo!.id, 'REPORT-001');
+  });
+
+  test('should detect report from GOTO params for analyze-report stage', () => {
+    manager.process({ isStart: true, stage: 'analyze-report' });
+    manager.process({ isGoto: true, gotoStage: 'done', ticket: 'IMPL-002', isCreateReport: true, reportInfo: { id: 'ANL-REPORT-050', path: '.workflow/reports/ANL-REPORT-050.md' } });
+    const stages = manager.getCompletedStages();
+    assert.strictEqual(stages.length, 1);
+    assert.strictEqual(stages[0].stage, 'analyze-report');
+    assert.ok(stages[0].reportInfo);
+  });
+
+  test('should not add reportInfo for non-report stages', () => {
+    manager.process({ isStart: true, stage: 'execute-task' });
+    manager.process({ isGoto: true, gotoStage: 'done', ticket: 'IMPL-003' });
+    const stages = manager.getCompletedStages();
+    assert.strictEqual(stages.length, 1);
+    assert.strictEqual(stages[0].stage, 'execute-task');
+    assert.strictEqual(stages[0].reportInfo, undefined);
+  });
+
+  test('should not add reportInfo when no ticket for report stage', () => {
+    manager.process({ isStart: true, stage: 'create-report' });
+    manager.process({ isGoto: true, gotoStage: 'done' });
+    const stages = manager.getCompletedStages();
+    assert.strictEqual(stages.length, 1);
+    assert.strictEqual(stages[0].reportInfo, undefined);
+  });
+});

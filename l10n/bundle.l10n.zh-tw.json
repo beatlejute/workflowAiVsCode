@@ -235,5 +235,12 @@
   "Template file not found: {0}": "找不到模板檔案: {0}",
   "Invalid template file format": "模板檔案格式無效",
   "Failed to toggle template. Check Output channel for details.": "切換模板失敗。請查看Output頻道了解詳情。",
-  "Failed to toggle template: {0}": "切換模板失敗: {0}"
+  "Failed to toggle template: {0}": "切換模板失敗: {0}",
+  "Plan {0} approved": "計劃 {0} 已批准",
+  "Plan {0} reverted to draft": "計劃 {0} 已退回草稿",
+  "Plan is already in draft": "計劃已在草稿中",
+  "Cannot revert plan in status {0}, use archive instead": "無法在狀態 {0} 下退回草稿，請使用封存",
+  "Plan must be in draft to approve": "計劃必須處於草稿狀態才能批准",
+  "Plan {0} already exists": "計劃 {0} 已存在",
+  "Plan {0} created from template": "已從模板創建計劃 {0}"
 }

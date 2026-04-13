@@ -131,9 +131,8 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     public readonly result: StageResult = success === false ? StageResult.Error : StageResult.Success
   ) {
     const icon = getStageResultIcon(result);
-    const gotoMarker = (statusChange && result === StageResult.Success) ? '\u21a9\ufe0f' : '';
-    const reportMarker = reportInfo ? '\ud83d\udcca' : '';
-    const label = `${icon}${gotoMarker}${reportMarker} ${stage}`;
+    const gotoMarker = (statusChange && result === StageResult.Success) ? getGotoStatusIcon(statusChange, stage) : '';
+    const label = `${icon}${gotoMarker} ${stage}`;
     const stableIndex = typeof logLineHint === 'number' ? logLineHint : 0;
     super(
       label,
@@ -521,4 +520,62 @@ function createHistoryReportTooltip(reportId: string, reportPath: string): vscod
   markdown.appendMarkdown(`| **${t('Path')}** | ${reportPath} |\n`);
   markdown.appendMarkdown(`\n[${t('Click to open')}](command:vscode.open)`);
   return markdown;
+}
+
+const GOTO_STATUS_ICONS: Record<string, string> = {
+  found: '🔍',
+  passed: '✔️',
+  relevant: '✔️',
+  completed: '🏁',
+  has_ready: '📋',
+  plan_created: '📝',
+  decomposed: '✔️',
+  completed_in_progress: '✔️',
+  done: '✔️',
+  failed: '✗',
+  irrelevant: '🚫',
+  error: '⚠️',
+  max_reached: '🛑',
+  blocked: '🛑',
+  empty: '∅',
+  no_triggers: '∅',
+  no_plan: '∅',
+  skipped: '⏭️',
+  default: '↩️',
+  in_progress: '▶️',
+  'in-progress': '▶️',
+  in_review: '👁️',
+  review: '👁️',
+  ready: '🔁',
+  needs_decomposition: '🔀',
+  has_gaps: '📉'
+};
+
+function getStageTypeIcon(stage: string): string {
+  if (stage.startsWith('script-')) return '⚙️';
+  if (stage.startsWith('increment-')) return '🔄';
+  if (stage.endsWith('-report')) return '📊';
+  return '🤖';
+}
+
+function isFallbackAgent(stage: string): boolean {
+  return stage.startsWith('fallback-');
+}
+
+function parseLastSegment(statusChange: string): string {
+  if (!statusChange) return '';
+  const segments = statusChange.split('→');
+  return segments[segments.length - 1].trim();
+}
+
+export function getGotoStatusIcon(statusChange: string, stage: string): string {
+  const lastSegment = parseLastSegment(statusChange);
+  const statusIcon = GOTO_STATUS_ICONS[lastSegment] || '↩️';
+  
+  let typeIcon = getStageTypeIcon(stage);
+  if (isFallbackAgent(stage) && typeIcon === '🤖') {
+    typeIcon = '🔀';
+  }
+  
+  return `${statusIcon}${typeIcon}`;
 }

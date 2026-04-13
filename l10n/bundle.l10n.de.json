@@ -235,5 +235,12 @@
   "Template file not found: {0}": "Vorlagendatei nicht gefunden: {0}",
   "Invalid template file format": "Ungültiges Vorlagendateiformat",
   "Failed to toggle template. Check Output channel for details.": "Vorlage konnte nicht umgeschaltet werden. Details im Output-Kanal.",
-  "Failed to toggle template: {0}": "Vorlage konnte nicht umgeschaltet werden: {0}"
+  "Failed to toggle template: {0}": "Vorlage konnte nicht umgeschaltet werden: {0}",
+  "Plan {0} approved": "Plan {0} genehmigt",
+  "Plan {0} reverted to draft": "Plan {0} auf Entwurf zurückgesetzt",
+  "Plan is already in draft": "Plan ist bereits im Entwurf",
+  "Cannot revert plan in status {0}, use archive instead": "Plan im Status {0} kann nicht zurückgesetzt werden, stattdessen archivieren",
+  "Plan must be in draft to approve": "Plan muss im Entwurf sein, um genehmigt zu werden",
+  "Plan {0} already exists": "Plan {0} existiert bereits",
+  "Plan {0} created from template": "Plan {0} aus Vorlage erstellt"
 }

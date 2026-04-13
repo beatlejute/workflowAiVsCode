@@ -309,10 +309,10 @@ export class WorkflowStore implements IStore {
   // ==================== Incremental Update Methods ====================
 
   /**
-   * Parse a file and return the parsed entity (ticket, plan, or report)
+   * Parse a file and return the parsed entity (ticket, plan, report, or plan-template)
    * Used by updateFile() for incremental updates
    */
-  private async parseFile(filePath: string): Promise<{ type: 'ticket' | 'plan' | 'report'; data: Ticket | Plan | Report; status?: TicketStatus } | null> {
+  private async parseFile(filePath: string): Promise<{ type: 'ticket' | 'plan' | 'report' | 'plan-template'; data: Ticket | Plan | Report | PlanTemplate; status?: TicketStatus } | null> {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
       const relativePath = path.relative(this.workflowRoot ?? '', filePath);
@@ -327,9 +327,20 @@ export class WorkflowStore implements IStore {
         return { type: 'ticket', data: { ...frontmatter, status, ...(reviews.length > 0 ? { reviews } : {}) }, status };
       }
 
+      // Plan templates: plans/templates/{ID}.md — must check BEFORE general plans/ branch
+      if (pathParts[0] === 'plans' && pathParts[1] === 'templates' && pathParts.length >= 3) {
+        const { frontmatter } = parseFrontmatter<PlanTemplate>(content);
+        if (!frontmatter.id) { return null; }
+        return { type: 'plan-template', data: frontmatter };
+      }
+
       // Check for plans: plans/current/{ID}.md or plans/archive/{ID}.md
+      // Explicitly check for 'current' or 'archive' — do NOT treat templates as current
       if (pathParts[0] === 'plans' && pathParts.length >= 3) {
-        const folder = pathParts[1] === 'archive' ? 'archive' as const : 'current' as const;
+        if (pathParts[1] !== 'current' && pathParts[1] !== 'archive') {
+          return null; // Unknown plans subfolder (e.g. templates) — skip
+        }
+        const folder = pathParts[1] as 'current' | 'archive';
         const { frontmatter } = parseFrontmatter<Plan>(content);
         if (!frontmatter.id) { return null; }
         return { type: 'plan', data: { ...frontmatter, folder } };
@@ -353,7 +364,7 @@ export class WorkflowStore implements IStore {
    * Update cache with a parsed entity
    * Emits appropriate add/update event
    */
-  private updateCache(filePath: string, entity: { type: 'ticket' | 'plan' | 'report'; data: Ticket | Plan | Report; status?: TicketStatus }): void {
+  private updateCache(filePath: string, entity: { type: 'ticket' | 'plan' | 'report' | 'plan-template'; data: Ticket | Plan | Report | PlanTemplate; status?: TicketStatus }): void {
     if (entity.type === 'ticket') {
       const ticket = entity.data as Ticket;
       const isNew = !this.tickets.has(ticket.id);
@@ -385,6 +396,15 @@ export class WorkflowStore implements IStore {
         id: report.id,
         operation: 'add'
       });
+    } else if (entity.type === 'plan-template') {
+      const template = entity.data as PlanTemplate;
+      const isNew = !this.planTemplates.has(template.id);
+      this.planTemplates.set(template.id, template);
+      this.emitEvent({
+        type: 'plan-template',
+        id: template.id,
+        operation: isNew ? 'add' : 'update'
+      });
     }
   }
 
@@ -406,7 +426,18 @@ export class WorkflowStore implements IStore {
       }
     }
 
-    // Check for plans: plans/{folder}/{ID}.md
+    // Plan templates: plans/templates/{ID}.md — must check BEFORE general plans/ branch
+    if (pathParts[0] === 'plans' && pathParts[1] === 'templates' && pathParts.length >= 3) {
+      const fileName = pathParts[2];
+      const id = fileName.replace('.md', '');
+      if (this.planTemplates.has(id)) {
+        this.planTemplates.delete(id);
+        this.emitEvent({ type: 'plan-template', id, operation: 'delete' });
+      }
+      return; // Don't fall through to general plans branch
+    }
+
+    // Check for plans: plans/{current|archive}/{ID}.md
     if (pathParts[0] === 'plans' && pathParts.length >= 3) {
       const fileName = pathParts[2];
       const id = fileName.replace('.md', '');
@@ -431,7 +462,7 @@ export class WorkflowStore implements IStore {
   /**
    * Incremental update for a single file change
    * Parses only the changed file and updates cache without full refresh
-   * 
+   *
    * @param filePath - Path to the changed file
    * @param changeType - Type of change: 'create', 'change', or 'delete'
    */
@@ -447,6 +478,7 @@ export class WorkflowStore implements IStore {
     this.emitEvent({ type: 'ticket', operation: 'refresh' });
     this.emitEvent({ type: 'plan', operation: 'refresh' });
     this.emitEvent({ type: 'report', operation: 'refresh' });
+    this.emitEvent({ type: 'plan-template', operation: 'refresh' });
   }
 
   /**

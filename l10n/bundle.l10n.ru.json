@@ -235,5 +235,12 @@
   "Template file not found: {0}": "Файл шаблона не найден: {0}",
   "Invalid template file format": "Неверный формат файла шаблона",
   "Failed to toggle template. Check Output channel for details.": "Не удалось переключить шаблон. Подробности в канале Output.",
-  "Failed to toggle template: {0}": "Не удалось переключить шаблон: {0}"
+  "Failed to toggle template: {0}": "Не удалось переключить шаблон: {0}",
+  "Plan {0} approved": "План {0} утверждён",
+  "Plan {0} reverted to draft": "План {0} возвращён в черновики",
+  "Plan is already in draft": "План уже в черновике",
+  "Cannot revert plan in status {0}, use archive instead": "Нельзя вернуть план в статусе {0}, используйте архив",
+  "Plan must be in draft to approve": "План должен быть в черновике для утверждения",
+  "Plan {0} already exists": "План {0} уже существует",
+  "Plan {0} created from template": "План {0} создан из шаблона"
 }

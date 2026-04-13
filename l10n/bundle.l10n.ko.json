@@ -235,5 +235,12 @@
   "Template file not found: {0}": "템플릿 파일을 찾을 수 없음: {0}",
   "Invalid template file format": "템플릿 파일 형식이 잘못됨",
   "Failed to toggle template. Check Output channel for details.": "템플릿 전환 실패. Output 채널을 확인하세요.",
-  "Failed to toggle template: {0}": "템플릿 전환 실패: {0}"
+  "Failed to toggle template: {0}": "템플릿 전환 실패: {0}",
+  "Plan {0} approved": "계획 {0} 승인됨",
+  "Plan {0} reverted to draft": "계획 {0} 초안으로 되돌림",
+  "Plan is already in draft": "계획은 이미 초안입니다",
+  "Cannot revert plan in status {0}, use archive instead": "상태 {0}에서는 초안으로 되돌릴 수 없습니다. 대신 아카이브를 사용하세요",
+  "Plan must be in draft to approve": "승인하려면 계획이 초안이어야 합니다",
+  "Plan {0} already exists": "계획 {0}이(가) 이미 존재합니다",
+  "Plan {0} created from template": "템플릿에서 계획 {0} 생성됨"
 }

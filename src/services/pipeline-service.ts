@@ -80,6 +80,7 @@ export class PipelineService extends EventEmitter {
   private totalStages: number = 0;
   private completedStages: number = 0;
   private fallbackUsed = false;
+  private logLines: string[] = []; // Rolling buffer of stdout lines for summary detection
 
   private readonly _onStageChange = new vscode.EventEmitter<string | undefined>();
   readonly onStageChange = this._onStageChange.event;
@@ -170,6 +171,7 @@ export class PipelineService extends EventEmitter {
     this._onStageChange.fire(undefined);
     this.currentAgent = undefined;
     this.currentTicket = undefined;
+    this.logLines = [];
 
     this.setState(PipelineState.Running);
 
@@ -237,6 +239,18 @@ export class PipelineService extends EventEmitter {
       const output = data.toString();
       this.emit('log', output);
       this.parseStdout(output);
+
+      // Collect lines into rolling buffer (keep last 100 to have margin for 50-line window)
+      const newLines = output.split('\n');
+      for (const line of newLines) {
+        if (line.trim()) {
+          this.logLines.push(line.trim());
+        }
+      }
+      // Keep buffer bounded
+      if (this.logLines.length > 200) {
+        this.logLines = this.logLines.slice(-100);
+      }
     });
 
     // Handle stderr
@@ -262,17 +276,50 @@ export class PipelineService extends EventEmitter {
         return;
       }
 
-      // Check for stage errors even if exit code is 0
-      // CLI may exit with 0 even when a stage fails (e.g., exit 1 in script)
-      if (code === 0 && this.hasStageErrors) {
-        this.reportProgress('Pipeline failed', 100);
-        this.setState(PipelineState.Error);
-      } else if (code === 0) {
+      // ADR-003: Use summary from last 50 lines as authoritative status source.
+      // PipelineRunner always emits a summary block at the end of the log with:
+      //   - "Pipeline completed successfully!" (explicit success marker)
+      //   - "Stages failed: N" (failure count)
+      // We check ONLY the last 50 lines because:
+      //   1. Summary is always in the tail of the log
+      //   2. "Pipeline completed successfully!" may appear in the middle of the log
+      //      (nested process, user script echo, previous run retrospective)
+      //   3. Only the final summary block is authoritative
+      const tailWindow = this.logLines.slice(-50);
+      const tailText = tailWindow.join('\n');
+
+      // Check for authoritative summary markers in the tail window
+      const hasSuccessMarker = /Pipeline completed successfully!/.test(tailText);
+      const stagesFailedMatch = tailText.match(/Stages failed:\s*(\d+)/);
+
+      if (stagesFailedMatch !== null) {
+        // Summary found — it overrides heuristic hasStageErrors
+        const stagesFailed = parseInt(stagesFailedMatch[1], 10);
+        if (stagesFailed === 0 && code === 0) {
+          this.reportProgress('Pipeline completed', 100);
+          this.setState(PipelineState.Completed);
+        } else {
+          this.reportProgress('Pipeline failed', 100);
+          this.setState(PipelineState.Error);
+        }
+      } else if (hasSuccessMarker) {
+        // "Pipeline completed successfully!" in tail without explicit "Stages failed"
+        // Treat as completed (success marker is authoritative when in tail)
         this.reportProgress('Pipeline completed', 100);
         this.setState(PipelineState.Completed);
       } else {
-        this.reportProgress('Pipeline failed', 100);
-        this.setState(PipelineState.Error);
+        // Fallback: no summary in tail — use existing heuristic + exitCode logic
+        // This handles cases where process was killed, SIGKILL, stdout broken, etc.
+        if (code === 0 && this.hasStageErrors) {
+          this.reportProgress('Pipeline failed', 100);
+          this.setState(PipelineState.Error);
+        } else if (code === 0) {
+          this.reportProgress('Pipeline completed', 100);
+          this.setState(PipelineState.Completed);
+        } else {
+          this.reportProgress('Pipeline failed', 100);
+          this.setState(PipelineState.Error);
+        }
       }
     });
 
@@ -504,8 +551,25 @@ export class PipelineService extends EventEmitter {
       };
     }
 
-    // Detect stage errors: look for FAIL/ERROR patterns in the message
-    if (/(FAIL|ERROR|failed|failure)/i.test(message)) {
+    // Detect stage errors: narrow regex for real error markers only.
+    // Based on real CLI log formats from PipelineRunner and pipeline-log-parser.ts:
+    //
+    // MATCHES (real error indicators from .workflow/logs/*.log and src/):
+    //   - [ERROR] log level              — explicit error level (parsed as level === 'ERROR')
+    //   - COMPLETE stage="X" status="error"  — stage completion with error status
+    //   - COMPLETE stage="X" status="failed" — stage completion with failed status
+    //   - exitCode=N (N > 0)           — nonzero exit code (pipeline-log-parser.ts:96)
+    //   - Stage "X" failed / stage failed — stage failure message (with/without quotes, with/without capitalization)
+    //   - task failure detected         — explicit failure message
+    //   - FAIL: stage execution failed  — FAIL prefix with context
+    //
+    // DOES NOT MATCH (false positives from INFO stats):
+    //   - [INFO] Total failed: 166, passed: 220  — backlog ticket statistics (failed: N, passed: M pattern)
+    //   - [INFO] ...failed... in generic INFO context without error markers
+    //
+    // Strategy: ERROR log level always indicates stage error. For other levels, check message content.
+    const isStatsLine = /\bTotal\s+failed:\s*\d+,\s*passed:/i.test(message);
+    if (level === 'ERROR' || (!isStatsLine && /(status="(error|failed)"|exitCode=([1-9]\d*)|\b\w+\s+failed\b|task failure|FAIL:)/i.test(message))) {
       this.hasStageErrors = true;
     }
 
@@ -574,8 +638,10 @@ export class PipelineService extends EventEmitter {
       };
     }
 
-    // Detect stage errors in legacy format
-    if (/(FAIL|ERROR|failed|failure)/i.test(line)) {
+    // Detect stage errors in legacy format — same narrow markers as parseLine() above.
+    // See comment in parseLine() for full documentation of matched/non-matched formats.
+    const isStatsLine = /\bTotal\s+failed:\s*\d+,\s*passed:/i.test(line);
+    if (!isStatsLine && (/\[ERROR\]|status="(error|failed)"|exitCode=([1-9]\d*)|\b\w+\s+failed\b|task failure|FAIL:/i.test(line))) {
       this.hasStageErrors = true;
     }
 

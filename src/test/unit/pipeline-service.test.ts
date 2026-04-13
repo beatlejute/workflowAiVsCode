@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for PipelineService
  *
  * Tests:
@@ -14,6 +14,8 @@
  */
 
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { EventEmitter } from 'events';
 import { PipelineService, PipelineState } from '../../services/pipeline-service';
 
@@ -347,7 +349,7 @@ suite('PipelineService - process exit handling', () => {
         stderr: new EventEmitter(),
         on: function(event: string, handler: any) {
           if (event === 'error' && spawnCallCount === 1) {
-            // First spawn (workflow) fails with ENOENT → triggers fallback
+            // First spawn (workflow) fails with ENOENT в†’ triggers fallback
             setTimeout(() => {
               const err = new Error('spawn workflow ENOENT') as NodeJS.ErrnoException;
               err.code = 'ENOENT';
@@ -355,7 +357,7 @@ suite('PipelineService - process exit handling', () => {
             }, 10);
           }
           if (event === 'error' && spawnCallCount === 2) {
-            // Second spawn (workflow-ai) also fails → Error state
+            // Second spawn (workflow-ai) also fails в†’ Error state
             setTimeout(() => {
               const err = new Error('spawn workflow-ai ENOENT') as NodeJS.ErrnoException;
               err.code = 'ENOENT';
@@ -379,6 +381,120 @@ suite('PipelineService - process exit handling', () => {
 
     callSpawnWithFallback(svc, 'workflow', ['run'], process.env);
   }).timeout(10000);
+
+  // ADR-003: Summary-based status detection (FIX-043)
+  suite('Summary-based status detection (last 50 lines)', () => {
+    
+    test('should complete when summary shows "Stages failed: 0" and code === 0', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Completed) {
+          done();
+        }
+      });
+
+      // Simulate log with summary in last 50 lines
+      mock.simulateStdout('[2026-03-11T10:00:00] [ERROR] [stage] Some error occurred\n');
+      mock.simulateStdout('Pipeline completed successfully!\n');
+      mock.simulateStdout('Stages failed: 0\n');
+      mock.simulateClose(0);
+    }).timeout(5000);
+
+    test('should error when summary shows "Stages failed: 2" regardless of hasStageErrors', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Error) {
+          done();
+        }
+      });
+
+      // Simulate log with failure count in summary
+      mock.simulateStdout('Pipeline execution finished\n');
+      mock.simulateStdout('Stages failed: 2\n');
+      mock.simulateClose(0); // Even with code 0, should error based on summary
+    }).timeout(5000);
+
+    test('should complete when "Pipeline completed successfully!" is in tail without "Stages failed"', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Completed) {
+          done();
+        }
+      });
+
+      // Simulate success marker without explicit failure count
+      mock.simulateStdout('Some output\n');
+      mock.simulateStdout('Pipeline completed successfully!\n');
+      mock.simulateClose(0);
+    }).timeout(5000);
+
+    test('should NOT match "Pipeline completed successfully!" in middle of log (only in last 50 lines)', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Error) {
+          done();
+        }
+      });
+
+      // Simulate success marker in middle of log (not in tail)
+      mock.simulateStdout('Pipeline completed successfully!\n');
+      // Add 50+ more lines to push the success marker out of the tail window
+      for (let i = 0; i < 55; i++) {
+        mock.simulateStdout(`Log line ${i}\n`);
+      }
+      // Now close with error code
+      mock.simulateClose(1);
+    }).timeout(5000);
+
+    test('should fallback to heuristic + exitCode when no summary in tail', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Error) {
+          done();
+        }
+      });
+
+      // Simulate error without summary markers
+      mock.simulateStdout('[2026-03-11T10:00:00] [ERROR] [stage] FAIL: stage execution failed\n');
+      mock.simulateStdout('Process crashed\n');
+      mock.simulateClose(0); // Code 0 but hasStageErrors should trigger Error
+    }).timeout(5000);
+
+    test('should override hasStageErrors when summary is present in tail', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Completed) {
+          done();
+        }
+      });
+
+      // Simulate error in log but successful summary
+      mock.simulateStdout('[2026-03-11T10:00:00] [ERROR] [stage] Temporary error (recovered)\n');
+      mock.simulateStdout('Stage recovered\n');
+      mock.simulateStdout('Pipeline completed successfully!\n');
+      mock.simulateStdout('Stages failed: 0\n');
+      mock.simulateClose(0);
+    }).timeout(5000);
+
+    test('should handle "Stages failed: 0" with non-zero code as Error', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Error) {
+          done();
+        }
+      });
+
+      // Summary says success but exit code says failure
+      mock.simulateStdout('Pipeline completed successfully!\n');
+      mock.simulateStdout('Stages failed: 0\n');
+      mock.simulateClose(1); // Non-zero code should override summary success
+    }).timeout(5000);
+
+    test('should handle summary with high failure count', (done) => {
+      service.onStateChange((state) => {
+        if (state === PipelineState.Error) {
+          done();
+        }
+      });
+
+      mock.simulateStdout('Pipeline execution completed\n');
+      mock.simulateStdout('Stages failed: 5\n');
+      mock.simulateClose(0);
+    }).timeout(5000);
+  });
 });
 
 suite('PipelineService - stop with active process', () => {
@@ -501,5 +617,192 @@ suite('PipelineService - log events', () => {
     });
 
     mock.simulateStdout('test output\n');
+  }).timeout(5000);
+});
+
+// QA-031: False-positive pipeline status detection tests (TDD — post FIX-042/FIX-043)
+suite('QA-031: False-positive pipeline status detection', () => {
+
+  // Test 1: INFO-строка "Total failed: N, passed: M" → Completed (hasStageErrors=false)
+  test('should NOT treat INFO stats line "Total failed: N, passed: M" as stage error → Completed', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Completed) {
+        service.removeAllListeners();
+        done();
+      } else if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        assert.fail('INFO stats line should not trigger Error state');
+      }
+    });
+
+    // Simulate INFO line with ticket statistics (not stage errors)
+    mock.simulateStdout('[2026-04-07T10:00:00] [INFO] [stats] Total failed: 166, passed: 220\n');
+    mock.simulateStdout('[2026-04-07T10:00:01] [INFO] [Runner] Pipeline completed successfully!\n');
+    mock.simulateStdout('Stages failed: 0\n');
+    mock.simulateClose(0);
+  }).timeout(5000);
+
+  // Test 2: Явная ошибка → Error
+  test('should detect explicit [ERROR] Stage X failed → Error', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        done();
+      }
+    });
+
+    // Simulate explicit error in log
+    mock.simulateStdout('[2026-04-07T10:00:00] [ERROR] [stage-x] Stage "stage-x" failed\n');
+    mock.simulateStdout('exitCode=1\n');
+    mock.simulateClose(0); // Even with code 0, explicit error should trigger Error
+  }).timeout(5000);
+
+  // Test 3: Retry с последующим успехом → Completed (регресс на clear hasStageErrors)
+  test('should clear hasStageErrors on retry followed by success → Completed', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Completed) {
+        service.removeAllListeners();
+        done();
+      } else if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        assert.fail('Retry followed by success should not trigger Error state');
+      }
+    });
+
+    // Simulate retry scenario: error on attempt 1, success on attempt 2
+    mock.simulateStdout('[2026-04-07T10:00:00] [WARN] [stage-a] RETRY stage="stage-a" attempt=1/3\n');
+    mock.simulateStdout('[2026-04-07T10:00:01] [ERROR] [stage-a] Stage "stage-a" failed on attempt 1\n');
+    mock.simulateStdout('[2026-04-07T10:00:02] [INFO] [stage-a] Retrying stage-a\n');
+    mock.simulateStdout('[2026-04-07T10:00:10] [INFO] [stage-a] GOTO stage-a → stage-b status="success"\n');
+    mock.simulateStdout('[2026-04-07T10:01:00] [INFO] [stage-b] GOTO stage-b → complete status="success"\n');
+    mock.simulateStdout('Pipeline completed successfully!\n');
+    mock.simulateStdout('Stages failed: 0\n');
+    mock.simulateClose(0);
+  }).timeout(5000);
+
+  // Test 4: Summary "Stages failed: 2" → Error
+  test('should detect summary "Stages failed: 2" → Error', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        done();
+      }
+    });
+
+    mock.simulateStdout('[2026-04-07T10:00:00] [INFO] [stage-a] GOTO stage-a → stage-b status="success"\n');
+    mock.simulateStdout('Pipeline execution finished\n');
+    mock.simulateStdout('Stages failed: 2\n');
+    mock.simulateClose(0); // Even with exit code 0, summary says 2 failed
+  }).timeout(5000);
+
+  // Test 5: Summary "Stages failed: 10" → Error (двузначное число)
+  test('should detect summary "Stages failed: 10" (multi-digit) → Error', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        done();
+      }
+    });
+
+    mock.simulateStdout('[2026-04-07T10:00:00] [INFO] [Runner] Processing stages\n');
+    mock.simulateStdout('Pipeline execution finished\n');
+    mock.simulateStdout('Stages failed: 10\n');
+    mock.simulateClose(0);
+  }).timeout(5000);
+
+  // Test 6: Негативный тест окна summary — маркер в середине + ошибка в хвосте → Error
+  // Reads fixture file: src/test/unit/__fixtures__/pipeline-mid-success-tail-error.log
+  test('should NOT match "Pipeline completed successfully!" in middle of log when tail has errors → Error', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    service.onStateChange((state) => {
+      if (state === PipelineState.Error) {
+        service.removeAllListeners();
+        done();
+      }
+    });
+
+    // Read log content from fixture file
+    const fixturePath = path.join(__dirname, '__fixtures__', 'pipeline-mid-success-tail-error.log');
+    const logContent = fs.readFileSync(fixturePath, 'utf-8');
+    const lines = logContent.split('\n');
+
+    // Simulate stdout line by line from fixture
+    for (const line of lines) {
+      if (line.trim()) {
+        mock.simulateStdout(line + '\n');
+      }
+    }
+    mock.simulateClose(1);
+  }).timeout(5000);
+
+  // Test 7: Негативный тест по exitCode — exitCode=10 и exitCode=127 → hasStageErrors=true
+  test('should detect exitCode=10 as stage error (multi-digit exit code)', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    let stateChanged = false;
+    service.onStateChange((state) => {
+      stateChanged = true;
+      if (state === PipelineState.Error) {
+        done();
+      }
+    });
+
+    mock.simulateStdout('[2026-04-07T10:00:00] [ERROR] [stage-a] exitCode=10\n');
+    mock.simulateClose(0);
+
+    // Fallback timeout: if state didn't change in 3s, fail explicitly
+    setTimeout(() => {
+      if (!stateChanged) {
+        assert.fail('State did not change for exitCode=10 test');
+      }
+    }, 3000);
+  }).timeout(5000);
+
+  test('should detect exitCode=127 as stage error (command not found)', (done) => {
+    const mock = createMockSpawn();
+    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    callSpawnWithFallback(service, 'workflow', ['run'], process.env);
+
+    let stateChanged = false;
+    service.onStateChange((state) => {
+      stateChanged = true;
+      if (state === PipelineState.Error) {
+        done();
+      }
+    });
+
+    mock.simulateStdout('[2026-04-07T10:00:00] [ERROR] [stage-a] exitCode=127\n');
+    mock.simulateClose(0);
+
+    setTimeout(() => {
+      if (!stateChanged) {
+        assert.fail('State did not change for exitCode=127 test');
+      }
+    }, 3000);
   }).timeout(5000);
 });

@@ -1626,4 +1626,182 @@ reporting:
       assert.strictEqual(store.getPlanTemplates().length, 0, 'Should have 0 templates after clear');
     });
   });
+
+  suite('Plan-Template File Classification (FIX-044)', () => {
+
+    /**
+     * Helper to create a test plan template file
+     */
+    function createTemplateFile(dir: string, id: string, title: string) {
+      const template: PlanTemplate = {
+        id,
+        title,
+        type: 'template',
+        trigger: { type: 'daily', params: {} },
+        last_triggered: '',
+        enabled: true
+      };
+      const yamlContent = yaml.dump(template, { indent: 2 });
+      const content = `---\n${yamlContent}---\n## Template content`;
+      const filePath = path.join(dir, `${id}.md`);
+      fs.writeFileSync(filePath, content, 'utf-8');
+      return filePath;
+    }
+
+    test('updateFile for plan template should add to planTemplates Map, not plans', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const templatesDir = path.join(plansDir, 'templates');
+      const templatePath = createTemplateFile(templatesDir, 'TMPL-001', 'Test Template');
+
+      // Simulate file change event
+      await store.updateFile(templatePath, 'create');
+
+      // Template should be in planTemplates
+      assert.strictEqual(store.getPlanTemplates().length, 1, 'Should have 1 plan template');
+      assert.ok(store.getPlanTemplateById('TMPL-001'), 'Should find template by ID');
+
+      // Template should NOT be in plans (getCurrentPlans should not contain it)
+      const currentPlans = store.getCurrentPlans();
+      const foundInPlans = currentPlans.find(p => p.id === 'TMPL-001');
+      assert.strictEqual(foundInPlans, undefined, 'TMPL-001 should NOT appear in current plans');
+    });
+
+    test('updateFile for plan template change should update planTemplates Map', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const templatesDir = path.join(plansDir, 'templates');
+      const templatePath = createTemplateFile(templatesDir, 'TMPL-002', 'Original Title');
+
+      await store.updateFile(templatePath, 'create');
+      assert.strictEqual(store.getPlanTemplateById('TMPL-002')?.title, 'Original Title');
+
+      // Modify the file
+      const modifiedTemplate: PlanTemplate = {
+        id: 'TMPL-002',
+        title: 'Modified Title',
+        type: 'template',
+        trigger: { type: 'weekly', params: { day: 'monday' } },
+        last_triggered: '',
+        enabled: false
+      };
+      const modifiedYaml = yaml.dump(modifiedTemplate, { indent: 2 });
+      fs.writeFileSync(templatePath, `---\n${modifiedYaml}---\n## Modified`, 'utf-8');
+
+      await store.updateFile(templatePath, 'change');
+
+      const updated = store.getPlanTemplateById('TMPL-002');
+      assert.strictEqual(updated?.title, 'Modified Title', 'Template should be updated');
+      assert.strictEqual(updated?.enabled, false, 'Template enabled should be updated');
+    });
+
+    test('updateFile for plan template delete should remove from planTemplates Map', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const templatesDir = path.join(plansDir, 'templates');
+      const templatePath = createTemplateFile(templatesDir, 'TMPL-003', 'To Be Deleted');
+
+      await store.updateFile(templatePath, 'create');
+      assert.strictEqual(store.getPlanTemplates().length, 1, 'Should have 1 template');
+
+      await store.updateFile(templatePath, 'delete');
+
+      assert.strictEqual(store.getPlanTemplates().length, 0, 'Should have 0 templates after delete');
+      assert.strictEqual(store.getPlanTemplateById('TMPL-003'), undefined, 'Template should be removed');
+
+      // Plans Map should not be affected
+      assert.strictEqual(store.getPlans().length, 0, 'Plans Map should not be affected');
+    });
+
+    test('updateFile for current plan should add to plans Map, not planTemplates', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const currentDir = path.join(plansDir, 'current');
+      const planPath = createPlanFile(currentDir, 'PLAN-022', 'Test Plan');
+
+      await store.updateFile(planPath, 'create');
+
+      // Plan should be in plans
+      const currentPlans = store.getCurrentPlans();
+      assert.strictEqual(currentPlans.length, 1, 'Should have 1 current plan');
+      assert.strictEqual(currentPlans[0].id, 'PLAN-022', 'Should find plan by ID');
+      assert.strictEqual(currentPlans[0].folder, 'current', 'Plan folder should be current');
+
+      // Plan should NOT be in planTemplates
+      assert.strictEqual(store.getPlanTemplates().length, 0, 'Should have 0 plan templates');
+    });
+
+    test('updateFile for archived plan should add to plans Map with archive folder', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const archiveDir = path.join(plansDir, 'archive');
+      const planPath = createPlanFile(archiveDir, 'PLAN-019', 'Archived Plan', true);
+
+      await store.updateFile(planPath, 'create');
+
+      const archivedPlans = store.getArchivedPlans();
+      assert.strictEqual(archivedPlans.length, 1, 'Should have 1 archived plan');
+      assert.strictEqual(archivedPlans[0].id, 'PLAN-019', 'Should find archived plan by ID');
+      assert.strictEqual(archivedPlans[0].folder, 'archive', 'Plan folder should be archive');
+    });
+
+    test('refresh should not mix templates into current plans', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      // Create both current plan and template
+      const currentDir = path.join(plansDir, 'current');
+      const templatesDir = path.join(plansDir, 'templates');
+      createPlanFile(currentDir, 'PLAN-010', 'Current Plan');
+      createTemplateFile(templatesDir, 'TMPL-MIX', 'Template That Should Not Mix');
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const currentPlans = store.getCurrentPlans();
+      const foundTemplateInPlans = currentPlans.find(p => p.id === 'TMPL-MIX');
+      assert.strictEqual(foundTemplateInPlans, undefined, 'Template should NOT appear in current plans after refresh');
+
+      const templates = store.getPlanTemplates();
+      assert.strictEqual(templates.length, 1, 'Should have 1 template');
+      assert.strictEqual(templates[0].id, 'TMPL-MIX', 'Template should be in planTemplates');
+
+      assert.strictEqual(currentPlans.length, 1, 'Should have exactly 1 current plan');
+      assert.strictEqual(currentPlans[0].id, 'PLAN-010', 'Current plan should be correct');
+    });
+
+    test('updateFile for template should emit plan-template refresh event', async () => {
+      const { plansDir } = createTestStructure(testDir);
+      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+      await store.refresh(path.join(testDir, '.workflow'));
+
+      const events: StoreChangeEvent[] = [];
+      store.onDidChange((event) => {
+        events.push(event);
+      });
+
+      const templatesDir = path.join(plansDir, 'templates');
+      const templatePath = createTemplateFile(templatesDir, 'TMPL-EVT', 'Event Test Template');
+
+      await store.updateFile(templatePath, 'create');
+
+      const templateRefresh = events.find(e => e.type === 'plan-template' && e.operation === 'refresh');
+      assert.ok(templateRefresh, 'Should emit plan-template refresh event after updateFile');
+    });
+  });
 });

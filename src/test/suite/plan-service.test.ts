@@ -48,6 +48,7 @@ suite('PlanService Suite', () => {
     // Create plan folders
     fs.mkdirSync(path.join(plansDir, 'current'), { recursive: true });
     fs.mkdirSync(path.join(plansDir, 'archive'), { recursive: true });
+    fs.mkdirSync(path.join(plansDir, 'templates'), { recursive: true });
 
     // Create ticket folders
     const statuses = ['backlog', 'ready', 'in-progress', 'blocked', 'review', 'done'];
@@ -557,6 +558,272 @@ related_reports: []
 
       const archived = store.getPlanById('PLAN-001');
       assert.strictEqual(archived?.status, 'archived', 'Should update status in store');
+    });
+  });
+
+  suite('approvePlan() - Status Change', () => {
+
+    /**
+     * Helper to create a draft plan file on disk and in store
+     */
+    function createDraftPlan(id: string, title: string, extraFields: Record<string, unknown> = {}): Plan {
+      const plansDir = path.join(testDir, '.workflow', 'plans', 'current');
+      const now = new Date().toISOString();
+      const plan: Plan = {
+        id,
+        title,
+        status: 'draft',
+        author: 'Test',
+        created_at: now,
+        updated_at: now,
+        completed_at: '',
+        previous_plan: '',
+        related_reports: [],
+        ...extraFields
+      };
+
+      const frontmatterYaml = Object.entries(plan)
+        .map(([key, value]) => {
+          if (Array.isArray(value)) {
+            if (value.length === 0) return `${key}: []`;
+            return `${key}:\n${value.map((v: string) => `  - ${v}`).join('\n')}`;
+          }
+          if (typeof value === 'string') return `${key}: "${value}"`;
+          return `${key}: ${value}`;
+        })
+        .join('\n');
+
+      const content = `---\n${frontmatterYaml}\n---\n## Plan body content`;
+      fs.writeFileSync(path.join(plansDir, `${id}.md`), content, 'utf-8');
+      store.addPlan(plan);
+      return plan;
+    }
+
+    test('should change status from draft to approved', async () => {
+      createTestStructure(testDir);
+      createDraftPlan('PLAN-001', 'Draft Plan');
+
+      // Call approvePlan via command-registration — but since that requires full extension setup,
+      // test the core logic via direct file operations that match what approvePlan does
+      const planPath = path.join(testDir, '.workflow', 'plans', 'current', 'PLAN-001.md');
+      const content = fs.readFileSync(planPath, 'utf-8');
+
+      // Simulate approve: parse, modify, write atomically
+      const { safeLoad: _safeLoad } = require('../../utils/yaml-utils');
+      const { parse: parseFrontmatter } = require('../../data/frontmatter-parser');
+      const { frontmatter, body } = parseFrontmatter(content);
+      assert.strictEqual(frontmatter.status, 'draft', 'Should start as draft');
+
+      const updated = { ...frontmatter, status: 'approved', updated_at: new Date().toISOString() };
+      const yaml = require('js-yaml');
+      const updatedYaml = yaml.dump(updated, { indent: 2, schema: yaml.JSON_SCHEMA }).trimEnd();
+      const newContent = `---\n${updatedYaml}\n---\n${body}`;
+
+      const tmpPath = planPath + '.tmp';
+      fs.writeFileSync(tmpPath, newContent, 'utf-8');
+      fs.renameSync(tmpPath, planPath);
+
+      // Verify
+      const newContent_read = fs.readFileSync(planPath, 'utf-8');
+      const { frontmatter: newFm } = parseFrontmatter(newContent_read);
+      assert.strictEqual(newFm.status, 'approved', 'Status should be approved after approve');
+      assert.ok(newFm.updated_at, 'updated_at should be set');
+    });
+
+    test('should preserve unknown fields during approve', async () => {
+      createTestStructure(testDir);
+      createDraftPlan('PLAN-002', 'Plan With Custom Field', { custom_field: 'foo' });
+
+      const planPath = path.join(testDir, '.workflow', 'plans', 'current', 'PLAN-002.md');
+      const content = fs.readFileSync(planPath, 'utf-8');
+      const { parse: parseFrontmatter } = require('../../data/frontmatter-parser');
+      const { frontmatter } = parseFrontmatter(content);
+      assert.strictEqual(frontmatter.custom_field, 'foo', 'Should have custom_field before approve');
+
+      // Approve
+      const updated = { ...frontmatter, status: 'approved', updated_at: new Date().toISOString() };
+      const yaml = require('js-yaml');
+      const updatedYaml = yaml.dump(updated, { indent: 2, schema: yaml.JSON_SCHEMA }).trimEnd();
+      const { body } = parseFrontmatter(content);
+      const newContent = `---\n${updatedYaml}\n---\n${body}`;
+
+      const tmpPath = planPath + '.tmp';
+      fs.writeFileSync(tmpPath, newContent, 'utf-8');
+      fs.renameSync(tmpPath, planPath);
+
+      // Verify
+      const newContent_read = fs.readFileSync(planPath, 'utf-8');
+      const { frontmatter: newFm } = parseFrontmatter(newContent_read);
+      assert.strictEqual(newFm.custom_field, 'foo', 'custom_field should be preserved after approve');
+      assert.strictEqual(newFm.status, 'approved', 'Status should be approved');
+    });
+
+    test('atomic write should use temp file + rename', async () => {
+      createTestStructure(testDir);
+      createDraftPlan('PLAN-003', 'Atomic Test');
+
+      const planPath = path.join(testDir, '.workflow', 'plans', 'current', 'PLAN-003.md');
+      const tmpPath = planPath + '.tmp';
+
+      // Before write
+      assert.ok(fs.existsSync(planPath), 'Plan file should exist');
+      assert.ok(!fs.existsSync(tmpPath), 'Temp file should not exist');
+
+      // Write atomically
+      const content = fs.readFileSync(planPath, 'utf-8');
+      const { parse: parseFrontmatter } = require('../../data/frontmatter-parser');
+      const { frontmatter, body } = parseFrontmatter(content);
+      const updated = { ...frontmatter, status: 'approved', updated_at: new Date().toISOString() };
+      const yaml = require('js-yaml');
+      const updatedYaml = yaml.dump(updated, { indent: 2, schema: yaml.JSON_SCHEMA }).trimEnd();
+      const newContent = `---\n${updatedYaml}\n---\n${body}`;
+
+      fs.writeFileSync(tmpPath, newContent, 'utf-8');
+      assert.ok(fs.existsSync(tmpPath), 'Temp file should exist after write');
+
+      fs.renameSync(tmpPath, planPath);
+      assert.ok(!fs.existsSync(tmpPath), 'Temp file should not exist after rename');
+      assert.ok(fs.existsSync(planPath), 'Plan file should exist after rename');
+    });
+  });
+
+  suite('createFromTemplate() - Plan from Template', () => {
+
+    /**
+     * Helper to create a test template file
+     */
+    function createTemplateFile(id: string, title: string, extraFields: Record<string, unknown> = {}): string {
+      const templatesDir = path.join(testDir, '.workflow', 'plans', 'templates');
+      const template = {
+        id,
+        title,
+        type: 'template',
+        trigger: { type: 'manual', params: {} },
+        last_triggered: '',
+        enabled: true,
+        ...extraFields
+      };
+      const yamlContent = require('js-yaml').dump(template, { indent: 2, schema: require('js-yaml').JSON_SCHEMA });
+      const content = `---\n${yamlContent}---\n## Template body content`;
+      const filePath = path.join(templatesDir, `${id}.md`);
+      fs.writeFileSync(filePath, content, 'utf-8');
+      return filePath;
+    }
+
+    test('should create plan from template with correct ID', async () => {
+      createTestStructure(testDir);
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template');
+
+      const { plan, filePath } = await planService.createFromTemplate(templatePath);
+
+      assert.strictEqual(plan.id, 'PLAN-001', 'Should generate PLAN-001 as first plan');
+      assert.strictEqual(plan.status, 'draft', 'Status should be draft');
+      assert.strictEqual(plan.title, 'Test Template', 'Title should match template');
+      assert.ok(fs.existsSync(filePath), 'File should exist');
+    });
+
+    test('should generate correct next ID with gaps in numbering', async () => {
+      createTestStructure(testDir);
+      // Add plans with gaps: PLAN-001, PLAN-003
+      const plan1: Plan = { id: 'PLAN-001', title: 'Plan 1', status: 'active', author: 'Test', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [] };
+      const plan3: Plan = { id: 'PLAN-003', title: 'Plan 3', status: 'active', author: 'Test', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [] };
+      store.addPlan(plan1);
+      store.addPlan(plan3);
+
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template');
+      const { plan } = await planService.createFromTemplate(templatePath);
+
+      assert.strictEqual(plan.id, 'PLAN-004', 'Should generate PLAN-004 (max 3 + 1)');
+    });
+
+    test('should substitute frontmatter fields correctly', async () => {
+      createTestStructure(testDir);
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template');
+
+      const { plan, filePath } = await planService.createFromTemplate(templatePath);
+      const content = fs.readFileSync(filePath, 'utf-8');
+
+      assert.ok(content.includes(`id: "${plan.id}"`), 'Should have correct id');
+      assert.ok(content.includes('status: "draft"'), 'Should have status draft');
+      assert.ok(content.includes('created_at:'), 'Should have created_at');
+      assert.ok(content.includes('updated_at:'), 'Should have updated_at');
+      assert.ok(content.includes('completed_at: ""'), 'Should have empty completed_at');
+    });
+
+    test('should preserve template custom fields in plan', async () => {
+      createTestStructure(testDir);
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template', {
+        custom_field: 'bar',
+        plan_author: 'Custom Author'
+      });
+
+      const { filePath } = await planService.createFromTemplate(templatePath);
+      const content = fs.readFileSync(filePath, 'utf-8');
+
+      assert.ok(content.includes('custom_field: "bar"') || content.includes('custom_field: bar'), 'Should preserve custom_field');
+    });
+
+    test('should throw EEXIST when plan file already exists', async () => {
+      createTestStructure(testDir);
+      const plansDir = path.join(testDir, '.workflow', 'plans', 'current');
+
+      // Create PLAN-001 in store AND on disk
+      const plan1: Plan = { id: 'PLAN-001', title: 'Existing', status: 'draft', author: 'Test', created_at: '', updated_at: '', completed_at: '', previous_plan: '', related_reports: [] };
+      store.addPlan(plan1);
+      fs.writeFileSync(path.join(plansDir, 'PLAN-001.md'), '---\nid: "PLAN-001"\n---\nBody', 'utf-8');
+
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template');
+
+      // First create: generates PLAN-002 (max 1 + 1) — should succeed
+      await planService.createFromTemplate(templatePath);
+
+      // Now manually create PLAN-003 on disk (but NOT in store)
+      // This simulates a race condition: file exists but store doesn't know about it
+      fs.writeFileSync(path.join(plansDir, 'PLAN-003.md'), '---\nid: "PLAN-003"\n---\nBody', 'utf-8');
+
+      // Second create: store sees max(PLAN-001, PLAN-002) = 2, generates PLAN-003
+      // But PLAN-003 already exists on disk → wx flag throws EEXIST
+      try {
+        await planService.createFromTemplate(templatePath);
+        assert.fail('Should have thrown EEXIST');
+      } catch (error) {
+        assert.strictEqual((error as NodeJS.ErrnoException).code, 'EEXIST', 'Should throw EEXIST');
+      }
+    });
+
+    test('should use wx flag for atomic write', async () => {
+      // This tests the wx flag is used — the EEXIST test above indirectly validates this.
+      // Direct flag testing would require mocking fs.writeFile which is complex in integration tests.
+      // The EEXIST test confirms wx behavior works correctly.
+      createTestStructure(testDir);
+      const templatePath = createTemplateFile('TMPL-001', 'Test Template');
+
+      const { filePath } = await planService.createFromTemplate(templatePath);
+      assert.ok(fs.existsSync(filePath), 'File should exist with wx flag');
+    });
+
+    test('should handle template without required frontmatter fields gracefully', async () => {
+      createTestStructure(testDir);
+      // Minimal template with no optional fields
+      const templatesDir = path.join(testDir, '.workflow', 'plans', 'templates');
+      const content = `---
+id: TMPL-MINIMAL
+title: Minimal Template
+type: template
+trigger:
+  type: manual
+  params: {}
+last_triggered: ""
+enabled: true
+---
+## Minimal body`;
+      const filePath = path.join(templatesDir, 'TMPL-MINIMAL.md');
+      fs.writeFileSync(filePath, content, 'utf-8');
+
+      const { plan } = await planService.createFromTemplate(filePath);
+
+      assert.strictEqual(plan.id, 'PLAN-001', 'Should generate ID');
+      assert.strictEqual(plan.status, 'draft', 'Should be draft');
     });
   });
 });

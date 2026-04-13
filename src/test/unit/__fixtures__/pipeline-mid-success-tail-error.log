@@ -1,0 +1,27 @@
+[2026-04-07T16:00:00] [INFO] [Runner] START stage="plan-review" agent="qwen-code" skill="plan-review"
+[2026-04-07T16:00:01] [INFO] [plan-review] Pipeline completed successfully!
+[2026-04-07T16:00:02] [INFO] [plan-review] GOTO plan-review → stage-a status="success"
+[2026-04-07T16:01:00] [INFO] [stage-a] Processing stage A
+[2026-04-07T16:01:01] [INFO] [stage-a] GOTO stage-a → stage-b status="success"
+[2026-04-07T16:02:00] [INFO] [stage-b] Processing stage B
+[2026-04-07T16:02:01] [INFO] [stage-b] GOTO stage-b → stage-c status="success"
+[2026-04-07T16:03:00] [INFO] [stage-c] Processing stage C
+[2026-04-07T16:03:01] [INFO] [stage-c] GOTO stage-c → stage-d status="success"
+[2026-04-07T16:04:00] [INFO] [stage-d] Processing stage D
+[2026-04-07T16:04:01] [INFO] [stage-d] GOTO stage-d → stage-e status="success"
+[2026-04-07T16:05:00] [INFO] [stage-e] Processing stage E
+[2026-04-07T16:05:01] [WARN] [stage-e] RETRY stage="stage-e" attempt=1/3
+[2026-04-07T16:05:02] [ERROR] [stage-e] Stage "stage-e" failed on attempt 1
+[2026-04-07T16:05:03] [INFO] [stage-e] Retrying stage-e
+[2026-04-07T16:05:10] [INFO] [stage-e] GOTO stage-e → stage-f status="success"
+[2026-04-07T16:06:00] [INFO] [stage-f] Processing stage F
+[2026-04-07T16:06:01] [INFO] [stage-f] GOTO stage-f → stage-g status="success"
+[2026-04-07T16:07:00] [INFO] [stage-g] Processing stage G
+[2026-04-07T16:07:01] [INFO] [stage-g] GOTO stage-g → review-result status="success"
+[2026-04-07T16:08:00] [INFO] [review-result] Processing review
+[2026-04-07T16:08:01] [INFO] [review-result] GOTO review-result → pipeline-complete status="success"
+[2026-04-07T16:09:00] [INFO] [pipeline-complete] Finalizing pipeline
+[2026-04-07T16:09:01] [ERROR] [pipeline-complete] Stage "pipeline-complete" failed
+[2026-04-07T16:09:02] [INFO] [pipeline-complete] exitCode=1
+[2026-04-07T16:09:03] [INFO] [Runner] Pipeline execution finished with errors
+[2026-04-07T16:09:04] [INFO] [Runner] Stages failed: 1

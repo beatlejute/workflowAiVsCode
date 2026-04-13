@@ -235,5 +235,12 @@
   "Template file not found: {0}": "Template file not found: {0}",
   "Invalid template file format": "Invalid template file format",
   "Failed to toggle template. Check Output channel for details.": "Failed to toggle template. Check Output channel for details.",
-  "Failed to toggle template: {0}": "Failed to toggle template: {0}"
+  "Failed to toggle template: {0}": "Failed to toggle template: {0}",
+  "Plan {0} approved": "Plan {0} approved",
+  "Plan {0} reverted to draft": "Plan {0} reverted to draft",
+  "Plan is already in draft": "Plan is already in draft",
+  "Cannot revert plan in status {0}, use archive instead": "Cannot revert plan in status {0}, use archive instead",
+  "Plan must be in draft to approve": "Plan must be in draft to approve",
+  "Plan {0} already exists": "Plan {0} already exists",
+  "Plan {0} created from template": "Plan {0} created from template"
 }

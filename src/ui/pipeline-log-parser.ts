@@ -114,8 +114,11 @@ export class PipelineLogParser {
           const params = JSON.parse(gotoNewMatch[3]);
           if (params.ticket_id && /^[A-Z]+-\d+$/.test(params.ticket_id)) result.ticket = params.ticket_id;
           if (params.target) result.gotoTarget = params.target;
-          // Парсим elapsed из params если есть (формат: "5.2s", "1m30s", etc.)
           if (params.elapsed && /^[\d.]+[smh]/.test(params.elapsed)) result.elapsed = params.elapsed;
+          if (params.report_id && typeof params.report_id === 'string') {
+            result.isCreateReport = true;
+            result.reportInfo = { id: params.report_id, path: `.workflow/reports/${params.report_id}.md` };
+          }
         } catch { /* ignore */ }
       }
       result.statusTransition = this.ticketStatusHistory.length > 0 ? this.ticketStatusHistory.join(' → ') : result.gotoTarget ? `→ ${result.gotoTarget}` : undefined;

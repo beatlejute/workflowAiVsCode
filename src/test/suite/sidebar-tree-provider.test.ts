@@ -427,6 +427,36 @@ suite('SidebarTreeProvider Suite', () => {
       const icon = item.iconPath as vscode.ThemeIcon;
       assert.strictEqual(icon.id, 'edit');
     });
+
+    test('PlanTreeItem contextValue should be plan-current-draft for draft status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Draft Plan', 'draft', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      assert.strictEqual(item.contextValue, 'plan-current-draft');
+    });
+
+    test('PlanTreeItem contextValue should be plan-current-approved for approved status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Approved Plan', 'approved', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      assert.strictEqual(item.contextValue, 'plan-current-approved');
+    });
+
+    test('PlanTreeItem contextValue should be plan-current for active status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Active Plan', 'active', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      assert.strictEqual(item.contextValue, 'plan-current');
+    });
+
+    test('PlanTreeItem contextValue should be plan-current for completed status', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Completed Plan', 'completed', false);
+      const item = new PlanTreeItem(plan, workflowRoot, true);
+      assert.strictEqual(item.contextValue, 'plan-current');
+    });
+
+    test('PlanTreeItem contextValue should be plan-archive for archived plans', () => {
+      const plan = createTestPlanWithStatus('PLAN-001', 'Archived Plan', 'archived', true);
+      const item = new PlanTreeItem(plan, workflowRoot, false);
+      assert.strictEqual(item.contextValue, 'plan-archive');
+    });
   });
 
   suite('getPlanStatusIcon', () => {
