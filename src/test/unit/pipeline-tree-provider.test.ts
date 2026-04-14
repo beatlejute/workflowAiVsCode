@@ -261,6 +261,7 @@ statuses:
         true,
         'IMPL-001',
         'general-purpose',
+        undefined,
         'execute-task',
         'todo → in_progress'
       );
@@ -281,6 +282,7 @@ statuses:
         false,
         'FIX-002',
         'code-reviewer',
+        undefined,
         'review-result'
       );
 
@@ -296,6 +298,7 @@ statuses:
         true,
         'IMPL-003',
         'general-purpose',
+        undefined,
         'create-report',
         'ready → done'
       );
@@ -332,6 +335,7 @@ statuses:
         false,
         'IMPL-001',
         'qwen-code',
+        undefined,
         'execute-task',
         undefined,
         undefined,
@@ -352,6 +356,7 @@ statuses:
         'review-result',
         '0.1s',
         false,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -382,6 +387,7 @@ statuses:
         undefined,
         undefined,
         undefined,
+        undefined,
         StageResult.Error
       );
 
@@ -405,6 +411,7 @@ statuses:
         undefined,
         undefined,
         undefined,
+        undefined,
         StageResult.Timeout
       );
 
@@ -417,8 +424,7 @@ statuses:
         '5s',
         true,
         'IMPL-001',
-        'agent',
-        undefined
+        'claude-sonnet'
       );
 
       const label = item.label as string;
@@ -433,7 +439,8 @@ statuses:
         '5s',
         true,
         'IMPL-001',
-        'agent',
+        'claude-sonnet',
+        undefined,
         undefined,
         'todo → in_progress'
       );
@@ -450,7 +457,8 @@ statuses:
         '3s',
         true,
         'IMPL-002',
-        'agent',
+        'claude-sonnet',
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -470,7 +478,8 @@ statuses:
         '2s',
         false,
         'FIX-001',
-        'agent',
+        'claude-sonnet',
+        undefined,
         undefined,
         'todo → in_progress',
         undefined,
@@ -492,7 +501,8 @@ statuses:
         '3s',
         true,
         'IMPL-003',
-        'agent',
+        'claude-sonnet',
+        undefined,
         undefined,
         'todo → done',
         undefined,
@@ -505,6 +515,82 @@ statuses:
       assert.ok(label.includes('create-report'));
       const reportMarkerCount = (label.match(/📊/g) || []).length;
       assert.strictEqual(reportMarkerCount, 1, 'getGotoStatusIcon returns type icon 📊 for create-report stage');
+    });
+
+    test('TC11: Completed with agent=undefined and statusChange uses fallback agent (🤖)', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5s',
+        true,
+        'IMPL-001',
+        undefined,
+        undefined,
+        undefined,
+        'todo → done'
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('🤖'), 'label should contain 🤖 (default agent type)');
+      assert.ok(label.includes('✔️'), 'label should contain ✔️ (done status)');
+      assert.ok(label.includes('execute-task'));
+    });
+
+    test('TC12a: Completed with fallbackAgent shows 🎭 marker and Fallback in description', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5s',
+        true,
+        'IMPL-001',
+        'qwen-code',
+        'qwen-code',
+        'execute-task',
+        '→ default'
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('🎭'), 'label should contain 🎭 (fallback marker)');
+      assert.ok(label.includes('execute-task'));
+      const desc = item.description as string;
+      assert.ok(desc.includes('Fallback'), 'description should contain Fallback');
+      assert.ok(desc.includes('qwen-code'));
+      const tooltip = item.tooltip as vscode.MarkdownString;
+      assert.ok(tooltip.value.includes('Fallback Agent'));
+    });
+
+    test('TC12b: Completed without fallbackAgent has no 🎭 marker', () => {
+      const item = new CompletedStageTreeItem(
+        'execute-task',
+        '5s',
+        true,
+        'IMPL-001',
+        'claude-sonnet',
+        undefined,
+        'execute-task',
+        '→ default'
+      );
+
+      const label = item.label as string;
+      assert.ok(!label.includes('🎭'), 'label should NOT contain 🎭 without fallback');
+    });
+
+    test('TC12: Completed with agent=undefined and report stage uses 📊 type icon', () => {
+      const item = new CompletedStageTreeItem(
+        'create-report',
+        '3s',
+        true,
+        'IMPL-002',
+        undefined,
+        undefined,
+        undefined,
+        'todo → done'
+      );
+
+      const label = item.label as string;
+      assert.ok(label.includes('✅'));
+      assert.ok(label.includes('📊'), 'label should contain 📊 (report type icon)');
+      assert.ok(label.includes('✔️'), 'label should contain ✔️ (done status)');
+      assert.ok(label.includes('create-report'));
     });
   });
 

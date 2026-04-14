@@ -176,6 +176,20 @@ suite('PipelineLogParser', () => {
       const result = parser.parse(line);
       assert.strictEqual(result.isFallback, false);
     });
+
+    test('should parse Agent rotation as fallback', () => {
+      const line = '[2026-04-14 01:45:17] [INFO] [execute-task] Agent rotation: attempt 2 → qwen-code';
+      const result = parser.parse(line);
+      assert.strictEqual(result.agent, 'qwen-code');
+      assert.strictEqual(result.isFallback, true);
+    });
+
+    test('should parse Agent rotation with attempt 3', () => {
+      const line = '[2026-04-14 01:48:46] [INFO] [execute-task] Agent rotation: attempt 3 → claude-sonnet';
+      const result = parser.parse(line);
+      assert.strictEqual(result.agent, 'claude-sonnet');
+      assert.strictEqual(result.isFallback, true);
+    });
   });
 
   suite('parse() - context extraction', () => {

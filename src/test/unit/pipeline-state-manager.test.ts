@@ -187,6 +187,29 @@ suite('PipelineStateManager', () => {
       assert.strictEqual(manager.getCurrentFallbackAgent(), undefined);
     });
 
+    test('should reset currentFallbackAgent on regular START after previous fallback', () => {
+      // Сначала устанавливаем fallback
+      manager.process({
+        isFallback: true,
+        agent: 'backup-agent',
+        isStart: false,
+        timestamp: '2026-03-11T10:00:00'
+      } as ParsedLogData);
+      assert.strictEqual(manager.getCurrentFallbackAgent(), 'backup-agent');
+
+      // Обычный START должен сбросить fallback
+      manager.process({
+        isStart: true,
+        stage: 'review-result',
+        agent: 'claude-sonnet',
+        isFallback: false,
+        skill: 'review-result',
+        timestamp: '2026-03-11T10:01:00'
+      } as ParsedLogData);
+      assert.strictEqual(manager.getCurrentAgent(), 'claude-sonnet');
+      assert.strictEqual(manager.getCurrentFallbackAgent(), undefined);
+    });
+
     test('should save fallback agent on isFallback without isStart (real log parsing)', () => {
       const data: ParsedLogData = {
         isFallback: true,
@@ -199,6 +222,87 @@ suite('PipelineStateManager', () => {
       assert.strictEqual(changed, true);
       assert.strictEqual(manager.getCurrentFallbackAgent(), 'backup-agent');
       assert.strictEqual(manager.getCurrentAgent(), undefined);
+    });
+
+    test('should preserve fallbackAgent when START has same agent as rotation (real log sequence)', () => {
+      // Agent rotation: attempt 2 → qwen-code
+      manager.process({
+        isFallback: true,
+        agent: 'qwen-code',
+        isStart: false,
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+      assert.strictEqual(manager.getCurrentFallbackAgent(), 'qwen-code');
+
+      // START stage="execute-task" agent="qwen-code"
+      manager.process({
+        isStart: true,
+        stage: 'execute-task',
+        agent: 'qwen-code',
+        isFallback: false,
+        skill: 'execute-task',
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+
+      assert.strictEqual(manager.getCurrentAgent(), 'qwen-code');
+      assert.strictEqual(manager.getCurrentFallbackAgent(), 'qwen-code');
+    });
+
+    test('should record fallbackAgent in completedStages', () => {
+      // Agent rotation → START
+      manager.process({
+        isFallback: true,
+        agent: 'qwen-code',
+        isStart: false,
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+      manager.process({
+        isStart: true,
+        stage: 'execute-task',
+        agent: 'qwen-code',
+        isFallback: false,
+        skill: 'execute-task',
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+
+      // GOTO to next stage
+      manager.process({
+        isGoto: true,
+        gotoStage: 'review-result',
+        elapsed: '5m0s',
+        timestamp: '2026-04-14T08:23:23'
+      });
+
+      const completed = manager.getCompletedStages();
+      assert.strictEqual(completed.length, 1);
+      assert.strictEqual(completed[0].stage, 'execute-task');
+      assert.strictEqual(completed[0].agent, 'qwen-code');
+      assert.strictEqual(completed[0].fallbackAgent, 'qwen-code');
+    });
+
+    test('should reset fallbackAgent after GOTO (new stage)', () => {
+      // Set fallback
+      manager.process({
+        isFallback: true,
+        agent: 'qwen-code',
+        isStart: false,
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+      manager.process({
+        isStart: true,
+        stage: 'execute-task',
+        agent: 'qwen-code',
+        timestamp: '2026-04-14T08:18:23'
+      } as ParsedLogData);
+
+      // GOTO transitions to new stage → fallbackAgent should be cleared
+      manager.process({
+        isGoto: true,
+        gotoStage: 'review-result',
+        timestamp: '2026-04-14T08:23:23'
+      });
+
+      assert.strictEqual(manager.getCurrentFallbackAgent(), undefined);
     });
   });
 

@@ -122,6 +122,7 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     public readonly success?: boolean,
     public readonly ticket?: string,
     public readonly agent?: string,
+    public readonly fallbackAgent?: string,
     public readonly skill?: string,
     public readonly statusChange?: string,
     public readonly outputLines?: string[],
@@ -131,8 +132,9 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
     public readonly result: StageResult = success === false ? StageResult.Error : StageResult.Success
   ) {
     const icon = getStageResultIcon(result);
-    const gotoMarker = (statusChange && result === StageResult.Success) ? getGotoStatusIcon(statusChange, stage) : '';
-    const label = `${icon}${gotoMarker} ${stage}`;
+    const fallbackMarker = fallbackAgent ? '🎭' : '';
+    const gotoMarker = (statusChange && result === StageResult.Success) ? getGotoStatusIcon(statusChange, stage, agent || '') : '';
+    const label = `${icon}${fallbackMarker}${gotoMarker} ${stage}`;
     const stableIndex = typeof logLineHint === 'number' ? logLineHint : 0;
     super(
       label,
@@ -141,11 +143,12 @@ export class CompletedStageTreeItem extends PipelineTreeItem {
       `completed-stage-${stage}-${stableIndex}`
     );
 
-    // Build description: elapsed | ticket | agent | status
+    // Build description: elapsed | ticket | agent (fallback) | status
     const elapsedPart = elapsed ? `⏱ ${elapsed}` : '';
-    const parts = [elapsedPart, ticket, agent, statusChange].filter(Boolean);
+    const fallbackPart = fallbackAgent ? `${t('Fallback')}: ${fallbackAgent}` : '';
+    const parts = [elapsedPart, ticket, agent, fallbackPart, statusChange].filter(Boolean);
     this.description = parts.join(' | ');
-    this.tooltip = createCompletedStageTooltip(stage, elapsed, result, ticket, agent, skill, statusChange, outputLines);
+    this.tooltip = createCompletedStageTooltip(stage, elapsed, result, ticket, agent, fallbackAgent, skill, statusChange, outputLines);
     // Use contextValue to control context menu visibility:
     // - 'completed-stage-report' for report stages (has Open Report)
     // - 'completed-stage-ticket' for stages with a ticket (has Open Ticket)
@@ -397,6 +400,7 @@ function createCompletedStageTooltip(
   result?: StageResult,
   ticket?: string,
   agent?: string,
+  fallbackAgent?: string,
   skill?: string,
   statusChange?: string,
   outputLines?: string[]
@@ -412,6 +416,9 @@ function createCompletedStageTooltip(
   }
   if (agent) {
     markdown.appendMarkdown(`| **${t('Agent')}** | ${agent} |\n`);
+  }
+  if (fallbackAgent) {
+    markdown.appendMarkdown(`| **${t('Fallback Agent')}** | ${fallbackAgent} |\n`);
   }
   if (skill) {
     markdown.appendMarkdown(`| **${t('Skill')}** | ${skill} |\n`);
@@ -551,15 +558,11 @@ const GOTO_STATUS_ICONS: Record<string, string> = {
   has_gaps: '📉'
 };
 
-function getStageTypeIcon(stage: string): string {
-  if (stage.startsWith('script-')) return '⚙️';
-  if (stage.startsWith('increment-')) return '🔄';
+function getStageTypeIcon(stage: string, agent: string): string {
+  if (agent.startsWith('script-')) return '⚙️';
+  if (agent.startsWith('increment-')) return '🔄';
   if (stage.endsWith('-report')) return '📊';
   return '🤖';
-}
-
-function isFallbackAgent(stage: string): boolean {
-  return stage.startsWith('fallback-');
 }
 
 function parseLastSegment(statusChange: string): string {
@@ -568,14 +571,11 @@ function parseLastSegment(statusChange: string): string {
   return segments[segments.length - 1].trim();
 }
 
-export function getGotoStatusIcon(statusChange: string, stage: string): string {
+export function getGotoStatusIcon(statusChange: string, stage: string, agent: string): string {
   const lastSegment = parseLastSegment(statusChange);
   const statusIcon = GOTO_STATUS_ICONS[lastSegment] || '↩️';
-  
-  let typeIcon = getStageTypeIcon(stage);
-  if (isFallbackAgent(stage) && typeIcon === '🤖') {
-    typeIcon = '🔀';
-  }
-  
-  return `${statusIcon}${typeIcon}`;
+
+  const typeIcon = getStageTypeIcon(stage, agent);
+
+  return typeIcon + statusIcon;
 }

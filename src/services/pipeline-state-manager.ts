@@ -106,6 +106,11 @@ export class PipelineStateManager {
           this.state.currentFallbackAgent = data.agent;
         } else {
           this.state.currentAgent = data.agent;
+          // Не сбрасываем fallback если START пришёл с тем же агентом
+          // (Agent rotation → START идут подряд, START не должен затирать fallback)
+          if (this.state.currentFallbackAgent !== data.agent) {
+            this.state.currentFallbackAgent = undefined;
+          }
         }
       }
       if (data.skill) this.state.currentSkill = data.skill;
@@ -116,7 +121,7 @@ export class PipelineStateManager {
 
     // Handle FALLBACK - preserve fallback agent even when not inside START
     // Парсер устанавливает isFallback=true для сообщений "switching to fallback: <agent>"
-    // без isStart, поэтому нужна отдельная обработка
+    // или "Agent rotation: attempt N → <agent>" без isStart
     if (data.isFallback && data.agent && !data.isStart) {
       this.state.currentFallbackAgent = data.agent;
       changed = true;
@@ -221,6 +226,7 @@ export class PipelineStateManager {
         result: stageResult,
         ticket: this.state.currentTicket,
         agent: this.state.currentAgent,
+        fallbackAgent: this.state.currentFallbackAgent,
         skill: this.state.currentSkill,
         statusChange,
         outputLines: [...this.state.currentOutputLines],
@@ -234,6 +240,7 @@ export class PipelineStateManager {
     // Reset for next stage
     this.state.ticketStatusHistory = [];
     this.state.currentOutputLines = [];
+    this.state.currentFallbackAgent = undefined;
 
     // Fallback report detection: if no reportInfo but stage is a report stage, try to find report
     if (!this.state.currentStageReport && prevStage) {

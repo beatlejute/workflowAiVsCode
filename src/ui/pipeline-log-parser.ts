@@ -184,6 +184,14 @@ export class PipelineLogParser {
       return result;
     }
 
+    // Parse agent rotation: Agent rotation: attempt N → agentId
+    const rotationMatch = message.match(/Agent rotation:\s*attempt\s+\d+\s*→\s*(\S+)/);
+    if (rotationMatch) {
+      result.agent = rotationMatch[1];
+      result.isFallback = true;
+      return result;
+    }
+
     // Context ticket_id / plan_id
     const ticketMatch = message.match(/^\s*ticket_id:\s*([A-Z]+-\d+)/);
     if (ticketMatch) { result.ticket = ticketMatch[1]; return result; }

@@ -49,6 +49,7 @@ export interface CompletedStageData {
   result: StageResult;
   ticket?: string;
   agent?: string;
+  fallbackAgent?: string;
   skill?: string;
   statusChange?: string;
   outputLines?: string[];
@@ -259,6 +260,7 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
         info.success,
         info.ticket,
         info.agent,
+        info.fallbackAgent,
         info.skill,
         info.statusChange,
         info.outputLines,
