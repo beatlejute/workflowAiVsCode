@@ -251,6 +251,11 @@ export class TicketService implements ITicketService {
     // Move ticket via direct file system operations
     await this.moveTicketDirect(id, ticket.status, targetStatus);
 
+    // Открыть manual-gate, ждущие этот тикет. Раннер держит гейт до
+    // manual-gate-human.timeout (86400 с) и затем уводит тикет в blocked,
+    // поэтому перемещение мимо approval-файла молча убивало human-задачу.
+    await this.approveOpenGates(id, targetStatus);
+
     // Update ticket in store (file watcher will also update, but this ensures immediate consistency)
     const updatedTicket: Ticket = {
       ...ticket,
@@ -316,6 +321,60 @@ export class TicketService implements ITicketService {
     await this.withOwnWrite(async () => {
       await fs.unlink(sourcePath);
     });
+  }
+
+  /**
+   * Переводит в approved все pending-гейты, ждущие этот тикет.
+   *
+   * Зеркало `approveOpenGates` из workflow-ai (`src/lib/operations/tickets.mjs`)
+   * и хука в `src/scripts/move-ticket.js`: расширение не импортирует CLI, но
+   * обязано писать тот же словарь, иначе раннер решения не увидит. Поля и
+   * значение `decided_by` совпадают намеренно — потребитель не должен
+   * различать, кто открыл гейт.
+   *
+   * Ошибка хука не должна ронять перемещение: тикет уже переехал.
+   *
+   * @param id - ID тикета
+   * @param targetStatus - Целевой статус
+   * @returns Имена файлов, переведённых в approved
+   */
+  private async approveOpenGates(id: string, targetStatus: TicketStatus): Promise<string[]> {
+    const approved: string[] = [];
+    try {
+      const approvalsDir = path.join(this.workflowRoot, 'approvals');
+      const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`^${escapedId}_manual-gate-.*_\\d+\\.json$`);
+
+      let files: string[];
+      try {
+        files = await fs.readdir(approvalsDir);
+      } catch {
+        return approved; // каталога нет — гейтов нет
+      }
+
+      for (const file of files) {
+        if (!pattern.test(file)) continue;
+        const filePath = path.join(approvalsDir, file);
+        try {
+          const raw = await fs.readFile(filePath, 'utf-8');
+          const data = JSON.parse(raw) as Record<string, unknown>;
+          if (data.status !== 'pending') continue;
+          data.status = 'approved';
+          data.decided_by = 'move-ticket';
+          data.comment = `auto-approved on move to ${targetStatus}`;
+          data.updated_at = new Date().toISOString();
+          await this.withOwnWrite(async () => {
+            await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+          });
+          approved.push(file);
+        } catch {
+          // Битый или исчезнувший файл — остальные не трогаем.
+        }
+      }
+    } catch {
+      // Нет прав, нет каталога — гейта просто нет.
+    }
+    return approved;
   }
 
   // Flag to prevent file watcher from triggering on our own writes
