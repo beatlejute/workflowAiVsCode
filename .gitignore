@@ -18,3 +18,21 @@ cov.txt
 
 #AI
 .mcp.json
+
+# Workflow AI specific
+.workflow-state/
+.cache/
+.workflow/
+
+# AI
+QWEN.md
+CLAUDE.md
+.kilocodemodes
+
+# Старые выводы прогонов — артефакты отладки, не состояние проекта.
+test-output*.txt
+test-run-output.txt
+lint-*.log
+
+# Инкрементальный кеш tsc — артефакт сборки.
+*.tsbuildinfo
