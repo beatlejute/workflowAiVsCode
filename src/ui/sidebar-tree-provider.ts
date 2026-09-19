@@ -13,9 +13,8 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 import * as path from 'path';
-import * as fs from 'fs';
 import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
-import { Ticket, TicketStatus, Plan, Report, ReviewEntry, PlanTemplate } from '../data/types';
+import { Ticket, TicketStatus, Plan, Report, PlanTemplate, PipelineConfig } from '../data/types';
 import { getReviewBadges, extractPlanId } from './utils';
 
 /**
@@ -1081,7 +1080,7 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SidebarTreeIt
    * Extract skill bindings from pipeline configuration
    * Returns a map of skillId -> stages count
    */
-  private getStageSkillsFromPipeline(pipeline: any): Map<string, number> {
+   private getStageSkillsFromPipeline(pipeline: PipelineConfig | undefined): Map<string, number> {
     const skillCounts = new Map<string, number>();
 
     if (!pipeline?.pipeline?.stages) {
@@ -1091,10 +1090,9 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SidebarTreeIt
     const stages = pipeline.pipeline.stages;
 
     for (const stageConfig of Object.values(stages)) {
-      const stage = stageConfig as any;
-      if (stage.skill && typeof stage.skill === 'string') {
-        const count = skillCounts.get(stage.skill) || 0;
-        skillCounts.set(stage.skill, count + 1);
+      if (stageConfig.skill && typeof stageConfig.skill === 'string') {
+        const count = skillCounts.get(stageConfig.skill) || 0;
+        skillCounts.set(stageConfig.skill, count + 1);
       }
     }
 

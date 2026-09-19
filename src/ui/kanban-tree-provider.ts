@@ -20,7 +20,7 @@ import { WorkflowStore, StoreChangeEvent } from '../data/workflow-store';
 import { Ticket, TicketStatus } from '../data/types';
 import { getReviewBadges, extractPlanId } from './utils';
 import { TreeItemCache } from '../utils/tree-item-cache';
-import { getTicketIcon } from '../utils/ticket-utils';
+import { getTicketIcon, getTicketIconActive } from '../utils/ticket-utils';
 import { buildTicketTooltip } from '../utils/tooltip-utils';
 
 export type KanbanSortMode = 'priority' | 'id' | 'title' | 'date';
@@ -109,53 +109,35 @@ export function invalidateTicketCache(ticketId: string): void {
 }
 
 /**
- * Get dimmed icon for pulse animation (pipeline active ticket)
+ * Which ticket the pipeline is working on. Shared by every kanban column,
+ * because the ticket can sit in any of them.
+ *
+ * There is no timer here any more. The icon itself animates (`loading~spin`),
+ * so a tree refresh is only needed when the id changes — twice per ticket
+ * instead of once a second.
  */
-function getTicketIconDimmed(): vscode.ThemeIcon {
-  return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('disabledForeground'));
-}
-
-/** Shared pulse state across all kanban providers */
 let pulseTicketId: string | undefined;
-let pulseOn = true;
-let pulseTimer: ReturnType<typeof setInterval> | null = null;
 const pulseSubscribers = new Set<KanbanTreeProvider>();
 
-function startPulseTimer(): void {
-  if (pulseTimer) { return; }
-  pulseOn = true;
-  pulseTimer = setInterval(() => {
-    pulseOn = !pulseOn;
-    for (const provider of pulseSubscribers) {
-      provider.firePulse();
-    }
-  }, 1000);
-}
-
-function stopPulseTimer(): void {
-  if (pulseTimer) {
-    clearInterval(pulseTimer);
-    pulseTimer = null;
-  }
-  pulseOn = true;
-}
-
 /**
- * Set the ticket ID whose priority dot should pulse (driven by pipeline).
- * Call with undefined to stop pulsing.
+ * Set the ticket ID the pipeline is currently working on; its icon becomes
+ * animated. Call with undefined when the pipeline moves on or stops.
  */
 export function setPulseTicketId(ticketId: string | undefined): void {
   if (ticketId === pulseTicketId) { return; }
+  const previous = pulseTicketId;
   pulseTicketId = ticketId;
-  if (ticketId) {
-    startPulseTimer();
-  } else {
-    stopPulseTimer();
-  }
-  // Force refresh all providers so the icon updates immediately
+
+  // Обновляем обе строки: у прежнего тикета иконка снова статичная.
   for (const provider of pulseSubscribers) {
-    provider.firePulse();
+    provider.refreshTicketIcon(previous);
+    provider.refreshTicketIcon(ticketId);
   }
+}
+
+/** Ticket whose icon is currently animated (undefined when none). Used by tests. */
+export function getPulseTicketId(): string | undefined {
+  return pulseTicketId;
 }
 
 /**
@@ -281,16 +263,16 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
   }
 
   /**
-   * Fire a tree data change for pulse animation (called by shared timer).
-   * Only refreshes the pulsing ticket element to avoid hover flicker.
+   * Re-render one ticket row after its icon changed from static to animated or
+   * back. Fired only on a change of the active ticket — not on a timer — so the
+   * row flash this used to cause is now a one-off, not a heartbeat.
    */
-  firePulse(): void {
-    if (!pulseTicketId || !this.workflowRoot) {
+  refreshTicketIcon(ticketId: string | undefined): void {
+    if (!ticketId || !this.workflowRoot) {
       return;
     }
-    const ticket = this.store.getTicketById(pulseTicketId);
+    const ticket = this.store.getTicketById(ticketId);
     if (ticket && ticket.status === this.status) {
-      console.log(`[KanbanTreeProvider:${this.status}] firePulse: updating ${pulseTicketId}`);
       const item = getOrCreateTreeItem(ticket, this.workflowRoot);
       this._onDidChangeTreeData.fire(item);
     }
@@ -300,13 +282,9 @@ export class KanbanTreeProvider implements vscode.TreeDataProvider<KanbanTicketT
    * Get tree item for element
    */
   getTreeItem(element: KanbanTicketTreeItem): vscode.TreeItem {
-    if (pulseTicketId && element.ticket.id === pulseTicketId) {
-      element.iconPath = pulseOn
-        ? getTicketIcon(element.ticket.priority)
-        : getTicketIconDimmed();
-    } else {
-      element.iconPath = getTicketIcon(element.ticket.priority);
-    }
+    element.iconPath = pulseTicketId && element.ticket.id === pulseTicketId
+      ? getTicketIconActive(element.ticket.priority)
+      : getTicketIcon(element.ticket.priority);
     return element;
   }
 

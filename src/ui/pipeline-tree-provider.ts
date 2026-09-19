@@ -29,6 +29,8 @@ import { HistoryBackfillService } from '../services/history-backfill-service';
 import { PipelineStateManager } from '../services/pipeline-state-manager';
 import { PipelineHistoryManager, RunHistoryEntry, PersistedHistoryItem } from '../services/pipeline-history-manager';
 import { PipelineExecutionListener } from '../services/pipeline-execution-listener';
+import { CollapseStateStore } from './tree-collapse-state';
+import { ActiveRun } from '../services/pipeline-run-source';
 import { t } from '../i18n';
 
 export { RunHistoryEntry, PersistedHistoryItem };
@@ -63,6 +65,30 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private stateManager: PipelineStateManager;
   private historyManager: PipelineHistoryManager;
   private executionListener: PipelineExecutionListener | null = null;
+
+  /**
+   * User's collapse/expand choices. The tree is rebuilt on every refresh —
+   * once a second while a pipeline runs — so without this the builder's default
+   * state would overwrite the user's click almost immediately.
+   */
+  readonly collapseState = new CollapseStateStore();
+
+  /** Run started outside the extension, when one occupies this project's slot. */
+  private externalRun: ActiveRun | undefined;
+
+  /**
+   * Reports a foreign run holding this project's slot, if any.
+   *
+   * Set by external pipeline detection. Without it a user starting a pipeline
+   * while another one runs gets the runner's raw stderr and a generic Error;
+   * with it we can say what is already running before spawning anything.
+   */
+  private blockingRunProbe: (() => ActiveRun | undefined) | undefined;
+
+  /** Wire in the probe used to explain PIPELINE_ALREADY_RUNNING up front. */
+  setBlockingRunProbe(probe: () => ActiveRun | undefined): void {
+    this.blockingRunProbe = probe;
+  }
 
   // Minimal state tracking
   private currentState: PipelineState = PipelineState.Idle;
@@ -100,6 +126,42 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
 
   getCompletedStagesCount(): number {
     return this.stateManager.getCompletedStages().length;
+  }
+
+  /**
+   * Publish the run occupying this project's slot when it is not ours.
+   * Only one run per project exists at a time (runner singleton), so this
+   * replaces rather than adds to what PipelineService reports.
+   */
+  setExternalRun(run: ActiveRun | undefined): void {
+    const externalRun = run && run.source !== 'extension' ? run : undefined;
+    // Сравниваем и logPath с approval: у одного и того же run они появляются
+    // вторым событием при неизменном state, и без этого команда «открыть лог»
+    // не возникла бы до следующего изменения.
+    const changed = externalRun?.runId !== this.externalRun?.runId
+      || externalRun?.state !== this.externalRun?.state
+      || externalRun?.logPath !== this.externalRun?.logPath
+      || externalRun?.awaitingApproval?.stepId !== this.externalRun?.awaitingApproval?.stepId;
+    this.externalRun = externalRun;
+    if (changed) {
+      this.refresh();
+    }
+  }
+
+  /** The external run currently shown, if any. */
+  getExternalRun(): ActiveRun | undefined {
+    return this.externalRun;
+  }
+
+  /** Record a finished external run in the run history. */
+  addExternalRunToHistory(
+    result: 'success' | 'error' | 'stopped',
+    source: 'cli' | 'mcp',
+    runId?: string,
+    logFile?: string
+  ): void {
+    this.historyManager.addExternalRun(result, source, runId, logFile);
+    this.refresh();
   }
 
   setWorkflowRoot(root: string): void {
@@ -168,7 +230,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
 
   refresh(): void {
     // Auto-detect log file for current run when pipeline is running
-    if (this.currentState === PipelineState.Running && !this.currentRunLogFile) {
+    if ((this.currentState === PipelineState.Running || this.currentState === PipelineState.Paused) && !this.currentRunLogFile) {
       this.currentRunLogFile = this.dataProvider.scanForLogFile(this.runStartTime);
     }
     this._onDidChangeTreeData.fire(undefined);
@@ -200,15 +262,41 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       totalElapsedMs: this.stateManager.getTotalElapsedMs(),
       averageElapsedMs: this.stateManager.getAverageElapsedMs(),
       runHistory: this.historyManager.getHistory(),
-      currentRunLogFile: this.currentRunLogFile
+      currentRunLogFile: this.currentRunLogFile,
+      currentManualGateTicket: this.pipelineService?.getCurrentManualGateTicket(),
+      externalRun: this.externalRun && this.externalRun.source !== 'extension'
+        ? {
+            source: this.externalRun.source,
+            state: this.externalRun.state as 'starting' | 'running' | 'paused' | 'stale',
+            runId: this.externalRun.runId,
+            pid: this.externalRun.pid,
+            startedAt: this.externalRun.startedAt,
+            logPath: this.externalRun.logPath
+          }
+        : undefined
     };
 
-    return this.dataProvider.getChildrenForElement(element, state);
+    return this.dataProvider
+      .getChildrenForElement(element, state)
+      .then(items => this.collapseState.apply(items));
   }
 
   async startPipeline(planId?: string): Promise<void> {
     if (!this.pipelineService) {
       vscode.window.showErrorMessage(t('Pipeline service not available'));
+      return;
+    }
+
+    // Раннер откажет вторым запуском в том же проекте (PIPELINE_ALREADY_RUNNING).
+    // Лучше сказать это словами, чем показать stderr чужого процесса.
+    const blocking = this.blockingRunProbe?.();
+    if (blocking) {
+      vscode.window.showErrorMessage(
+        t('A pipeline is already running in this project ({0}, PID {1}, started {2})',
+          blocking.source,
+          String(blocking.pid ?? '?'),
+          blocking.startedAt ?? '?')
+      );
       return;
     }
 
@@ -244,6 +332,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   clearHistory(): void {
     this.historyManager.clear();
     this.stateManager.reset();
+    // History nodes are gone; their remembered collapse state would only leak.
+    this.collapseState.clear();
     this.refresh();
     vscode.window.showInformationMessage(t('Pipeline history cleared'));
   }
@@ -269,6 +359,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       clearInterval(this.stageElapsedTimer);
       this.stageElapsedTimer = undefined;
     }
+    this.collapseState.clear();
+    this._onDidChangeTreeData.dispose();
     if (this.pipelineService) this.pipelineService.dispose();
     if (this.outputChannel) this.outputChannel.dispose();
   }

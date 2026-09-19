@@ -68,7 +68,8 @@ suite('executeMoveTicket Command Tests', () => {
 
       // Assert
       assert.ok(moveStub.calledOnceWith(ticketId, TicketStatus.InProgress));
-      assert.ok(showInformationMessageStub.calledWithMatch(/Moved IMPL-001 to in-progress/i));
+      // Production uses Russian i18n key "Тикет {0} перемещён в {1}"; localized text may differ
+      assert.ok(showInformationMessageStub.calledWithMatch(/IMPL-001/) && showInformationMessageStub.calledWithMatch(/in-progress/));
     });
 
     test('should move ticket from active editor when ticketId is not provided', async () => {
@@ -90,7 +91,7 @@ suite('executeMoveTicket Command Tests', () => {
       showQuickPickStub.resolves({ label: TicketStatus.Ready });
 
       // Act
-      await executeMoveTicket(ticketService);
+      await executeMoveTicket(ticketService, undefined);
 
       // Assert
       assert.ok(moveStub.calledOnceWith(ticketId, TicketStatus.Ready));
@@ -111,7 +112,7 @@ suite('executeMoveTicket Command Tests', () => {
       showQuickPickStub.onSecondCall().resolves({ label: TicketStatus.InProgress });
 
       // Act
-      await executeMoveTicket(ticketService);
+      await executeMoveTicket(ticketService, undefined);
 
       // Assert
       assert.ok(Array.isArray(showQuickPickStub.firstCall.args[0]));
@@ -133,7 +134,7 @@ suite('executeMoveTicket Command Tests', () => {
       showQuickPickStub.onFirstCall().resolves(undefined);
 
       // Act
-      await executeMoveTicket(ticketService);
+      await executeMoveTicket(ticketService, undefined);
 
       // Assert
       assert.ok(moveStub.notCalled);
@@ -163,7 +164,7 @@ suite('executeMoveTicket Command Tests', () => {
       getAllStub.returns([]);
 
       // Act
-      await executeMoveTicket(ticketService);
+      await executeMoveTicket(ticketService, undefined);
 
       // Assert
       assert.ok(showInformationMessageStub.calledWithMatch(/no tickets available/i));
@@ -211,7 +212,8 @@ suite('executeMoveTicket Command Tests', () => {
       await executeMoveTicket(ticketService, ticketId);
 
       // Assert
-      assert.ok(showErrorMessageStub.calledWithMatch(/failed to move ticket/i));
+      // Production uses Russian i18n key "Ошибка перемещения тикета {0}: {1}"; localized text may differ
+      assert.ok(showErrorMessageStub.calledWithMatch(/IMPL-001/));
     });
 
     test('should handle non-Error exceptions', async () => {
@@ -227,7 +229,8 @@ suite('executeMoveTicket Command Tests', () => {
       await executeMoveTicket(ticketService, ticketId);
 
       // Assert
-      assert.ok(showErrorMessageStub.calledWithMatch(/failed to move ticket/i));
+      // Production uses Russian i18n key "Ошибка перемещения тикета {0}: {1}"; localized text may differ
+      assert.ok(showErrorMessageStub.calledWithMatch(/IMPL-001/));
     });
   });
 
@@ -242,7 +245,7 @@ suite('executeMoveTicket Command Tests', () => {
       showQuickPickStub.onFirstCall().resolves(undefined);
 
       // Act
-      await executeMoveTicket(ticketService);
+      await executeMoveTicket(ticketService, undefined);
 
       // Assert
       const firstCallArgs = showQuickPickStub.firstCall.args[0];

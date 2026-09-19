@@ -80,6 +80,88 @@ export interface PipelineDataState {
   averageElapsedMs: number;
   runHistory: RunHistoryEntry[];
   currentRunLogFile?: string;
+  currentManualGateTicket?: string;
+  /**
+   * Run started outside the extension, when one holds this project's slot.
+   * Mutually exclusive with our own run: the runner allows one pipeline per
+   * project root, so both are never set at once.
+   */
+  externalRun?: ExternalRunSummary;
+}
+
+/** What the tree needs to know about a run it does not own. */
+export interface ExternalRunSummary {
+  source: 'cli' | 'mcp';
+  state: 'starting' | 'running' | 'paused' | 'stale';
+  runId?: string;
+  pid?: number;
+  startedAt?: string;
+  logPath?: string;
+}
+
+/** Localised name of an external run's state; the raw values are internal. */
+function externalStateLabel(state: ExternalRunSummary['state']): string {
+  switch (state) {
+    case 'starting': return t('starting');
+    case 'running': return t('running');
+    case 'paused': return t('paused');
+    case 'stale': return t('stale');
+  }
+}
+
+/** Icon and label for the state of a run we do not own. */
+const EXTERNAL_STATE_ICON: Record<ExternalRunSummary['state'], string> = {
+  starting: 'loading~spin',
+  running: 'loading~spin',
+  paused: 'debug-pause',
+  stale: 'warning'
+};
+
+/**
+ * Builds the root node for a pipeline someone else started.
+ *
+ * Deliberately the same `pipeline-run` id as our own run node: the two are
+ * alternatives for one slot, and reusing the id keeps the user's collapse
+ * choice when a run changes hands.
+ */
+export function buildExternalRunItem(run: ExternalRunSummary): PipelineTreeItem {
+  const item = new PipelineTreeItem(
+    t('Pipeline: {0}', externalStateLabel(run.state)),
+    // Детей нет — как и у узла собственного запуска, см. PipelineRunTreeItem.
+    vscode.TreeItemCollapsibleState.None,
+    'pipeline-run',
+    'pipeline-run'
+  );
+
+  item.description = run.runId ? `${run.source} · ${run.runId}` : run.source;
+  item.iconPath = new vscode.ThemeIcon(
+    EXTERNAL_STATE_ICON[run.state],
+    run.state === 'stale' ? new vscode.ThemeColor('notificationsWarningIcon.foreground') : undefined
+  );
+  item.contextValue = 'pipeline-run-external';
+
+  const lines = [
+    `**${t('External pipeline')}**`,
+    '',
+    `- ${t('Started by')}: ${run.source}`,
+    `- ${t('State')}: ${externalStateLabel(run.state)}`
+  ];
+  if (run.pid) { lines.push(`- PID: ${run.pid}`); }
+  if (run.startedAt) { lines.push(`- ${t('Started')}: ${run.startedAt}`); }
+  if (run.state === 'stale') {
+    lines.push('', t('The process is gone but its lock file remains; the next run will clear it.'));
+  }
+  item.tooltip = new vscode.MarkdownString(lines.join('\n'));
+
+  if (run.logPath) {
+    item.command = {
+      command: 'vscode.open',
+      title: t('Open log'),
+      arguments: [vscode.Uri.file(run.logPath)]
+    };
+  }
+
+  return item;
 }
 
 /**
@@ -233,11 +315,30 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
   getRootItemsFromState(state: PipelineDataState, currentRunLogFile?: string): Thenable<PipelineTreeItem[]> {
     const items: PipelineTreeItem[] = [];
 
-    // 1. Pipeline run status
-    items.push(new PipelineRunTreeItem(state.currentState, state.elapsed));
+    // 1. Pipeline run status. An external run takes the same single slot — the
+    //    runner does not allow a second pipeline in one project — so it is
+    //    rendered as the same node with its origin spelled out.
+    if (state.externalRun) {
+      items.push(buildExternalRunItem(state.externalRun));
+      // Стейджи из stateManager принадлежат нашему прошлому запуску — под
+      // чужим run'ом они были бы враньём. Статистику и историю показываем:
+      // они не про текущий запуск.
+      items.push(new StatisticsTreeItem(
+        state.stagesStarted,
+        state.retries,
+        state.gotos,
+        state.timeouts,
+        state.totalElapsedMs,
+        state.averageElapsedMs
+      ));
+      items.push(new HistoryTreeItem(state.runHistory));
+      return Promise.resolve(items);
+    }
 
-    // 2. Current stage (if running)
-    if (state.currentState === PipelineState.Running && state.currentStage) {
+    items.push(new PipelineRunTreeItem(state.currentState, state.elapsed, state.currentManualGateTicket, this.workflowRoot || undefined));
+
+    // 2. Current stage (if running or paused)
+    if ((state.currentState === PipelineState.Running || state.currentState === PipelineState.Paused) && state.currentStage) {
       items.push(new CurrentStageTreeItem(
         state.currentStage,
         state.currentAgent,

@@ -14,6 +14,8 @@
 - [Key Features](#key-features)
   - [Core Features (v0.0.1)](#core-features-v001)
   - [New in v1.0.0](#new-in-v100)
+- [Notifications](#notifications)
+- [Localization](#localization)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
   - [From VS Code Marketplace](#from-vs-code-marketplace)
@@ -81,9 +83,63 @@
 - **🔧 Sort Controls** — Sort by priority, ID, title, or date with direction toggle
 - **📋 Plan Context Menu** — Quick actions: Decompose, Run Pipeline, Archive/Unarchive
 
+#### New in v0.2.0
+
+- **🔔 Contextual Notifications** — Blocked ticket alerts now include reason and attempt count; human-gate notifications with Open and Move to review actions.
+- **🌍 Expanded Localization** — Full support for 12 locales (en, de, es, fr, it, ja, ko, pt, pt-br, ru, zh, zh-cn, zh-tw).
+- **⏸️ Pipeline Paused State** — Visual indicator in the Pipeline tree view when waiting for manual intervention.
+- **🔄 L10n Parity Checks** — Automated script ensures translation keys and placeholders stay in sync across all locales.
+
 ### Integration with wf CLI
 
 This extension is a companion to the `wf` CLI tool. All ticket operations sync with the underlying file-based workflow system, ensuring compatibility with command-line workflows and CI/CD pipelines.
+
+## Notifications
+
+The extension provides real-time notifications to keep you informed about important workflow events.
+
+### Blocked Ticket Notifications
+
+When a ticket becomes blocked (e.g., after exceeding maximum review attempts), the extension shows a contextual notification with details:
+
+- **Reason**: The notification includes the blocking reason (e.g., `max_review_attempts`).
+- **Attempts count**: For review attempts exhaustion, the number of attempts is displayed.
+
+Example: `Ticket IMPL-001 auto-blocked after 3 review attempts`.
+
+### Human Gate Notifications
+
+When the pipeline reaches a manual human gate stage (`manual-gate-human`), a tray notification appears with actions:
+
+- **Open** — opens the waiting ticket file for review.
+- **Move to review** — moves the ticket to the `review` column automatically.
+
+![Human gate notification](assets/screenshots/notification-human-gate.png)
+
+> *Figure: Notification for a human-gated ticket with action buttons*
+
+## Localization
+
+Workflow AI supports the following 12 locales:
+
+| Locale | Code |
+|--------|------|
+| English | `en` |
+| German | `de` |
+| Spanish | `es` |
+| French | `fr` |
+| Italian | `it` |
+| Japanese | `ja` |
+| Korean | `ko` |
+| Portuguese | `pt` |
+| Portuguese (Brazil) | `pt-br` |
+| Russian | `ru` |
+| Chinese (Simplified) | `zh` |
+| Chinese (Traditional) | `zh-tw` |
+
+The extension automatically detects your VS Code locale. To override, set `workflow.locale` in settings.
+
+To add or update translations, edit the files in `l10n/bundle.l10n.*.json` and run `npm run lint:l10n` to verify parity.
 
 ## Screenshots
 
@@ -232,6 +288,44 @@ Configure the extension in VS Code settings (`settings.json`):
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `workflow.cliPath` | Custom path to the wf CLI executable (leave empty for auto-detection) | `""` |
+| `workflow.externalPipelineDetection` | Detect pipelines started outside the extension (terminal, MCP server) and show them in the pipeline view | `true` |
+
+### Pipeline tracking
+
+The extension shows a pipeline whether or not it started it.
+
+A pipeline started from this extension is tracked through its own child process,
+as before. One started anywhere else — `workflow run` in a terminal, the MCP
+server's `start_pipeline` — is picked up from `.workflow/logs/.pipeline.lock`,
+the lock the runner takes on every start. The lock says who started the run
+(`started_by`), which run it is (`run_id`) and where its log lives
+(`pipeline_log`), so the pipeline view labels the run with its origin and its
+log is mirrored into a `WF: Pipeline (cli …)` output channel.
+
+**One run per project.** The runner refuses a second `workflow run` for a
+project whose lock is held by a live process, so a project never has two
+pipelines at once — the pipeline view shows a single run node regardless of who
+started it, and starting one from the extension while another is running gives
+a plain message rather than the runner's stderr. Parallel runs are only
+possible across different projects; with several workspace folders the status
+bar appends `+N` to the primary folder's state.
+
+**Requires workflow-ai ≥ 1.6.0.** Earlier runners write a lock without
+`started_by`. Rather than guess, the extension leaves such a pipeline untracked
+and says so once per session.
+
+**A stale lock is normal on Windows.** Killing the runner there does not deliver
+a signal, so its cleanup never runs and the lock outlives the process. Such a
+run is shown as `stale` rather than as still running, is not counted as an
+active project and is not announced as a newly detected pipeline; the next
+`workflow run` clears the lock. Because a dead process produces no further file
+events, liveness is also re-checked on a timer while a run is being tracked.
+
+**Privacy.** An external pipeline's output is mirrored verbatim into an output
+channel, including anything the pipeline prints — tokens, keys, paths. Nothing
+is redacted. If that matters for a given project, switch
+`workflow.externalPipelineDetection` off — the switch takes effect immediately,
+without reloading the window.
 
 ### Workflow Configuration File
 
@@ -642,6 +736,32 @@ If you're still experiencing issues:
    - Extension version
    - Steps to reproduce
    - Error messages from Developer Tools console
+
+## Known Limitations
+
+### Single-Root Workspace Only
+
+The extension currently supports **single-root workspaces only**. If you open a multi-root workspace (multiple folders), the extension will only use the first folder for workflow initialization.
+
+**Details**:
+- When opening multiple workspace folders, only the first folder is scanned for the `.workflow/` directory
+- Additional folders containing `.workflow/` will be **ignored**
+- The extension will not crash, but workflow data from secondary folders will not be accessible
+- **Workaround**: Open each project folder individually or create a monorepo structure where only the first folder contains `.workflow/`
+
+**Current Behavior**:
+- ✅ Single workspace folder with `.workflow/` — fully supported
+- ✅ Multiple folders where only the first has `.workflow/` — supported
+- ✅ Multiple folders without graceful degradation — extension won't crash
+- ❌ Multi-root workspace with `.workflow/` in multiple folders — not supported
+
+This limitation is documented in test suite: `src/test/unit/multi-root-workflow-roots.test.ts`
+
+**Partial exception — external pipeline detection.** Detection of pipelines
+started outside the extension does run per folder: every workspace folder with a
+`.workflow/` directory gets its own watcher, and the status bar counts them all.
+Everything else — the ticket store, the kanban board, starting a pipeline from
+the extension — still works only in the first folder.
 
 ## See Also
 

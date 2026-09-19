@@ -96,6 +96,15 @@ class MockPipelineService {
       }
     };
   }
+
+  removeListener(event: string, listener: any): void {
+    if (event === 'stateChange') {
+      const index = this.stateChangeListeners.indexOf(listener);
+      if (index > -1) {
+        this.stateChangeListeners.splice(index, 1);
+      }
+    }
+  }
 }
 
 /**

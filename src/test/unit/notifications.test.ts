@@ -39,6 +39,7 @@ interface MockStore {
   onDidChange: (listener: (e: StoreChangeEvent) => void) => () => void;
   _fireChange: (event: StoreChangeEvent) => void;
   _updateTicket: (id: string, status: TicketStatus) => void;
+  eventEmitter: { removeListener: (event: string, listener: any) => void };
 }
 
 function createTicket(id: string, status: TicketStatus): MockTicket {
@@ -56,7 +57,10 @@ function createMockStore(tickets: MockTicket[] = [], reports: unknown[] = []): M
     getReports: () => reports,
     onDidChange: (listener: (e: StoreChangeEvent) => void) => {
       changeListeners.push(listener);
-      return () => {};
+      return () => {
+        const idx = changeListeners.indexOf(listener);
+        if (idx > -1) { changeListeners.splice(idx, 1); }
+      };
     },
     _fireChange: (event: StoreChangeEvent) => {
       changeListeners.forEach(l => l(event));
@@ -67,6 +71,12 @@ function createMockStore(tickets: MockTicket[] = [], reports: unknown[] = []): M
         t.status = status;
         ticketMap.set(id, t);
       }
+    },
+    eventEmitter: {
+      removeListener: (event: string, listener: any) => {
+        const idx = changeListeners.indexOf(listener);
+        if (idx > -1) { changeListeners.splice(idx, 1); }
+      }
     }
   };
 }
@@ -74,20 +84,37 @@ function createMockStore(tickets: MockTicket[] = [], reports: unknown[] = []): M
 // Mock pipeline service
 interface MockPipelineService {
   onStateChange: (listener: (s: PipelineState) => void) => { dispose: () => void };
+  onManualGateActivated: (listener: (data: { stage: string | undefined; ticketId: string | undefined }) => void) => MockPipelineService;
+  removeListener: (event: string, listener: any) => void;
   _fireStateChange: (s: PipelineState) => void;
 }
 
 function createMockPipelineService(): MockPipelineService {
   const stateChangeListeners: ((state: PipelineState) => void)[] = [];
-  return {
+  const gateActivatedListeners: ((data: { stage: string | undefined; ticketId: string | undefined }) => void)[] = [];
+  const service: MockPipelineService = {
     onStateChange: (listener: (s: PipelineState) => void) => {
       stateChangeListeners.push(listener);
       return { dispose: () => {} };
+    },
+    onManualGateActivated: (listener: (data: { stage: string | undefined; ticketId: string | undefined }) => void) => {
+      gateActivatedListeners.push(listener);
+      return service;
+    },
+    removeListener: (event: string, listener: any) => {
+      if (event === 'stateChange') {
+        const idx = stateChangeListeners.indexOf(listener);
+        if (idx > -1) { stateChangeListeners.splice(idx, 1); }
+      } else if (event === 'manual-gate-activated') {
+        const idx = gateActivatedListeners.indexOf(listener);
+        if (idx > -1) { gateActivatedListeners.splice(idx, 1); }
+      }
     },
     _fireStateChange: (s: PipelineState) => {
       stateChangeListeners.forEach(l => l(s));
     }
   };
+  return service;
 }
 
 suite('NotificationsManager Tests', () => {

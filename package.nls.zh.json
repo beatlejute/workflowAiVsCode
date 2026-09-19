@@ -129,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "归档计划 {0} 失败。请查看输出通道了解详情。",
   "Failed to unarchive plan {0}. Check Output channel for details.": "取消归档计划 {0} 失败。请查看输出通道了解详情。",
   "Failed to filter tickets. Check Output channel for details.": "筛选工单失败。请查看输出通道了解详情。",
-  "Failed to clear filter. Check Output channel for details.": "清除筛选失败。请查看输出通道了解详情。"
+  "Failed to clear filter. Check Output channel for details.": "清除筛选失败。请查看输出通道了解详情。",
+  "config.externalPipelineDetection.description": "[needs review] 检测在扩展之外（终端、MCP 服务器）启动的流水线，并在流水线视图中显示。"
 }

@@ -22,6 +22,8 @@ import { WorkflowStore } from '../data/workflow-store';
 import { TicketService } from '../services/ticket-service';
 import { FileWatcherService } from '../services/file-watcher-service';
 import { DependencyService } from '../services/dependency-service';
+import { updateContextKeys } from '../utils/extension-helpers';
+import { setupExternalPipelineDetection } from '../services/external-pipeline-setup';
 
 export interface AllProviders {
   tickets: TicketsTreeProvider;
@@ -72,12 +74,18 @@ export function setupTreeViews(
   const pipelineTreeView = vscode.window.createTreeView('workflow-sidebar.pipeline', { treeDataProvider: pipeline });
   context.subscriptions.push(pipelineTreeView);
 
+  // Feed the user's collapse/expand clicks back into the provider, otherwise the
+  // per-second refresh while a pipeline runs resets the chevron on every tick.
+  context.subscriptions.push(...pipeline.collapseState.attach(pipelineTreeView));
+
   const updatePipelineBadge = () => {
-    const isRunning = pipelineService.getState() === PipelineState.Running;
-    pipelineTreeView.badge = isRunning
-      ? { value: pipeline.getCompletedStagesCount() + 1, tooltip: 'Pipeline is running' }
+    const state = pipelineService.getState();
+    const isRunning = state === PipelineState.Running;
+    const isPaused = state === PipelineState.Paused;
+    pipelineTreeView.badge = (isRunning || isPaused)
+      ? { value: pipeline.getCompletedStagesCount() + 1, tooltip: isPaused ? 'Pipeline is paused' : 'Pipeline is running' }
       : undefined;
-    pipelineTreeView.description = isRunning ? 'Running' : '';
+    pipelineTreeView.description = isRunning ? 'Running' : (isPaused ? 'Paused' : '');
   };
   pipelineService.on('stateChange', updatePipelineBadge);
   pipelineService.on('log', updatePipelineBadge);
@@ -123,14 +131,14 @@ export function setupTreeViews(
   updateKanbanTitles();
   updateKanbanBadges();
 
-  // Update titles and badges on store changes.
-  // Individual providers handle their own incremental refresh via store.onDidChange,
-  // so we only update kanban titles/badges here (no redundant full refresh).
-  store.onDidChange(() => {
-    updateKanbanTitles();
-    updateKanbanBadges();
-  });
-}
+   // Update titles and badges on store changes.
+   // Individual providers handle their own incremental refresh via store.onDidChange,
+   // so we only update kanban titles/badges here (no redundant full refresh).
+   store.onDidChange(() => {
+     updateKanbanTitles();
+     updateKanbanBadges();
+   });
+ }
 
 export function registerLanguageProviders(
   context: vscode.ExtensionContext,
@@ -222,6 +230,20 @@ export function setupWorkflowRoot(
   const statusBar = new StatusBar(pipelineService, store);
   context.subscriptions.push(statusBar);
 
+  // Pipelines started from a terminal or by the MCP server. The workspace root,
+  // not workflowRoot: the monitor looks for `.workflow/logs/.pipeline.lock`.
+  const primaryRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+  const externalPipelines = setupExternalPipelineDetection(
+    context,
+    pipelineService,
+    pipeline,
+    statusBar,
+    primaryRoot
+  );
+  if (externalPipelines) {
+    context.subscriptions.push(externalPipelines);
+  }
+
   if (workflowRoot) {
     pipelineService.setWorkflowRoot(workflowRoot);
     tickets.setWorkflowRoot(workflowRoot);
@@ -245,8 +267,58 @@ export function setupWorkflowRoot(
     context.subscriptions.push(fileWatcher);
   }
 
-  pipelineService.on('stateChange', async () => {
-    const running = pipelineService.getState() === PipelineState.Running;
-    await vscode.commands.executeCommand('setContext', 'workflow.pipelineRunning', running);
-  });
-}
+   pipelineService.on('stateChange', async () => {
+     const state = pipelineService.getState();
+     const isRunning = state === PipelineState.Running;
+     const isPaused = state === PipelineState.Paused;
+     await vscode.commands.executeCommand('setContext', 'workflow.pipelineRunning', isRunning);
+     await vscode.commands.executeCommand('setContext', 'workflow.pipelinePaused', isPaused);
+   });
+
+   // --- Reactive context key updates for cliInstalled/workflowFound ---
+   // 1. Refresh on workspace folder changes (e.g., opening/closing folders)
+   context.subscriptions.push(
+     vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+       await updateContextKeys(pipelineService);
+     })
+   );
+
+   // 2. Watch .workflow directory for creation/deletion to update workflowFound flag
+   const workspaceFolders = vscode.workspace.workspaceFolders;
+   if (workspaceFolders && workspaceFolders.length > 0) {
+     const workspaceRoot = workspaceFolders[0].uri.fsPath;
+     const workflowDirPattern = new vscode.RelativePattern(workspaceRoot, '.workflow');
+     const workflowDirWatcher = vscode.workspace.createFileSystemWatcher(
+       workflowDirPattern,
+       false, // ignoreCreateEvents: false => receive create events
+       true,  // ignoreChangeEvents: true => ignore changes inside
+       false  // ignoreDeleteEvents: false => receive delete events
+     );
+
+     workflowDirWatcher.onDidCreate(async () => {
+       console.log('[WorkflowDirWatcher] .workflow directory created');
+       await updateContextKeys(pipelineService);
+     });
+
+     workflowDirWatcher.onDidDelete(async () => {
+       console.log('[WorkflowDirWatcher] .workflow directory deleted');
+       await updateContextKeys(pipelineService);
+     });
+
+     context.subscriptions.push(workflowDirWatcher);
+   }
+
+   // 3. Periodic process checker for CLI availability (detects uninstall/install during session)
+   const CLI_CHECK_INTERVAL_MS = 5000; // check every 5 seconds
+   const cliCheckInterval = setInterval(async () => {
+     try {
+       await updateContextKeys(pipelineService);
+     } catch (error) {
+       console.error('Periodic context key update failed:', error);
+     }
+   }, CLI_CHECK_INTERVAL_MS);
+   context.subscriptions.push({
+     dispose: () => clearInterval(cliCheckInterval)
+   });
+   // --- End reactive updates ---
+ }

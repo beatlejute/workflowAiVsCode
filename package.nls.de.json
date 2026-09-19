@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "PROTOKOLLE",
   "command.filterTicketsByPlan.title": "Nach Plan filtern",
   "command.clearTicketFilter.title": "Filter löschen",
-  "command.togglePlanTemplate.title": "Vorlage umschalten",
   "command.sortKanbanByDate.title": "Nach Datum sortieren",
   "command.toggleSortDirection.title": "Sortierrichtung umschalten",
   "command.sortTicketsByPriority.title": "Tickets nach Priorität sortieren",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Archivieren des Plans {0} fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Dearchivieren des Plans {0} fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
   "Failed to filter tickets. Check Output channel for details.": "Filtern der Tickets fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
-  "Failed to clear filter. Check Output channel for details.": "Filter zurücksetzen fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details."
+  "Failed to clear filter. Check Output channel for details.": "Filter zurücksetzen fehlgeschlagen. Überprüfen Sie den Output-Kanal für Details.",
+  "config.externalPipelineDetection.description": "[needs review] Erkennt Pipelines, die außerhalb der Erweiterung gestartet wurden (Terminal, MCP-Server), und zeigt sie in der Pipeline-Ansicht an."
 }

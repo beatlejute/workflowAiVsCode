@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "日誌",
   "command.filterTicketsByPlan.title": "按計劃篩選",
   "command.clearTicketFilter.title": "清除篩選",
-  "command.togglePlanTemplate.title": "切換模板",
   "command.sortKanbanByDate.title": "按日期排序",
   "command.toggleSortDirection.title": "切換排序方向",
   "command.sortTicketsByPriority.title": "按優先級排序工單",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "歸檔計劃 {0} 失敗。檢查 Output 頻道了解詳情。",
   "Failed to unarchive plan {0}. Check Output channel for details.": "取消歸檔計劃 {0} 失敗。檢查 Output 頻道了解詳情。",
   "Failed to filter tickets. Check Output channel for details.": "過濾票證失敗。檢查 Output 頻道了解詳情。",
-  "Failed to clear filter. Check Output channel for details.": "清除過濾器失敗。檢查 Output 頻道了解詳情。"
+  "Failed to clear filter. Check Output channel for details.": "清除過濾器失敗。檢查 Output 頻道了解詳情。",
+  "config.externalPipelineDetection.description": "[needs review] 偵測在擴充功能之外（終端機、MCP 伺服器）啟動的管線，並在管線檢視中顯示。"
 }

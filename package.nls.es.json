@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "REGISTROS",
   "command.filterTicketsByPlan.title": "Filtrar por plan",
   "command.clearTicketFilter.title": "Borrar filtro",
-  "command.togglePlanTemplate.title": "Alternar plantilla",
   "command.sortKanbanByDate.title": "Ordenar por fecha",
   "command.toggleSortDirection.title": "Cambiar dirección de ordenación",
   "command.sortTicketsByPriority.title": "Ordenar tickets por prioridad",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Error al archivar el plan {0}. Verifique el canal Output para más detalles.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Error al desarchivar el plan {0}. Verifique el canal Output para más detalles.",
   "Failed to filter tickets. Check Output channel for details.": "Error al filtrar tickets. Verifique el canal Output para más detalles.",
-  "Failed to clear filter. Check Output channel for details.": "Error al limpiar el filtro. Verifique el canal Output para más detalles."
+  "Failed to clear filter. Check Output channel for details.": "Error al limpiar el filtro. Verifique el canal Output para más detalles.",
+  "config.externalPipelineDetection.description": "[needs review] Detecta las canalizaciones iniciadas fuera de la extensión (terminal, servidor MCP) y las muestra en la vista de canalización."
 }

@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "ログ",
   "command.filterTicketsByPlan.title": "プランでフィルタ",
   "command.clearTicketFilter.title": "フィルタをクリア",
-  "command.togglePlanTemplate.title": "テンプレートを切り替え",
   "command.sortKanbanByDate.title": "日付順に並べ替え",
   "command.toggleSortDirection.title": "並べ替え方向を切り替え",
   "command.sortTicketsByPriority.title": "チケットを優先度順に並べ替え",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "計画 {0} のアーカイブに失敗しました。詳細は Output チャンネルを確認してください。",
   "Failed to unarchive plan {0}. Check Output channel for details.": "計画 {0} のアーカイブ解除に失敗しました。詳細は Output チャンネルを確認してください。",
   "Failed to filter tickets. Check Output channel for details.": "チケットのフィルタリングに失敗しました。詳細は Output チャンネルを確認してください。",
-  "Failed to clear filter. Check Output channel for details.": "フィルターのクリアに失敗しました。詳細は Output チャンネルを確認してください。"
+  "Failed to clear filter. Check Output channel for details.": "フィルターのクリアに失敗しました。詳細は Output チャンネルを確認してください。",
+  "config.externalPipelineDetection.description": "[needs review] 拡張機能の外部 (ターミナル、MCP サーバー) で開始されたパイプラインを検出し、パイプラインビューに表示します。"
 }

@@ -129,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Failed to archive plan {0}. Check Output channel for details.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Failed to unarchive plan {0}. Check Output channel for details.",
   "Failed to filter tickets. Check Output channel for details.": "Failed to filter tickets. Check Output channel for details.",
-  "Failed to clear filter. Check Output channel for details.": "Failed to clear filter. Check Output channel for details."
+  "Failed to clear filter. Check Output channel for details.": "Failed to clear filter. Check Output channel for details.",
+  "config.externalPipelineDetection.description": "Detect pipelines started outside the extension (terminal, MCP server) and show them in the pipeline view."
 }

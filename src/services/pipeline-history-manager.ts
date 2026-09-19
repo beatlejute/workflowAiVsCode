@@ -23,6 +23,10 @@ export interface PersistedHistoryItem {
   reports: ReportInfo[];
   logFile?: string;
   planId?: string;
+  /** Who started the run. Absent on entries written before external runs were tracked. */
+  source?: 'extension' | 'cli' | 'mcp';
+  /** Runner's own id for the run (`pipeline_<date>_<time>`), when known. */
+  runId?: string;
 }
 
 /**
@@ -36,6 +40,10 @@ export interface RunHistoryEntry {
   reports: ReportInfo[];
   logFile?: string;
   planId?: string;
+  /** Who started the run. Absent on entries written before external runs were tracked. */
+  source?: 'extension' | 'cli' | 'mcp';
+  /** Runner's own id for the run (`pipeline_<date>_<time>`), when known. */
+  runId?: string;
 }
 
 /**
@@ -88,7 +96,9 @@ export class PipelineHistoryManager {
         result: e.result,
         reports: e.reports || [],
         logFile: e.logFile,
-        planId: e.planId
+        planId: e.planId,
+        source: e.source,
+        runId: e.runId
       }));
       
       if (this.runHistory.length > 0) {
@@ -111,7 +121,9 @@ export class PipelineHistoryManager {
         result: item.result,
         reports: item.reports || [],
         logFile: item.logFile,
-        planId: item.planId
+        planId: item.planId,
+        source: item.source,
+        runId: item.runId
       })));
 
       const toSave = persisted.length > 50 ? persisted.slice(0, 50) : persisted;
@@ -125,6 +137,34 @@ export class PipelineHistoryManager {
    * Add run to history
    */
   addRun(result: 'success' | 'error' | 'stopped', reports: ReportInfo[], logFile?: string, planId?: string): void {
+    this.addEntry(result, reports, logFile, planId, 'extension');
+  }
+
+  /**
+   * Add a run that this extension did not start (terminal, MCP server).
+   *
+   * Uses the same counter as internal runs rather than a separate `ext-`
+   * numbering: one counter cannot collide with itself, which is what the
+   * separate numbering was meant to avoid in the first place. `source` and
+   * `runId` are what tell the two apart.
+   */
+  addExternalRun(
+    result: 'success' | 'error' | 'stopped',
+    source: 'cli' | 'mcp',
+    runId?: string,
+    logFile?: string
+  ): void {
+    this.addEntry(result, [], logFile, undefined, source, runId);
+  }
+
+  private addEntry(
+    result: 'success' | 'error' | 'stopped',
+    reports: ReportInfo[],
+    logFile?: string,
+    planId?: string,
+    source: 'extension' | 'cli' | 'mcp' = 'extension',
+    runId?: string
+  ): void {
     this.runCounter++;
     const timestamp = Date.now();
     this.runHistory.unshift({
@@ -134,7 +174,9 @@ export class PipelineHistoryManager {
       result,
       reports,
       logFile,
-      planId
+      planId,
+      source,
+      runId
     });
 
     if (this.runHistory.length > 50) {

@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "REGISTROS",
   "command.filterTicketsByPlan.title": "Filtrar por plano",
   "command.clearTicketFilter.title": "Limpar filtro",
-  "command.togglePlanTemplate.title": "Alternar modelo",
   "command.sortKanbanByDate.title": "Ordenar por data",
   "command.toggleSortDirection.title": "Alternar direção da classificação",
   "command.sortTicketsByPriority.title": "Ordenar tickets por prioridade",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Falha ao arquivar plano {0}. Verifique o canal Output para detalhes.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Falha ao desarquivar plano {0}. Verifique o canal Output para detalhes.",
   "Failed to filter tickets. Check Output channel for details.": "Falha ao filtrar tickets. Verifique o canal Output para detalhes.",
-  "Failed to clear filter. Check Output channel for details.": "Falha ao limpar filtro. Verifique o canal Output para detalhes."
+  "Failed to clear filter. Check Output channel for details.": "Falha ao limpar filtro. Verifique o canal Output para detalhes.",
+  "config.externalPipelineDetection.description": "[needs review] Detecta pipelines iniciados fora da extensão (terminal, servidor MCP) e os exibe na visualização de pipeline."
 }

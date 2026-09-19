@@ -26,6 +26,7 @@ interface MockPipelineService {
   getRetryCount: () => number;
   onStateChange: (listener: (s: PipelineState) => void) => { dispose: () => void };
   onStageChange: (listener: (stage: string | undefined) => void) => vscode.Disposable;
+  removeListener: (event: string, listener: any) => void;
   _fireStateChange: (s: PipelineState) => void;
   _fireStageChange: (stage: string | undefined) => void;
 }
@@ -34,6 +35,7 @@ interface MockStore {
   getTicketsByStatus: (status: string) => unknown[];
   onDidChange: (listener: (e: unknown) => void) => () => void;
   _fireChange: (event: unknown) => void;
+  eventEmitter: { removeListener: (event: string, listener: any) => void };
 }
 
 interface StatusBarItemState {
@@ -61,6 +63,12 @@ function createMockPipelineService(state: PipelineState = PipelineState.Idle, ov
       stageChangeListeners.push(listener);
       return { dispose: () => {} };
     },
+    removeListener: (event: string, listener: any) => {
+      if (event === 'stateChange') {
+        const idx = stateChangeListeners.indexOf(listener);
+        if (idx > -1) { stateChangeListeners.splice(idx, 1); }
+      }
+    },
     _fireStateChange: (s: PipelineState) => {
       stateChangeListeners.forEach(l => l(s));
     },
@@ -81,10 +89,19 @@ function createMockStore(readyCount = 0, blockedCount = 0): MockStore {
     },
     onDidChange: (listener: (e: unknown) => void) => {
       changeListeners.push(listener);
-      return () => {};
+      return () => {
+        const idx = changeListeners.indexOf(listener);
+        if (idx > -1) { changeListeners.splice(idx, 1); }
+      };
     },
     _fireChange: (event: unknown) => {
       changeListeners.forEach(l => l(event));
+    },
+    eventEmitter: {
+      removeListener: (event: string, listener: any) => {
+        const idx = changeListeners.indexOf(listener);
+        if (idx > -1) { changeListeners.splice(idx, 1); }
+      }
     }
   };
 }

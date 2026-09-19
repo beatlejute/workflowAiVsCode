@@ -24,6 +24,10 @@ export interface HistoryEntryWithBackfill {
   reports: ReportInfo[];
   logFile?: string;
   planId?: string;
+  /** Who started the run; carried through so it survives a reload. */
+  source?: 'extension' | 'cli' | 'mcp';
+  /** Runner's own id for the run, carried through alongside `source`. */
+  runId?: string;
 }
 
 /**
@@ -149,7 +153,9 @@ export class HistoryBackfillService {
       result: item.result,
       reports: item.reports || [],
       logFile: item.logFile,
-      planId: item.planId
+      planId: item.planId,
+      source: item.source,
+      runId: item.runId
     }));
   }
 
@@ -163,7 +169,9 @@ export class HistoryBackfillService {
       result: item.result,
       reports: item.reports || [],
       logFile: item.logFile,
-      planId: item.planId
+      planId: item.planId,
+      source: item.source,
+      runId: item.runId
     }));
   }
 }

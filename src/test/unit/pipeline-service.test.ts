@@ -174,7 +174,7 @@ suite('PipelineService - parseLine (via mock spawn)', () => {
 
   setup(() => {
     mock = createMockSpawn();
-    service = new PipelineService((cmd, args, opts) => {
+    service = new PipelineService((_cmd, _args, _opts) => {
       return mock.mockProcess;
     });
     // Directly call spawnWithFallback to register the mock process
@@ -283,7 +283,7 @@ suite('PipelineService - process exit handling', () => {
 
   setup(() => {
     mock = createMockSpawn();
-    service = new PipelineService((cmd, args, opts) => {
+    service = new PipelineService((_cmd, _args, _opts) => {
       return mock.mockProcess;
     });
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
@@ -498,7 +498,9 @@ suite('PipelineService - process exit handling', () => {
 });
 
 suite('PipelineService - stop with active process', () => {
-  test('stop() should kill process and set state to Idle', async () => {
+  test('stop() should kill process and set state to Idle', async function() {
+    // On Windows stop() invokes taskkill + 1s wait + process.kill probe — needs more than 2s default mocha timeout
+    this.timeout(5000);
     const mockProc: any = {
       pid: 12345,
       stdout: new EventEmitter(),
@@ -523,7 +525,7 @@ suite('PipelineService - parseLine edge cases', () => {
 
   setup(() => {
     mock = createMockSpawn();
-    service = new PipelineService((cmd, args, opts) => {
+    service = new PipelineService((_cmd, _args, _opts) => {
       return mock.mockProcess;
     });
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
@@ -571,7 +573,7 @@ suite('PipelineService - stderr handling', () => {
 
   setup(() => {
     mock = createMockSpawn();
-    service = new PipelineService((cmd, args, opts) => {
+    service = new PipelineService((_cmd, _args, _opts) => {
       return mock.mockProcess;
     });
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
@@ -599,7 +601,7 @@ suite('PipelineService - log events', () => {
 
   setup(() => {
     mock = createMockSpawn();
-    service = new PipelineService((cmd, args, opts) => {
+    service = new PipelineService((_cmd, _args, _opts) => {
       return mock.mockProcess;
     });
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
@@ -626,7 +628,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 1: INFO-строка "Total failed: N, passed: M" → Completed (hasStageErrors=false)
   test('should NOT treat INFO stats line "Total failed: N, passed: M" as stage error → Completed', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -649,7 +651,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 2: Явная ошибка → Error
   test('should detect explicit [ERROR] Stage X failed → Error', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -668,7 +670,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 3: Retry с последующим успехом → Completed (регресс на clear hasStageErrors)
   test('should clear hasStageErrors on retry followed by success → Completed', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -695,7 +697,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 4: Summary "Stages failed: 2" → Error
   test('should detect summary "Stages failed: 2" → Error', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -714,7 +716,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 5: Summary "Stages failed: 10" → Error (двузначное число)
   test('should detect summary "Stages failed: 10" (multi-digit) → Error', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -734,7 +736,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Reads fixture file: src/test/unit/__fixtures__/pipeline-mid-success-tail-error.log
   test('should NOT match "Pipeline completed successfully!" in middle of log when tail has errors → Error', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     service.onStateChange((state) => {
@@ -761,7 +763,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
   // Test 7: Негативный тест по exitCode — exitCode=10 и exitCode=127 → hasStageErrors=true
   test('should detect exitCode=10 as stage error (multi-digit exit code)', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     let stateChanged = false;
@@ -785,7 +787,7 @@ suite('QA-031: False-positive pipeline status detection', () => {
 
   test('should detect exitCode=127 as stage error (command not found)', (done) => {
     const mock = createMockSpawn();
-    const service = new PipelineService((cmd, args, opts) => mock.mockProcess);
+    const service = new PipelineService((_cmd, _args, _opts) => mock.mockProcess);
     callSpawnWithFallback(service, 'workflow', ['run'], process.env);
 
     let stateChanged = false;

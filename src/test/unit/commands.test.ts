@@ -16,7 +16,6 @@ import { WorkflowStore } from '../../data/workflow-store';
 import { TicketService } from '../../services/ticket-service';
 import { DependencyService } from '../../services/dependency-service';
 import { TicketStatus } from '../../data/types';
-import { safeLoad } from '../../utils/yaml-utils';
 
 suite('Command Handlers Tests', () => {
   let store: WorkflowStore;

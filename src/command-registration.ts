@@ -20,21 +20,22 @@ import { TicketService } from './services/ticket-service';
 import { DependencyService } from './services/dependency-service';
 import { WorkflowStore } from './data/workflow-store';
 import { PlanService } from './services/plan-service';
-import { TicketStatus } from './data/types';
+
 import { executeNewTicket } from './commands/new-ticket';
 import { executeNewPlan } from './commands/new-plan';
 import { executeShowStatistics } from './commands/show-statistics';
 import { executeCreatePlanFromFile } from './commands/create-plan-from-file';
 import { executeTogglePlanTemplate } from './commands/toggle-plan-template';
+import { executeMoveTicket } from './commands/move-ticket';
 import {
-  executeOpenPipelineConfig,
+  executeFilterTicketsByPlan,
+  executeClearTicketFilter,
   executeOpenConfig,
+  executeOpenPipelineConfig,
   executeFocusTicketsView,
   executeFocusKanban,
   executeRefreshAll,
-  executeCopyTicketId,
-  executeFilterTicketsByPlan,
-  executeClearTicketFilter
+  executeCopyTicketId
 } from './commands/index';
 import { onLocaleChanged, t } from './i18n';
 import { initializeErrorHandler, withErrorHandling } from './error-handler';
@@ -150,52 +151,11 @@ export function registerCommands(
   registry.register(
     'workflow.moveTicket',
     async (arg: unknown) => {
-      const ticketId = resolveTicketId(arg);
-      if (!ticketService || !ticketId) {
-        vscode.window.showErrorMessage(t('Ticket service not available or no ticket ID provided'));
+      if (!ticketService) {
+        vscode.window.showErrorMessage(t('Ticket service not available'));
         return;
       }
-
-      const ticket = ticketService.getById(ticketId);
-      if (!ticket) {
-        vscode.window.showErrorMessage(t('Ticket {0} not found', ticketId));
-        return;
-      }
-
-      const validTransitions = ticketService.getValidTransitions(ticket.status);
-      if (validTransitions.length === 0) {
-        vscode.window.showInformationMessage(t('No valid transitions from {0}', ticket.status));
-        return;
-      }
-
-      const targetStatus = await vscode.window.showQuickPick(
-        validTransitions.map(status => ({
-          label: status,
-          description: t('Move to {0}', status)
-        })),
-        {
-          placeHolder: t('Select target status for {0}', ticketId),
-          title: t('Move {0}', ticketId)
-        }
-      );
-
-      if (!targetStatus) {
-        return;
-      }
-
-      const result = await withErrorHandling(
-        async () => {
-          await ticketService.move(ticketId, targetStatus.label as TicketStatus);
-          return true;
-        },
-        (_error) => {
-          vscode.window.showErrorMessage(t('Failed to move ticket. Check Output channel for details.'));
-        }
-      );
-
-      if (result) {
-        vscode.window.showInformationMessage(t('Moved {0} to {1}', ticketId, targetStatus.label));
-      }
+      await executeMoveTicket(ticketService, arg);
     }
   );
 
@@ -881,12 +841,10 @@ export function registerCommands(
     }
   );
 
-  registry.register(
-    'workflow.filterTicketsByPlan',
-    async () => {
-      await executeFilterTicketsByPlan(store, ticketsProvider, kanbanProviders);
-    }
-  );
+   registry.register(
+     'workflow.filterTicketsByPlan',
+     () => executeFilterTicketsByPlan(store, ticketsProvider, kanbanProviders)
+   );
 
   registry.register(
     'workflow.clearTicketFilter',

@@ -27,6 +27,117 @@ import { ConfigManager } from './config-manager';
 import { IStore } from '../interfaces/IStore';
 
 /**
+ * The `## Ревью` / `## Review` section.
+ *
+ * Anchored to the start of a line and required to end there: tickets routinely
+ * mention the section by name in prose (`вставить запись в таблицу `## Ревью``),
+ * and an unanchored match latches onto that mention instead — then reads to the
+ * next heading and finds no rows at all. Fourteen real tickets lost every badge
+ * that way.
+ *
+ * No `m` flag: `\s*$` in the lookahead must mean end of input, not end of line.
+ */
+const REVIEW_SECTION_RE = /(?:^|\n)##[ \t]+(?:Ревью|Review)[ \t\r]*(?=\n)([\s\S]*?)(?=\n## |\n---|\s*$)/g;
+
+/**
+ * A date at the start of a review row: `YYYY-MM-DD`, optionally a time after a
+ * space or `T`, optionally seconds, optionally `Z` or a `+HH:MM` offset.
+ * Anything after that (`(attempt 6)` and friends) is ignored.
+ */
+const REVIEW_DATE_RE = /^(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\s*Z|\s*[+-]\d{2}:?\d{2})?)?)/;
+
+/**
+ * A verdict cell that opens with a symbol: `✅ passed`, `❌ failed`,
+ * `⏳ in review`, `✅ passed (attempt 2)`. Captures the symbol run and the rest.
+ *
+ * Restricted to pictographic symbols rather than "any non-letter". A blanket
+ * class also matches a backtick, an asterisk, a dash or a bracket, so a summary
+ * like `` `config.yaml` обновлён `` or an agent name in backticks would be read
+ * as a verdict when it comes before the real one.
+ */
+const REVIEW_VERDICT_RE = /^([\p{So}\p{Extended_Pictographic}‍️]+)\s*(.*)$/u;
+
+/**
+ * Verdicts written without a symbol. Kept deliberately short — a bare word is
+ * only treated as a verdict when it is one of these, otherwise an agent name
+ * like `claude-sonnet` in the same position would be mistaken for one.
+ */
+const BARE_VERDICTS = new Set([
+  'passed', 'failed', 'fixed', 'pass', 'fail', 'ok', 'approved', 'rejected', 'skipped', 'blocked'
+]);
+
+/** Table separator: `|---|---|` and its `:---:` variants. */
+const TABLE_SEPARATOR_RE = /^\|[\s:|-]+\|?$/;
+
+/** Sort key for review dates: `T` → space so that times order correctly. */
+function reviewSortKey(date: string): string {
+  return date.replace('T', ' ');
+}
+
+/**
+ * Splits a markdown table row into trimmed cells, dropping the outer pipes.
+ */
+function splitRowCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map(cell => cell.trim());
+}
+
+/**
+ * Parses one row of a review table, or returns null when the line is not one
+ * (separator, header, prose, a row without a date or without a verdict).
+ */
+function parseReviewRow(line: string): ReviewEntry | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || TABLE_SEPARATOR_RE.test(trimmed)) { return null; }
+
+  const cells = splitRowCells(trimmed);
+  if (cells.length < 2) { return null; }
+
+  // Столбец 1 — дата. Заголовок («Дата»/«Date») отсеивается здесь же.
+  const dateMatch = cells[0].match(REVIEW_DATE_RE);
+  if (!dateMatch) { return null; }
+
+  // Вердикт ищем по содержимому: позиция столбца в реальных тикетах плавает.
+  for (let i = 1; i < cells.length; i++) {
+    const verdict = parseVerdictCell(cells[i]);
+    if (!verdict) { continue; }
+    return {
+      date: dateMatch[1],
+      icon: verdict.icon,
+      status: verdict.status,
+      summary: (cells[i + 1] ?? '').trim()
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Recognises a verdict cell. Returns null for anything else — an agent name, a
+ * summary, an empty cell.
+ */
+function parseVerdictCell(cell: string): { icon: string; status: string } | null {
+  if (!cell) { return null; }
+
+  const symbolMatch = cell.match(REVIEW_VERDICT_RE);
+  if (symbolMatch && symbolMatch[2]) {
+    return { icon: symbolMatch[1], status: symbolMatch[2].trim() };
+  }
+
+  // Без значка вердиктом считается только слово из короткого списка.
+  const firstWord = cell.split(/\s+/)[0].toLowerCase();
+  if (BARE_VERDICTS.has(firstWord)) {
+    return { icon: '', status: cell };
+  }
+
+  return null;
+}
+
+/**
  * Event types that can be emitted by the store
  */
 export type StoreEventType = 'ticket' | 'plan' | 'report' | 'config' | 'plan-template';
@@ -67,15 +178,25 @@ export class WorkflowStore implements IStore {
 
   /**
    * Event listener registration
-   * Subscribe to store changes for reactive UI updates
+   * Subscribe to store changes for reactive UI updates - returns unsubscribe function
    */
-  public readonly onDidChange: (listener: (event: StoreChangeEvent) => void) => void;
+  public readonly onDidChange: (listener: (event: StoreChangeEvent) => void) => () => void;
 
   constructor() {
     this.configManager = new ConfigManager();
     this.onDidChange = (listener: (event: StoreChangeEvent) => void) => {
       this.eventEmitter.on('change', listener);
+      return () => this.eventEmitter.removeListener('change', listener);
     };
+  }
+
+  /**
+   * Set the workflow root directory without performing a full scan.
+   * Used by tests and lightweight init paths that need the path stored
+   * but not the cost of refresh().
+   */
+  setWorkflowRoot(workflowRoot: string | null): void {
+    this.workflowRoot = workflowRoot;
   }
 
   /**
@@ -175,29 +296,40 @@ export class WorkflowStore implements IStore {
 
   /**
    * Parse review entries from ticket markdown body.
-   * Expects a table under ## Ревью or ## Review with rows like:
-   * | date | ✅ passed / ❌ failed | summary |
+   *
+   * Rows live in a table under `## Ревью` / `## Review`, but their shape is not
+   * fixed. Real tickets carry at least these layouts, sometimes inside one and
+   * the same table:
+   *
+   *   | 2026-04-30 | ✅ passed | summary |                    3 columns
+   *   | 2026-05-01 10:50 | ✅ passed | summary | human |      agent last (header order)
+   *   | 2026-05-02 | claude-sonnet | ✅ passed | summary |    agent second (rows that ignore the header)
+   *
+   * Dates appear as `YYYY-MM-DD`, with a time after a space or a `T`, with or
+   * without seconds and a `Z`/offset, and occasionally with a trailing note
+   * such as `(attempt 6)`. Verdicts are not a closed set either: `✅ passed`,
+   * `❌ failed`, `✅ passed (attempt 2)`, `⏳ in review`, `✅ PASS`, plain `fixed`.
+   *
+   * So the columns are identified by content rather than by position: the first
+   * cell is the date, the verdict is the first cell after it that looks like a
+   * verdict, and the summary is whatever follows the verdict.
    */
   static parseReviews(body: string): ReviewEntry[] {
-    const sectionMatch = body.match(/## (?:Ревью|Review)([\s\S]*?)(?=\n## |\n---|\s*$)/);
-    if (!sectionMatch) { return []; }
-
-    const section = sectionMatch[1];
+    // Секций бывает несколько: pipeline-fallback дописывает новую вместо
+    // строки в существующую, и таких тикетов в проектах полтора десятка.
     const reviews: ReviewEntry[] = [];
-    const rowRegex = /\|\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\s*\|\s*(\S+)\s+(\w+)\s*\|\s*([^|\n]*)\|?/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = rowRegex.exec(section)) !== null) {
-      reviews.push({
-        date: match[1],
-        icon: match[2],
-        status: match[3],
-        summary: match[4].trim()
-      });
+    for (const section of body.matchAll(REVIEW_SECTION_RE)) {
+      for (const line of section[1].split('\n')) {
+        const entry = parseReviewRow(line);
+        if (entry) { reviews.push(entry); }
+      }
     }
+    if (reviews.length === 0) { return []; }
 
-    // Сортируем по дате (хронологически), чтобы порядок строк в таблице не влиял
-    reviews.sort((a, b) => a.date.localeCompare(b.date));
+    // Сортируем по дате (хронологически), чтобы порядок строк в таблице не влиял.
+    // `T` приводится к пробелу, иначе «2026-05-01T09:00» встало бы после
+    // «2026-05-01 23:00» (код 'T' больше кода пробела).
+    reviews.sort((a, b) => reviewSortKey(a.date).localeCompare(reviewSortKey(b.date)));
 
     return reviews;
   }

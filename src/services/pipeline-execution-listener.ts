@@ -27,6 +27,8 @@ export type PipelineStateCallback = (state: PipelineState) => void;
 export class PipelineExecutionListener {
   private listenersSetup: boolean = false;
   private currentState: PipelineState = PipelineState.Idle;
+  private stateChangeListener?: (state: PipelineState) => void;
+  private logListener?: (log: string) => void;
 
   constructor(
     private readonly logParser: PipelineLogParser,
@@ -44,7 +46,7 @@ export class PipelineExecutionListener {
     if (this.listenersSetup) return;
     this.listenersSetup = true;
 
-    pipelineService.onStateChange((state: PipelineState) => {
+    this.stateChangeListener = (state: PipelineState) => {
       const previousState = this.currentState;
       this.currentState = state;
       this.onPipelineStateChange?.(state);
@@ -61,9 +63,10 @@ export class PipelineExecutionListener {
         this.onStateChange(result);
       }
       this.onRefresh();
-    });
+    };
+    pipelineService.onStateChange(this.stateChangeListener);
 
-    pipelineService.onLog((log: string) => {
+    this.logListener = (log: string) => {
       const timestamp = new Date().toLocaleTimeString();
       if (this.outputChannel) {
         this.outputChannel.appendLine(`[${timestamp}] ${log}`);
@@ -89,7 +92,8 @@ export class PipelineExecutionListener {
       if (changed) {
         this.onRefresh();
       }
-    });
+    };
+    pipelineService.onLog(this.logListener);
   }
 
   /**
@@ -97,5 +101,22 @@ export class PipelineExecutionListener {
    */
   getCurrentState(): PipelineState {
     return this.currentState;
+  }
+
+  /**
+   * Clean up listeners - must have reference to pipelineService that was set up with
+   */
+  dispose(pipelineService?: PipelineService): void {
+    if (!pipelineService) return; // Can't dispose without the service reference
+
+    if (this.stateChangeListener) {
+      pipelineService.removeListener('stateChange', this.stateChangeListener);
+    }
+    if (this.logListener) {
+      pipelineService.removeListener('log', this.logListener);
+    }
+
+    this.stateChangeListener = undefined;
+    this.logListener = undefined;
   }
 }

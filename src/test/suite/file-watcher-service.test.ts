@@ -664,7 +664,7 @@ reporting:
 
       const ticketsDir = path.join(testDir, '.workflow', 'tickets', 'ready');
 
-      let refreshCallTime: number | null = null;
+      let _refreshCallTime: number | null = null;
       const originalRefresh = store.refresh.bind(store);
       let lastCallTime = 0;
       
@@ -673,7 +673,7 @@ reporting:
         if (lastCallTime === 0) {
           lastCallTime = now;
         } else {
-          refreshCallTime = now - lastCallTime;
+          _refreshCallTime = now - lastCallTime;
           lastCallTime = now;
         }
         return originalRefresh(workflowRoot as string);
@@ -739,7 +739,7 @@ completed_at: ""
 
       // The store should still have the old title at this point (debounce not complete)
       const tickets = store.getTickets();
-      const changedTicket = tickets.find(t => t.id === 'CHANGE-001');
+      const _changedTicket = tickets.find(t => t.id === 'CHANGE-001');
       
       // Wait for debounce to complete
       await new Promise(resolve => setTimeout(resolve, 200));

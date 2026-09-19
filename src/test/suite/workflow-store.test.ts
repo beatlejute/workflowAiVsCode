@@ -283,26 +283,67 @@ reporting:
       assert.strictEqual(store.getTickets().length, 0, 'Should have no tickets');
     });
 
-    test('should handle invalid YAML in ticket files', async () => {
-      const { ticketsDir } = createTestStructure(testDir);
-      createConfigFiles(path.join(testDir, '.workflow', 'config'));
+     test('should handle invalid YAML in ticket files', async () => {
+       const { ticketsDir } = createTestStructure(testDir);
+       createConfigFiles(path.join(testDir, '.workflow', 'config'));
 
-      // Create invalid ticket file
-      const invalidPath = path.join(ticketsDir, 'ready', 'INVALID-001.md');
-      fs.writeFileSync(invalidPath, '---\ninvalid: yaml: content\n---', 'utf-8');
+       // Create invalid ticket file
+       const invalidPath = path.join(ticketsDir, 'ready', 'INVALID-001.md');
+       fs.writeFileSync(invalidPath, '---\ninvalid: yaml: content\n---', 'utf-8');
 
-      // Create valid ticket
-      createTicketFile(path.join(ticketsDir, 'ready'), 'VALID-001', 'ready', 'Valid Ticket');
+       // Create valid ticket
+       createTicketFile(path.join(ticketsDir, 'ready'), 'VALID-001', 'ready', 'Valid Ticket');
 
-      // Should not throw, should skip invalid file
-      await assert.doesNotReject(async () => {
-        await store.refresh(path.join(testDir, '.workflow'));
-      });
+       // Should not throw, should skip invalid file
+       await assert.doesNotReject(async () => {
+         await store.refresh(path.join(testDir, '.workflow'));
+       });
 
-      // Should still load valid tickets
-      assert.strictEqual(store.getTickets().length, 1, 'Should load valid ticket');
-      assert.ok(store.getTicketById('VALID-001'), 'Should find valid ticket');
-    });
+       // Should still load valid tickets
+       assert.strictEqual(store.getTickets().length, 1, 'Should load valid ticket');
+       assert.ok(store.getTicketById('VALID-001'), 'Should find valid ticket');
+     });
+
+     test('should load tickets with auto_blocked fields from frontmatter', async () => {
+       const { ticketsDir } = createTestStructure(testDir);
+       createConfigFiles(path.join(testDir, '.workflow', 'config'));
+
+       // Create a ticket with auto_blocked fields
+       const frontmatter = {
+         id: 'TEST-AUTO-BLOCKED-001',
+         title: 'Test Ticket with Auto Blocked Fields',
+         status: 'blocked',
+         priority: 2,
+         type: 'IMPL',
+         dependencies: [],
+         conditions: [],
+         context: {},
+         tags: [],
+         complexity: 'medium',
+         parent_plan: 'PLAN-001',
+         parent_task: '',
+         created_at: '2026-03-04T00:00:00Z',
+         updated_at: '2026-03-04T00:00:00Z',
+         completed_at: '',
+         auto_blocked_reason: 'max_review_attempts',
+         auto_blocked_attempts: 6,
+         auto_blocked_at: '2026-04-29T10:00:00Z'
+       };
+
+       const yamlContent = yaml.dump(frontmatter, { indent: 2 });
+       const content = `---\n${yamlContent}---\n## Test content`;
+       fs.writeFileSync(path.join(ticketsDir, 'blocked', 'TEST-AUTO-BLOCKED-001.md'), content, 'utf-8');
+
+       await store.refresh(path.join(testDir, '.workflow'));
+
+       const ticket = store.getTicketById('TEST-AUTO-BLOCKED-001');
+       assert.ok(ticket, 'Should find the ticket with auto_blocked fields');
+       
+       // Verify the auto_blocked fields are accessible
+       assert.strictEqual(ticket?.auto_blocked_reason, 'max_review_attempts', 'auto_blocked_reason should be accessible');
+       assert.strictEqual(ticket?.auto_blocked_attempts, 6, 'auto_blocked_attempts should be accessible');
+       assert.strictEqual(ticket?.auto_blocked_at, '2026-04-29T10:00:00Z', 'auto_blocked_at should be accessible');
+     });
   });
 
   suite('Event Emission - Batch on refresh()', () => {

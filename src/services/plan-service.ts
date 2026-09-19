@@ -457,7 +457,7 @@ export class PlanService {
     // Read current file to get body and preserve unknown frontmatter fields
     const planPath = path.join(this.workflowRoot, 'plans', planFolder, id + '.md');
     let body = '';
-    let unknownFields: Record<string, unknown> = {};
+    const unknownFields: Record<string, unknown> = {};
 
     try {
       const content = await fs.readFile(planPath, 'utf-8');

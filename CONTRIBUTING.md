@@ -289,6 +289,62 @@ A Husky pre-commit hook automatically runs `i18n:lint` before each commit to ens
    - Describe your changes clearly
    - Add screenshots if UI changed
 
+## Working with PipelineService events
+
+When working with PipelineService events, follow these patterns:
+
+**Adding new pipeline events:**
+1. Use the EventEmitter pattern with Disposable interface
+2. Implement proper subscription management
+3. Ensure no memory leaks from event listeners
+
+**Subscription pattern:**
+- Subscribe in `initialize()` method
+- Unsubscribe in `dispose()` method
+- Always test proper disposal to prevent memory leaks
+
+**Example:**
+```typescript
+export class MyPipelineService {
+  private eventEmitter = new EventEmitter();
+  private disposables: Disposable[] = [];
+
+  initialize() {
+    const subscription = this.eventEmitter.event(data => {
+      // Handle event
+    });
+    this.disposables.push(subscription);
+  }
+
+  dispose() {
+    this.disposables.forEach(disposable => disposable.dispose());
+    this.disposables = [];
+  }
+}
+```
+
+## Testing notifications
+
+When testing notification functionality, use these approaches:
+
+**Fixtures for runner log emulation:**
+- Use sample log lines from `manual-gate-human` scenarios
+- Mock different log levels and message formats
+- Test edge cases like empty logs or malformed entries
+
+**Mocking vscode.window.showInformationMessage:**
+```typescript
+const mockShowInformationMessage = sinon.mock(vscode.window);
+mockShowInformationMessage.expects('showInformationMessage')
+  .withExactArgs('Test message')
+  .resolves(undefined);
+```
+
+**Testing deduplication:**
+- Mock `Date.now()` to control timing
+- Test multiple messages within deduplication window
+- Verify proper cleanup of duplicate messages
+
 ## Code Review Process
 
 All PRs are reviewed by maintainers:
@@ -336,6 +392,23 @@ The extension supports multiple locales. When adding new user-facing strings:
 
 4. **Update other locales** (or let translators handle it via PR)
 
+### Adding new localized strings
+
+When adding new localized strings to the project, follow these guidelines:
+
+**Required locales:**
+All 12 locales must be maintained: `de`, `es`, `fr`, `it`, `ja`, `ko`, `pt`, `pt-br`, `ru`, `zh`, `zh-cn`, `zh-tw`
+
+**Translation rules:**
+- Russian (`ru`) — manual translation by native speakers
+- All other locales — machine translation with `[needs review]` marker
+- Always preserve placeholders `{0}`, `{1}`, etc. in all translations
+
+**Validation:**
+- Run parity check: `npm run lint:l10n`
+- Ensure all translations maintain the same meaning as the base locale
+- Check for consistency across all locale files
+
 **Supported locales:**
 
 - `en` — English (base)
@@ -345,7 +418,10 @@ The extension supports multiple locales. When adding new user-facing strings:
 - `es` — Spanish
 - `it` — Italian
 - `pt` — Portuguese
+- `pt-br` — Brazilian Portuguese
 - `zh` — Chinese
+- `zh-cn` — Simplified Chinese
+- `zh-tw` — Traditional Chinese
 - `ja` — Japanese
 - `ko` — Korean
 

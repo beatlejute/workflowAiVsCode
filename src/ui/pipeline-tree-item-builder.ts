@@ -10,6 +10,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { t } from '../i18n';
 import { PipelineState } from '../services/pipeline-service';
 import { StageResult } from './pipeline-tree-data-provider';
@@ -49,20 +50,42 @@ export class PipelineTreeItem extends vscode.TreeItem {
 export class PipelineRunTreeItem extends PipelineTreeItem {
   constructor(
     public readonly state: PipelineState,
-    public readonly elapsed?: string
+    public readonly elapsed?: string,
+    public readonly currentManualGateTicket?: string,
+    private workflowRoot?: string
   ) {
-    const label = getPipelineRunLabel(state);
+    const label = getPipelineRunLabel(state, currentManualGateTicket);
     super(
       label,
-      vscode.TreeItemCollapsibleState.Expanded,
+      // Не Expanded: у этого узла нет детей — getChildren обрабатывает только
+      // `statistics`, `history` и `history-item`, а стейджи лежат соседями в
+      // корне. Раскрывающая стрелка у бездетного узла и создавала впечатление,
+      // что клик по chevron ничего не делает.
+      vscode.TreeItemCollapsibleState.None,
       'pipeline-run',
       'pipeline-run'
     );
 
     this.description = elapsed ? `Elapsed: ${elapsed}` : '';
+    if (state === PipelineState.Paused && currentManualGateTicket) {
+      this.description = currentManualGateTicket;
+    }
+
     this.tooltip = createPipelineRunTooltip(state, elapsed);
     this.iconPath = getPipelineStateIcon(state);
     this.contextValue = 'pipeline-run';
+
+    // Add command to open ticket when paused with a manual gate ticket
+    if (state === PipelineState.Paused && currentManualGateTicket && workflowRoot) {
+       const ticketUri = vscode.Uri.file(
+         path.join(workflowRoot, '.workflow', 'tickets', 'ready', `${currentManualGateTicket}.md`)
+      );
+      this.command = {
+        command: 'vscode.open',
+        title: t('Open ticket'),
+        arguments: [ticketUri]
+      };
+    }
   }
 }
 
@@ -239,8 +262,13 @@ export class HistoryItemTreeItem extends PipelineTreeItem {
       `history-${entry.runNumber}`
     );
 
-    // Show planId in description when available
-    this.description = entry.planId ? `${entry.planId} | ${entry.date}` : entry.date;
+    // Show planId in description when available. Runs this extension did not
+    // start also name their origin — otherwise a CLI run is indistinguishable
+    // from ours in the history list.
+    const origin = entry.source && entry.source !== 'extension' ? `${entry.source} | ` : '';
+    this.description = entry.planId
+      ? `${origin}${entry.planId} | ${entry.date}`
+      : `${origin}${entry.date}`;
     this.tooltip = createHistoryItemTooltip(entry);
     // Use contextValue based on planId presence
     this.contextValue = entry.planId ? 'history-item-plan' : 'history-item';
@@ -278,10 +306,15 @@ export class HistoryReportTreeItem extends PipelineTreeItem {
 /**
  * Get label for pipeline run based on state and mode
  */
-function getPipelineRunLabel(state: PipelineState): string {
+function getPipelineRunLabel(state: PipelineState, currentManualGateTicket?: string): string {
+  if (state === PipelineState.Paused && currentManualGateTicket) {
+    return t('Waiting for manual intervention');
+  }
+
   const stateLabels: Record<PipelineState, string> = {
     [PipelineState.Idle]: 'Idle',
     [PipelineState.Running]: 'Running',
+    [PipelineState.Paused]: 'Paused',
     [PipelineState.Error]: 'Error',
     [PipelineState.Completed]: 'Completed'
   };
@@ -293,18 +326,20 @@ function getPipelineRunLabel(state: PipelineState): string {
  * Get theme icon for pipeline state
  */
 function getPipelineStateIcon(state: PipelineState): vscode.ThemeIcon {
-  switch (state) {
+    switch (state) {
     case PipelineState.Idle:
       return new vscode.ThemeIcon('circle-outline');
     case PipelineState.Running:
       return new vscode.ThemeIcon('loading~spin');
+    case PipelineState.Paused:
+      return new vscode.ThemeIcon('debug-pause');
     case PipelineState.Error:
       return new vscode.ThemeIcon('error', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
     case PipelineState.Completed:
       return new vscode.ThemeIcon('check', new vscode.ThemeColor('terminal.ansiGreen'));
     default:
       return new vscode.ThemeIcon('circle-outline');
-  }
+    }
 }
 
 /**
@@ -508,6 +543,10 @@ function createHistoryItemTooltip(entry: RunHistoryEntry): vscode.MarkdownString
   markdown.appendMarkdown(`|-------|-------|\n`);
   markdown.appendMarkdown(`| **${t('Date')}** | ${entry.date} |\n`);
   markdown.appendMarkdown(`| **${t('Result')}** | ${entry.result} |\n`);
+  markdown.appendMarkdown(`| **${t('Started by')}** | ${entry.source ?? 'extension'} |\n`);
+  if (entry.runId) {
+    markdown.appendMarkdown(`| **Run ID** | ${entry.runId} |\n`);
+  }
   if (entry.reports && entry.reports.length > 0) {
     markdown.appendMarkdown(`| **${t('Reports')}** | ${entry.reports.length} |\n`);
   }

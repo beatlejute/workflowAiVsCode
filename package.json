@@ -2,7 +2,7 @@
   "name": "workflow-vscode",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "workflow-ai",
   "license": "MIT",
   "icon": "assets/icon-128.png",
@@ -16,7 +16,10 @@
     "kanban",
     "productivity",
     "task-management",
-    "agile"
+    "agile",
+    "human-gate",
+    "manual-gate",
+    "notifications"
   ],
   "engines": {
     "vscode": "^1.109.0",
@@ -445,6 +448,11 @@
             "%config.locale.enumDescriptions.ko%"
           ],
           "description": "%config.locale.description%"
+        },
+        "workflow.externalPipelineDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.externalPipelineDetection.description%"
         }
       }
     },
@@ -572,6 +580,31 @@
           "when": "view == workflow-sidebar.pipeline && workflow.cliInstalled && workflow.workflowFound",
           "group": "2_pipeline",
           "icon": "$(tools)"
+        },
+        {
+          "command": "workflow.newPlan",
+          "when": "view == workflow-sidebar.plans && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "view == workflow-sidebar.plans && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "view == workflow-sidebar.reports && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "view == workflow-sidebar.logs && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.refreshAll",
+          "when": "view == workflow-sidebar.skills && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -801,8 +834,9 @@
     "watch": "node esbuild.config.mjs --watch",
     "package": "node esbuild.config.mjs --production",
     "package:vsix": "vsce package",
-    "lint": "eslint src/",
+    "lint": "npm run lint:i18n && npm run lint:l10n && eslint src/",
     "lint:i18n": "node scripts/check-i18n.js",
+    "lint:l10n": "node scripts/check-l10n-parity.mjs",
     "i18n:lint": "ts-node scripts/i18n-lint.ts",
     "pretest": "npm run test:compile",
     "test": "node ./src/test/runTests.mjs",

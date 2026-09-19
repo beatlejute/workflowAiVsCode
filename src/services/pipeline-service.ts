@@ -19,6 +19,7 @@ import { SpawnFunction } from '../types/process-types';
 export enum PipelineState {
   Idle = 'idle',
   Running = 'running',
+  Paused = 'paused',
   Error = 'error',
   Completed = 'completed'
 }
@@ -65,10 +66,12 @@ export type StageChangeListener = (stage: string | undefined) => void;
 export class PipelineService extends EventEmitter {
   private currentState: PipelineState = PipelineState.Idle;
   private childProcess: ChildProcess | null = null;
-  private currentStage: string | undefined;
-  private currentAgent: string | undefined;
-  private currentTicket: string | undefined;
-  private retryCount: number = 0;
+   private currentStage: string | undefined;
+   private currentAgent: string | undefined;
+   private currentTicket: string | undefined;
+   private currentManualGate: string | undefined;
+   private currentManualGateTicket: string | undefined;
+   private retryCount: number = 0;
   private stopping = false;
   private hasStageErrors = false;
   private stageWithRetryError: string | undefined; // Track which stage had error+retry
@@ -130,6 +133,13 @@ export class PipelineService extends EventEmitter {
   }
 
   /**
+   * Get current manual gate ticket (when pipeline is paused)
+   */
+  getCurrentManualGateTicket(): string | undefined {
+    return this.currentManualGateTicket;
+  }
+
+  /**
    * Get retry count
    */
   getRetryCount(): number {
@@ -143,6 +153,14 @@ export class PipelineService extends EventEmitter {
     this.on('stateChange', listener);
     return this;
   }
+
+   /**
+    * Register manual gate activation listener
+    */
+   onManualGateActivated(listener: (data: { stage: string | undefined; ticketId: string | undefined }) => void): this {
+     this.on('manual-gate-activated', listener);
+     return this;
+   }
 
   /**
    * Register log listener
@@ -184,6 +202,11 @@ export class PipelineService extends EventEmitter {
       // Remove CLAUDECODE env var to allow nested claude CLI calls from pipeline
       const env = { ...process.env };
       delete env.CLAUDECODE;
+
+      // The runner records this in .pipeline.lock. ExternalPipelineMonitor uses
+      // it to tell our own run from a CLI or MCP one — comparing PIDs cannot
+      // work on Windows, where spawn goes through cmd.exe (see spawnWithFallback).
+      env.WORKFLOW_STARTED_BY = 'extension';
 
       // Create progress bar with cancellation support
       await vscode.window.withProgress(
@@ -430,12 +453,29 @@ export class PipelineService extends EventEmitter {
       if (parsed.agent) {
         this.currentAgent = parsed.agent;
       }
-      if (parsed.ticket) {
-        this.currentTicket = parsed.ticket;
-      }
-      if (parsed.retry !== undefined) {
-        this.retryCount = parsed.retry;
-      }
+       if (parsed.ticket) {
+         this.currentTicket = parsed.ticket;
+       }
+       if (parsed.retry !== undefined) {
+         this.retryCount = parsed.retry;
+       }
+
+       // Manual-gate detection: START manual-gate-* → pause pipeline
+       if (parsed.type === 'start' && parsed.stage?.startsWith('manual-gate')) {
+         this.currentManualGate = parsed.stage;
+         this.currentManualGateTicket = parsed.ticket;
+         this.setState(PipelineState.Paused);
+         this.emit('manual-gate-activated', { stage: parsed.stage, ticketId: parsed.ticket });
+       }
+
+       // Manual-gate exit: GOTO from manual-gate-* → resume
+       if (parsed.type === 'goto' && parsed.fromStage?.startsWith('manual-gate')) {
+         this.currentManualGate = undefined;
+         this.currentManualGateTicket = undefined;
+         if (this.currentState === PipelineState.Paused) {
+           this.setState(PipelineState.Running);
+         }
+       }
     }
   }
 
@@ -501,18 +541,19 @@ export class PipelineService extends EventEmitter {
       };
     }
 
-    // Parse START: [timestamp] [INFO] [stage] START stage="X" agent="Y" skill="Z"
-    const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?/);
-    if (startMatch) {
-      return {
-        type: 'start',
-        raw: line,
-        timestamp,
-        stage: startMatch[1],
-        agent: startMatch[2],
-        skill: startMatch[3]
-      };
-    }
+     // Parse START: [timestamp] [INFO] [stage] START stage="X" agent="Y" skill="Z" ticket="TICKET-ID"
+     const startMatch = message.match(/^START(?:\s+stage="([^"]*)")?(?:\s+agent="([^"]*)")?(?:\s+skill="([^"]*)")?(?:\s+ticket="([^"]*)")?/);
+     if (startMatch) {
+       return {
+         type: 'start',
+         raw: line,
+         timestamp,
+         stage: startMatch[1],
+         agent: startMatch[2],
+         skill: startMatch[3],
+         ticket: startMatch[4]
+       };
+     }
 
     // Parse RETRY: [timestamp] [WARN] [stage] RETRY stage="X" attempt=N/M
     const retryMatch = message.match(/^RETRY\s+stage="([^"]+)"\s+attempt=(\d+)\/(\d+)/);

@@ -54,6 +54,7 @@ class MockVSCodeWindow {
 class MockPipelineService {
   private currentState: PipelineState = PipelineState.Idle;
   private stateChangeListeners: ((state: PipelineState) => void)[] = [];
+  private manualGateListeners: ((data: { stage: string | undefined; ticketId: string | undefined }) => void)[] = [];
 
   getState(): PipelineState {
     return this.currentState;
@@ -66,16 +67,71 @@ class MockPipelineService {
     }
   }
 
-  onStateChange(listener: (state: PipelineState) => void): vscode.Disposable {
+  fireManualGate(data: { stage: string | undefined; ticketId: string | undefined }): void {
+    for (const listener of this.manualGateListeners) {
+      listener(data);
+    }
+  }
+
+  onStateChange(listener: (state: PipelineState) => void): () => void {
     this.stateChangeListeners.push(listener);
-    return {
-      dispose: () => {
-        const index = this.stateChangeListeners.indexOf(listener);
-        if (index > -1) {
-          this.stateChangeListeners.splice(index, 1);
-        }
+    return () => {
+      const index = this.stateChangeListeners.indexOf(listener);
+      if (index > -1) {
+        this.stateChangeListeners.splice(index, 1);
       }
     };
+  }
+
+  onManualGateActivated(listener: (data: { stage: string | undefined; ticketId: string | undefined }) => void): () => void {
+    this.manualGateListeners.push(listener);
+    return () => {
+      const index = this.manualGateListeners.indexOf(listener);
+      if (index > -1) {
+        this.manualGateListeners.splice(index, 1);
+      }
+    };
+  }
+
+  onLog(_listener: (log: string) => void): this {
+    // Mock implementation - no-op for now
+    return this;
+  }
+
+  onStageChange(_listener: (stage: string | undefined) => void): any {
+    // Mock implementation returns a disposable-like object (vscode.Event)
+    return { dispose: () => {} };
+  }
+
+  removeListener(event: string, listener: any): this {
+    if (event === 'stateChange') {
+      const index = this.stateChangeListeners.indexOf(listener);
+      if (index > -1) {
+        this.stateChangeListeners.splice(index, 1);
+      }
+    } else if (event === 'manual-gate-activated') {
+      const index = this.manualGateListeners.indexOf(listener);
+      if (index > -1) {
+        this.manualGateListeners.splice(index, 1);
+      }
+    }
+    return this;
+  }
+
+  getCurrentStage(): string | undefined {
+    return undefined;
+  }
+
+  getCurrentAgent(): string | undefined {
+    return undefined;
+  }
+
+  getCurrentTicket(): string | undefined {
+    return undefined;
+  }
+
+  getRetryCount(): number {
+    return 0;
   }
 }
 
@@ -411,5 +467,59 @@ suite('NotificationsManager Suite', () => {
       1,
       'Should have completed notification'
     );
+  });
+
+  test('Human-gate scenario: emulated runner log with manual-gate-human transition', async () => {
+    // Dispose the default manager first to avoid duplicate subscriptions
+    notificationsManager.dispose();
+
+    // Create a new notifications manager with full initialization
+    const humanGateManager = new NotificationsManager(
+      store,
+      mockPipelineService as unknown as PipelineService
+    );
+    humanGateManager.setWorkflowRoot('/workflow/root');
+    humanGateManager.initialize();
+
+    // Reset notification calls from initialization
+    mockWindow.showInformationMessageCalls = [];
+
+    // Simulate manual-gate-human activation through pipeline service event
+    mockPipelineService.fireManualGate({ stage: 'manual-gate-human', ticketId: 'HUMAN-001' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Verify human gate notification was shown
+    assert.strictEqual(
+      mockWindow.showInformationMessageCalls.length,
+      1,
+      'Should show one information message for human-gate'
+    );
+
+    const notification = mockWindow.showInformationMessageCalls[0];
+    assert.ok(
+      notification.message.includes('HUMAN-001'),
+      'Message should contain human ticket ID'
+    );
+    assert.ok(
+      notification.message.includes('готов') || notification.message.includes('ready'),
+      'Message should indicate ticket is ready'
+    );
+
+    // Verify action buttons
+    assert.strictEqual(
+      notification.buttons.length,
+      2,
+      'Should have two action buttons'
+    );
+    assert.ok(
+      notification.buttons.some(b => b.includes('Open')),
+      'Should have "Open" button'
+    );
+    assert.ok(
+      notification.buttons.some(b => b.includes('Move to review')),
+      'Should have "Move to review" button'
+    );
+
+    humanGateManager.dispose();
   });
 });

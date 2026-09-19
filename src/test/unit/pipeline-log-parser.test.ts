@@ -78,7 +78,7 @@ suite('PipelineLogParser', () => {
     test('should not set isCreateReport when report_id is not string', () => {
       const line = '[2026-03-11T10:00:00] [INFO] [execute-task] GOTO execute-task → done status="passed" params={"ticket_id":"IMPL-001","report_id":123}';
       const result = parser.parse(line);
-      assert.strictEqual(result.isCreateReport, undefined);
+      assert.strictEqual(result.isCreateReport, false);
       assert.strictEqual(result.reportInfo, undefined);
     });
 

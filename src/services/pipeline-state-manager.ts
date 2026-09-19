@@ -13,6 +13,7 @@
 import { ReportInfo } from '../ui/pipeline-types';
 import { CompletedStageData, StageResult } from '../ui/pipeline-tree-data-provider';
 import { ParsedLogData } from '../ui/pipeline-log-parser';
+import * as fs from 'fs';
 
 /**
  * Pipeline execution state
@@ -219,6 +220,9 @@ export class PipelineStateManager {
       const occurrence = this.state.stageOccurrences.get(prevStage) ?? 0;
 
       const stageResult = this.state.lastStageResult;
+      // Prefer reportInfo from current GOTO event (when GOTO carries report_id);
+      // fallback to currentStageReport accumulated from previous CREATE_REPORT events.
+      const eventReportInfo = data.isCreateReport ? data.reportInfo : undefined;
       this.state.completedStages.push({
         stage: prevStage,
         elapsed: this.state.elapsed,
@@ -230,7 +234,7 @@ export class PipelineStateManager {
         skill: this.state.currentSkill,
         statusChange,
         outputLines: [...this.state.currentOutputLines],
-        reportInfo: this.state.currentStageReport,
+        reportInfo: eventReportInfo || this.state.currentStageReport,
         logLineHint: occurrence
       });
 
@@ -247,14 +251,13 @@ export class PipelineStateManager {
       const isReportStage = prevStage === 'create-report' || 
                            prevStage === 'analyze-report' || 
                            prevStage.endsWith('-report');
-      if (isReportStage && this.state.currentTicket) {
-        const reportId = this.state.currentTicket.replace(/^[A-Z]+-(\d+)$/, 'REPORT-$1');
-        const fs = require('fs');
-        const reportPath = `.workflow/reports/${reportId}.md`;
-        if (fs.existsSync(reportPath)) {
-          this.state.currentStageReport = { id: reportId, path: reportPath };
+if (isReportStage && this.state.currentTicket) {
+          const reportId = this.state.currentTicket.replace(/^[A-Z]+-(\d+)$/, 'REPORT-$1');
+          const reportPath = `.workflow/reports/${reportId}.md`;
+          if (fs.existsSync(reportPath)) {
+            this.state.currentStageReport = { id: reportId, path: reportPath };
+          }
         }
-      }
     }
 
     this.state.currentStageReport = undefined;

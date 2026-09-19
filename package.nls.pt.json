@@ -129,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Falha ao arquivar plano {0}. Verifique o canal Output para detalhes.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Falha ao desarquivar plano {0}. Verifique o canal Output para detalhes.",
   "Failed to filter tickets. Check Output channel for details.": "Falha ao filtrar tickets. Verifique o canal Output para detalhes.",
-  "Failed to clear filter. Check Output channel for details.": "Falha ao limpar filtro. Verifique o canal Output para detalhes."
+  "Failed to clear filter. Check Output channel for details.": "Falha ao limpar filtro. Verifique o canal Output para detalhes.",
+  "config.externalPipelineDetection.description": "[needs review] Deteta pipelines iniciados fora da extensão (terminal, servidor MCP) e mostra-os na vista de pipeline."
 }

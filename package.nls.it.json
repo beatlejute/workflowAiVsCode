@@ -129,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Archiviazione piano {0} fallita. Controlla il canale Output per i dettagli.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Disarchiviazione piano {0} fallita. Controlla il canale Output per i dettagli.",
   "Failed to filter tickets. Check Output channel for details.": "Filtro ticket fallito. Controlla il canale Output per i dettagli.",
-  "Failed to clear filter. Check Output channel for details.": "Pulizia filtro fallita. Controlla il canale Output per i dettagli."
+  "Failed to clear filter. Check Output channel for details.": "Pulizia filtro fallita. Controlla il canale Output per i dettagli.",
+  "config.externalPipelineDetection.description": "[needs review] Rileva le pipeline avviate al di fuori dell'estensione (terminale, server MCP) e le mostra nella vista pipeline."
 }

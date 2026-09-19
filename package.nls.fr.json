@@ -88,7 +88,6 @@
   "views.sidebar.logs.name": "JOURNAUX",
   "command.filterTicketsByPlan.title": "Filtrer par plan",
   "command.clearTicketFilter.title": "Effacer le filtre",
-  "command.togglePlanTemplate.title": "Basculer le modèle",
   "command.sortKanbanByDate.title": "Trier par date",
   "command.toggleSortDirection.title": "Basculer la direction du tri",
   "command.sortTicketsByPriority.title": "Trier les tickets par priorité",
@@ -130,5 +129,6 @@
   "Failed to archive plan {0}. Check Output channel for details.": "Échec de l'archivage du plan {0}. Vérifiez le canal Output pour les détails.",
   "Failed to unarchive plan {0}. Check Output channel for details.": "Échec de la désarchivage du plan {0}. Vérifiez le canal Output pour les détails.",
   "Failed to filter tickets. Check Output channel for details.": "Échec du filtrage des tickets. Vérifiez le canal Output pour les détails.",
-  "Failed to clear filter. Check Output channel for details.": "Échec de la réinitialisation du filtre. Vérifiez le canal Output pour les détails."
+  "Failed to clear filter. Check Output channel for details.": "Échec de la réinitialisation du filtre. Vérifiez le canal Output pour les détails.",
+  "config.externalPipelineDetection.description": "[needs review] Détecte les pipelines démarrés en dehors de l'extension (terminal, serveur MCP) et les affiche dans la vue pipeline."
 }

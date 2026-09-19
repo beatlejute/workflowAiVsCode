@@ -73,6 +73,9 @@ export interface Ticket {
   updated_at: string;
   completed_at: string;
   reviews?: ReviewEntry[];
+  auto_blocked_reason?: string;
+  auto_blocked_attempts?: number;
+  auto_blocked_at?: string;
 }
 
 /**
