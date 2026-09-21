@@ -106,17 +106,19 @@ ${title}
     await vscode.commands.executeCommand('workflow.refreshTickets');
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Apply filter to PLAN-001
-    await vscode.commands.executeCommand('workflow.filterTicketsByPlan', 'PLAN-001');
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Verify filter is applied by checking that only PLAN-001 tickets are visible
-    // (In E2E we verify the command executes successfully and files exist)
+    // `workflow.filterTicketsByPlan` здесь не зовётся намеренно. Аргументов
+    // команда не принимает (`command-registration.ts`: `() =>
+    // executeFilterTicketsByPlan(...)`) и всегда открывает QuickPick
+    // (`commands/index.ts`), а в безголовом прогоне выбирать некому: `await`
+    // висел до тайм-аута mocha в 60 с — это и роняло весь E2E-прогон.
+    // Регистрацию команды проверяют два теста выше; состояние фильтра лежит
+    // в провайдерах, до которых из E2E не дотянуться.
     const readyDir = path.join(workflowRoot, '.workflow', 'tickets', 'ready');
-    const files = fs.readdirSync(readyDir).filter(f => f.endsWith('.md'));
+    const files = fs.readdirSync(readyDir).filter(f => f.startsWith('FILTER-') && f.endsWith('.md'));
 
-    // All 3 tickets should exist
-    assert.strictEqual(files.length, 3, 'Should have 3 tickets in ready');
+    // Рядом лежат фикстуры рабочего пространства (`FIX-001`, `FIX-002`),
+    // поэтому считаются только созданные этим тестом.
+    assert.strictEqual(files.length, 3, 'Should have 3 FILTER tickets in ready');
 
     // Verify content
     const filter001Content = fs.readFileSync(
@@ -128,7 +130,7 @@ ${title}
       'FILTER-001 should have parent_plan: PLAN-001'
     );
 
-    // Clear filter
+    // Снятие фильтра диалогов не открывает — эту команду зовём как есть.
     await vscode.commands.executeCommand('workflow.clearTicketFilter');
     await new Promise(resolve => setTimeout(resolve, 500));
   });
