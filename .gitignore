@@ -45,3 +45,9 @@ reports/
 out/
 .claude/
 1.txt
+
+# Фикстуры тестов — исключение из правил выше: `plans/`, `reports/` и `tmp/`
+# написаны без ведущего слэша и совпадают на любой глубине, из-за чего
+# `src/test/suite/__fixtures__/workflow/plans/archive/PLAN-004.md` молча не
+# попал в коммит, а на Linux два теста упали с ENOENT.
+!src/test/**/__fixtures__/**
