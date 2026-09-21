@@ -34,6 +34,25 @@ function findFixtureDirs(dir) {
   return found;
 }
 
+/**
+ * Копирует дерево целиком: у фикстур есть подкаталоги (`workflow/config/…`).
+ *
+ * @returns {number} сколько файлов скопировано
+ */
+function copyTree(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  let n = 0;
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const src = path.join(from, entry.name);
+    const dst = path.join(to, entry.name);
+    if (entry.isDirectory()) { n += copyTree(src, dst); } else if (entry.isFile()) {
+      fs.copyFileSync(src, dst);
+      n++;
+    }
+  }
+  return n;
+}
+
 const srcRoot = path.join(root, 'src');
 if (!fs.existsSync(srcRoot)) {
   console.error(`[copy-test-fixtures] нет каталога ${srcRoot}`);
@@ -49,12 +68,7 @@ for (const fixtureDir of findFixtureDirs(srcRoot)) {
     // `dist/test`. Отсутствует — значит этот проект сейчас не собирали.
     if (!fs.existsSync(target)) { continue; }
     const destination = path.join(target, relative);
-    fs.mkdirSync(destination, { recursive: true });
-    for (const file of fs.readdirSync(fixtureDir, { withFileTypes: true })) {
-      if (!file.isFile()) { continue; }
-      fs.copyFileSync(path.join(fixtureDir, file.name), path.join(destination, file.name));
-      copied++;
-    }
+    copied += copyTree(fixtureDir, destination);
   }
 }
 
