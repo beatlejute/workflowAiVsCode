@@ -268,9 +268,8 @@ export function setupExternalPipelineDetection(
     // исходе: и успех, и падение выглядят одинаково. Исход — только в логе.
     // Остановленный отсюда запуск финального блока в лог не пишет: на Windows
     // taskkill /F не даёт раннеру ничего дописать, и лог читался бы как падение.
-    const result = control.wasStoppedByUser(previous)
-      ? 'stopped'
-      : previous.state === 'stale' ? 'error' : readRunResult(previous.logPath);
+    const result = finishedRunResult(previous, control.wasStoppedByUser(previous));
+    control.forget(previous);
     pipelineProvider.addExternalRunToHistory(
       result,
       previous.source,
@@ -287,6 +286,23 @@ export function setupExternalPipelineDetection(
       }
     }
   };
+}
+
+/**
+ * How a finished external run ended, for the history.
+ *
+ * A run stopped from here is `stopped`: on Windows `taskkill /F` gives the
+ * runner no chance to write its final block, and the log would read as a
+ * crash. A run whose process vanished without us is `error`. Otherwise the
+ * runner's own verdict in the log decides.
+ */
+export function finishedRunResult(
+  run: ActiveRun,
+  stoppedByUser: boolean
+): 'success' | 'error' | 'stopped' {
+  if (stoppedByUser) { return 'stopped'; }
+  if (run.state === 'stale') { return 'error'; }
+  return readRunResult(run.logPath);
 }
 
 /**

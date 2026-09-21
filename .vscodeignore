@@ -40,6 +40,7 @@ tsconfig.test.json
 scripts/create-icon.js
 scripts/i18n-lint.ts
 scripts/*.d.ts
+scripts/copy-test-fixtures.mjs
 
 # Plans and design docs (dev only)
 plans/

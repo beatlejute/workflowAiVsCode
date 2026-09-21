@@ -21,6 +21,8 @@ import {
 import { CompletedStageTreeItem, CurrentStageTreeItem } from '../../ui/pipeline-tree-item-builder';
 import { ExternalPipelineControl, ControlOutcome, ControlRefusal } from '../../services/external-pipeline-control';
 import { ActiveRun } from '../../services/pipeline-run-source';
+import { getPulseTicketId, setPulseTicketId } from '../../ui/kanban-tree-provider';
+import { finishedRunResult } from '../../services/external-pipeline-setup';
 
 function baseState(overrides: Partial<PipelineDataState> = {}): PipelineDataState {
   return {
@@ -218,6 +220,54 @@ suite('PipelineTreeProvider: external run', () => {
     assert.strictEqual(internals.externalTracker, undefined);
   });
 
+  test('the kanban pulses the ticket the external run works on, and only while it works', async () => {
+    setPulseTicketId(undefined);
+    const logPath = path.join(root, '.workflow', 'logs', 'pulse.log');
+    fs.writeFileSync(logPath, [
+      '[2026-09-21 12:00:00] [INFO] [pick-first-task] START stage="pick-first-task" agent="script-pick" skill="undefined"',
+      '[2026-09-21 12:00:01] [INFO] [pick-first-task] GOTO pick-first-task → execute-task status="found" params={"ticket_id":"IMPL-90"}',
+      '[2026-09-21 12:00:02] [INFO] [execute-task] START stage="execute-task" agent="claude-sonnet" skill="execute-task"',
+      ''
+    ].join('\n'));
+    const internals = provider as unknown as { externalTracker: { poll(): Promise<boolean> }; pollExternalTracker(): void };
+
+    provider.setExternalRun(run({ logPath }));
+    await internals.externalTracker.poll();
+    internals.pollExternalTracker();
+    await internals.externalTracker.poll();
+    assert.strictEqual(getPulseTicketId(), 'IMPL-90');
+
+    provider.setExternalRun(run({ logPath, state: 'paused' }));
+    assert.strictEqual(getPulseTicketId(), undefined, 'на паузе тикет не в работе');
+
+    provider.setExternalRun(run({ logPath }));
+    assert.strictEqual(getPulseTicketId(), 'IMPL-90');
+    provider.setExternalRun(undefined);
+    assert.strictEqual(getPulseTicketId(), undefined, 'запуск закончился — пульс снят');
+  });
+
+  test('the pulse of our own run is not cleared by an external run it never set', () => {
+    setPulseTicketId('OWN-1');
+    try {
+      provider.setExternalRun(run());
+      provider.setExternalRun(undefined);
+      assert.strictEqual(getPulseTicketId(), 'OWN-1');
+    } finally {
+      setPulseTicketId(undefined);
+    }
+  });
+
+  test('a stale run is read once, without a polling timer', () => {
+    const logPath = path.join(root, '.workflow', 'logs', 'stale.log');
+    fs.writeFileSync(logPath, '');
+    const internals = provider as unknown as { externalTracker?: unknown; externalTrackerTimer?: unknown };
+    provider.setExternalRun(run({ logPath }));
+    assert.ok(internals.externalTrackerTimer, 'живой запуск опрашивается');
+    provider.setExternalRun(run({ logPath, state: 'stale' }));
+    assert.ok(internals.externalTracker, 'стадии протухшего запуска остаются видны');
+    assert.strictEqual(internals.externalTrackerTimer, undefined, 'протухший запуск не опрашивается');
+  });
+
   test('Stop asks first and goes to the external control when our run is idle', async () => {
     provider.setExternalRun(run());
     await provider.stopPipeline();
@@ -290,6 +340,30 @@ suite('PipelineTreeProvider: external run', () => {
       assert.deepStrictEqual(messages.error, ['External pipeline control is not available']);
     } finally {
       bare.dispose();
+    }
+  });
+});
+
+suite('finishedRunResult', () => {
+  const base: ActiveRun = { root: '/p', source: 'mcp', state: 'running', pid: 1, startedAt: 's' };
+
+  test('a run stopped from here is stopped, whatever the log says', () => {
+    assert.strictEqual(finishedRunResult({ ...base, state: 'stale' }, true), 'stopped');
+    assert.strictEqual(finishedRunResult(base, true), 'stopped');
+  });
+
+  test('a run that died by itself is an error', () => {
+    assert.strictEqual(finishedRunResult({ ...base, state: 'stale' }, false), 'error');
+  });
+
+  test('otherwise the runner verdict in the log decides', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-finished-'));
+    try {
+      const logPath = path.join(dir, 'run.log');
+      fs.writeFileSync(logPath, '[2026-09-21 12:00:00] [INFO] [PipelineRunner] Pipeline completed successfully!\n');
+      assert.strictEqual(finishedRunResult({ ...base, logPath }, false), 'success');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });

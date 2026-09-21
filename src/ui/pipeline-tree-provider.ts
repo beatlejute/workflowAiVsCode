@@ -33,6 +33,7 @@ import { CollapseStateStore } from './tree-collapse-state';
 import { ActiveRun } from '../services/pipeline-run-source';
 import { ExternalRunTracker } from '../services/external-run-tracker';
 import { ExternalPipelineControl, ControlOutcome } from '../services/external-pipeline-control';
+import { setPulseTicketId } from './kanban-tree-provider';
 import { t } from '../i18n';
 
 export { RunHistoryEntry, PersistedHistoryItem };
@@ -102,6 +103,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   private externalControl: ExternalPipelineControl | undefined;
   /** Re-reads a folder's run right after a control action. */
   private refreshExternalRun: ((root: string) => void) | undefined;
+  /** The kanban pulse was set for the external run and is ours to clear. */
+  private externalPulse = false;
 
   /** Wire in control of external runs. */
   setExternalRunControl(control: ExternalPipelineControl, refreshRun: (root: string) => void): void {
@@ -165,8 +168,28 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       || externalRun?.suspendedByMcp !== this.externalRun?.suspendedByMcp;
     this.externalRun = externalRun;
     this.syncExternalTracker(externalRun);
+    this.updateExternalPulse();
     if (changed) {
       this.refresh();
+    }
+  }
+
+  /**
+   * Animates the kanban row of the ticket the external run works on — the
+   * same pulse our own run gets from PipelineExecutionListener. Only while the
+   * run is actually working: paused or stale runs work on nothing.
+   */
+  private updateExternalPulse(): void {
+    const run = this.externalRun;
+    const live = run?.state === 'running' || run?.state === 'starting';
+    const ticket = live ? this.externalTracker?.state.getCurrentTicket() : undefined;
+    if (ticket) {
+      setPulseTicketId(ticket);
+      this.externalPulse = true;
+    } else if (this.externalPulse) {
+      // Снимаем только свой пульс: чужой ставит наш собственный запуск.
+      setPulseTicketId(undefined);
+      this.externalPulse = false;
     }
   }
 
@@ -178,27 +201,38 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
    */
   private syncExternalTracker(run: ActiveRun | undefined): void {
     const key = run?.logPath ? `${run.pid}|${run.startedAt}|${run.logPath}` : undefined;
-    if (key === this.externalTrackerKey) { return; }
+    if (key !== this.externalTrackerKey) {
+      this.stopExternalTracker();
+      if (!run?.logPath || !key) { return; }
+      this.externalTracker = new ExternalRunTracker(run.logPath, run.startedAt);
+      this.externalTrackerKey = key;
+      this.pollExternalTracker();
+    }
 
-    this.stopExternalTracker();
-    if (!run?.logPath || !key) { return; }
+    // Протухший запуск больше ничего не пишет: хватит одного чтения, а
+    // ежесекундный опрос висел бы до следующего запуска — иногда днями.
+    const stale = run?.state === 'stale';
+    if (stale && this.externalTrackerTimer) {
+      clearInterval(this.externalTrackerTimer);
+      this.externalTrackerTimer = undefined;
+      this.pollExternalTracker();
+    } else if (!stale && !this.externalTrackerTimer && this.externalTracker) {
+      this.externalTrackerTimer = setInterval(() => this.pollExternalTracker(), 1000);
+    }
+  }
 
-    const tracker = new ExternalRunTracker(run.logPath, run.startedAt);
-    this.externalTracker = tracker;
-    this.externalTrackerKey = key;
-
-    const tick = () => {
-      void tracker.poll().then(changed => {
-        if (this.externalTracker !== tracker) { return; }
-        // Пока запуск идёт, дерево обновляем каждую секунду — как у нашего
-        // собственного: у текущей стадии тикает время.
-        if (changed || this.externalRun?.state === 'running') {
-          this.refresh();
-        }
-      });
-    };
-    tick();
-    this.externalTrackerTimer = setInterval(tick, 1000);
+  private pollExternalTracker(): void {
+    const tracker = this.externalTracker;
+    if (!tracker) { return; }
+    void tracker.poll().then(changed => {
+      if (this.externalTracker !== tracker) { return; }
+      this.updateExternalPulse();
+      // Пока запуск идёт, дерево обновляем каждую секунду — как у нашего
+      // собственного: у текущей стадии тикает время.
+      if (changed || this.externalRun?.state === 'running') {
+        this.refresh();
+      }
+    });
   }
 
   private stopExternalTracker(): void {
@@ -499,6 +533,10 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       this.stageElapsedTimer = undefined;
     }
     this.stopExternalTracker();
+    if (this.externalPulse) {
+      setPulseTicketId(undefined);
+      this.externalPulse = false;
+    }
     this.collapseState.clear();
     this._onDidChangeTreeData.dispose();
     if (this.pipelineService) this.pipelineService.dispose();

@@ -94,6 +94,9 @@ function fakeOs(platform: NodeJS.Platform): FakeOs {
 
 const target = { pid: PID, startedAt: STARTED_AT };
 
+/** A pause request as the extension writes it: after the run started. */
+const REQUEST = { pid: PID, requested_at: '2026-09-21T12:05:00.000Z', requested_by: 'extension' };
+
 suite('ExternalPipelineControl.stop', () => {
   test('refuses when the lock describes another run', async () => {
     const root = makeProject({ started_at: '2026-09-21T13:00:00.000Z' });
@@ -130,7 +133,8 @@ suite('ExternalPipelineControl.stop', () => {
       assert.deepStrictEqual(fake.commands, []);
       assert.strictEqual(lockExists(root), false);
       assert.strictEqual(fs.existsSync(path.join(root, PAUSE_REQUEST_RELATIVE)), false);
-      assert.strictEqual(control.wasStoppedByUser(target), true);
+      // Умер сам, до нажатия — в истории это не остановка пользователем.
+      assert.strictEqual(control.wasStoppedByUser(target), false);
     } finally {
       cleanup(root);
     }
@@ -180,6 +184,8 @@ suite('ExternalPipelineControl.stop', () => {
       assert.strictEqual(fs.existsSync(path.join(root, PAUSE_REQUEST_RELATIVE)), false);
       assert.strictEqual(fs.existsSync(path.join(root, MCP_PAUSE_STATE_RELATIVE)), false);
       assert.strictEqual(control.wasStoppedByUser(target), true);
+      control.forget(target);
+      assert.strictEqual(control.wasStoppedByUser(target), false, 'forget убирает запись');
     } finally {
       cleanup(root);
     }
@@ -308,7 +314,7 @@ suite('ExternalPipelineControl.resume', () => {
   test('withdraws a pause request', async () => {
     const root = makeProject({});
     try {
-      writeState(root, PAUSE_REQUEST_RELATIVE, { pid: PID });
+      writeState(root, PAUSE_REQUEST_RELATIVE, REQUEST);
       const fake = fakeOs('win32');
       const outcome = await new ExternalPipelineControl(fake).resume(root, target);
       assert.deepStrictEqual(outcome, { ok: true });
@@ -355,6 +361,17 @@ suite('ExternalPipelineControl.resume', () => {
       const outcome = await new ExternalPipelineControl(fake).resume(root, target);
       assert.deepStrictEqual(outcome, { ok: false, reason: 'resume-failed', pid: PID, hint: 'not found' });
       assert.strictEqual(fs.existsSync(path.join(root, MCP_PAUSE_STATE_RELATIVE)), true);
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  test('a request older than the run is not this run\'s pause', async () => {
+    const root = makeProject({});
+    try {
+      writeState(root, PAUSE_REQUEST_RELATIVE, { ...REQUEST, requested_at: '2026-09-21T11:00:00.000Z' });
+      const outcome = await new ExternalPipelineControl(fakeOs('win32')).resume(root, target);
+      assert.deepStrictEqual(outcome, { ok: false, reason: 'not-paused', pid: PID });
     } finally {
       cleanup(root);
     }

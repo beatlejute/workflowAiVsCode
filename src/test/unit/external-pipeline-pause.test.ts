@@ -58,6 +58,8 @@ function writeState(root: string, relative: string, data: object): void {
 }
 
 const PAUSED = '[2026-09-21 12:05:00] [INFO] [PipelineRunner] PAUSED before stage="execute-task"';
+/** A pause request written after the run in liveLock() started. */
+const REQUEST = { pid: process.pid, requested_at: '2026-09-21T12:04:00.000Z' };
 const RESUMED = '[2026-09-21 12:09:00] [INFO] [PipelineRunner] RESUMED stage="execute-task"';
 
 suite('readRunnerPauseState', () => {
@@ -107,6 +109,19 @@ suite('pause request and capabilities', () => {
     }
   });
 
+  test('with the run start given, only a younger request counts', () => {
+    const root = makeProject();
+    try {
+      writeState(root, PAUSE_REQUEST_RELATIVE, { pid: 10, requested_at: '2026-09-21T11:00:00.000Z' });
+      assert.strictEqual(readPauseRequest(root, 10, '2026-09-21T12:00:00.000Z'), false, 'от прошлого запуска');
+      assert.strictEqual(readPauseRequest(root, 10, '2026-09-21T10:00:00.000Z'), true);
+      writeState(root, PAUSE_REQUEST_RELATIVE, { pid: 10 });
+      assert.strictEqual(readPauseRequest(root, 10, '2026-09-21T10:00:00.000Z'), false, 'без даты возраст не проверить');
+    } finally {
+      cleanup(root);
+    }
+  });
+
   test('pause support comes from the lock capabilities', () => {
     assert.strictEqual(lockSupportsPause({ pid: 1, started_at: '', capabilities: ['pause-request'] }), true);
     assert.strictEqual(lockSupportsPause({ pid: 1, started_at: '', capabilities: [] }), false);
@@ -117,12 +132,17 @@ suite('pause request and capabilities', () => {
     const root = makeProject();
     try {
       const lock = liveLock(root);
-      writeState(root, PAUSE_REQUEST_RELATIVE, { pid: process.pid });
+      writeState(root, PAUSE_REQUEST_RELATIVE, REQUEST);
       const file = writeLog(root, ['[2026-09-21 12:00:01] [INFO] [a] START stage="a" agent="x" skill="y"']);
       assert.strictEqual(determineRunState(root, lock, true, file), 'running', 'пока нет PAUSED — стадия ещё идёт');
 
       writeLog(root, [PAUSED]);
       assert.strictEqual(determineRunState(root, lock, true, file), 'paused');
+
+      // Resume снял запрос, а RESUMED раннер допишет только через секунду:
+      // запуск уже идёт, а не стоит без кнопок.
+      fs.unlinkSync(path.join(root, PAUSE_REQUEST_RELATIVE));
+      assert.strictEqual(determineRunState(root, lock, true, file), 'running');
     } finally {
       cleanup(root);
     }
@@ -148,7 +168,7 @@ suite('ExternalPipelineMonitor pause fields', () => {
       const seen: Array<boolean | undefined> = [];
       monitor.onDidChangeRun(r => seen.push(r?.pauseRequested));
 
-      writeState(root, PAUSE_REQUEST_RELATIVE, { pid: process.pid });
+      writeState(root, PAUSE_REQUEST_RELATIVE, REQUEST);
       monitor.refresh();
       run = monitor.getActiveRun();
       assert.strictEqual(run?.pauseRequested, true);

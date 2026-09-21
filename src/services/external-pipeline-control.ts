@@ -151,6 +151,11 @@ export class ExternalPipelineControl {
     return this.stopped.has(`${target.pid}|${target.startedAt}`);
   }
 
+  /** Drops what is known about a finished run, once its history is written. */
+  forget(target: ControlTarget): void {
+    this.stopped.delete(`${target.pid}|${target.startedAt}`);
+  }
+
   /**
    * Stops the run and its whole process tree.
    *
@@ -165,8 +170,8 @@ export class ExternalPipelineControl {
     const key = `${lock.pid}|${lock.started_at}`;
 
     if (!this.deps.isAlive(lock.pid)) {
-      // Процесс уже умер, остался только lock — убирать нечего, кроме файлов.
-      this.stopped.add(key);
+      // Процесс умер сам, до нажатия: остановкой пользователя это не было, и
+      // в истории он останется протухшим (`error`). Убираем только файлы.
       this.cleanUpAfter(root, lock);
       return { ok: true, alreadyGone: true };
     }
@@ -228,7 +233,7 @@ export class ExternalPipelineControl {
     if (!lock) { return { ok: false, reason: 'run-changed' }; }
 
     let resumed = false;
-    if (readPauseRequest(root, lock.pid)) {
+    if (readPauseRequest(root, lock.pid, lock.started_at)) {
       removeFileIf(path.join(root, PAUSE_REQUEST_RELATIVE), data => data.pid === lock.pid);
       resumed = true;
     }

@@ -231,13 +231,20 @@ export function readPausedState(root: string, pid: number): boolean {
 
 /**
  * Whether a pause request addressed to this runner exists.
- * A request left behind by an earlier run carries another pid and is ignored,
- * exactly as the runner itself ignores it.
+ *
+ * Same rule as the runner's own `readPauseRequest`: the request must name this
+ * pid and, when the run's start is given, be younger than it. A file left by a
+ * run killed without cleaning up would otherwise pause the next runner that
+ * happens to get the same pid.
  */
-export function readPauseRequest(root: string, pid: number): boolean {
+export function readPauseRequest(root: string, pid: number, runStartedAt?: string): boolean {
   try {
     const data = JSON.parse(fs.readFileSync(path.join(root, PAUSE_REQUEST_RELATIVE), 'utf-8'));
-    return data?.pid === pid;
+    if (data?.pid !== pid) { return false; }
+    const since = runStartedAt ? Date.parse(runStartedAt) : NaN;
+    if (Number.isNaN(since)) { return true; }
+    const requestedAt = Date.parse(data.requested_at);
+    return !Number.isNaN(requestedAt) && requestedAt >= since;
   } catch {
     return false;
   }
@@ -282,10 +289,12 @@ export function determineRunState(
   // Если лог молчит о gate — падаем на каталог approvals с фильтром по дате
   // запуска. Он менее надёжен (раннер переиспользует файлы), но лучше, чем
   // ничего, когда лог ещё не дописан или обрезан.
-  // Пауза по запросу — тоже только по логу: файл запроса лежит и всё то время,
-  // пока раннер доделывает текущую стадию, а стоит он лишь после отметки PAUSED.
+  // Пауза по запросу — по отметке PAUSED в логе: файл запроса лежит и всё то
+  // время, пока раннер доделывает стадию. И только пока запрос есть: после
+  // Resume раннер пишет RESUMED с опозданием до секунды, и без этого условия
+  // запуск в этот промежуток читался бы стоящим — без кнопок Pause и Resume.
   if (readPausedState(root, lock.pid)
-    || readRunnerPauseState(logPath).paused
+    || (readRunnerPauseState(logPath).paused && readPauseRequest(root, lock.pid, lock.started_at))
     || readGateState(logPath).waiting
     || readAwaitingApproval(root, lock.started_at)) {
     return 'paused';
@@ -405,7 +414,7 @@ export class ExternalPipelineMonitor implements vscode.Disposable {
       awaitingApproval: this.readGate(logPath, lock, hasLog),
       pipelineVersion: lock.pipeline_version,
       supportsPause: lockSupportsPause(lock),
-      pauseRequested: readPauseRequest(this.root, lock.pid),
+      pauseRequested: readPauseRequest(this.root, lock.pid, lock.started_at),
       suspendedByMcp: readPausedState(this.root, lock.pid)
     };
 
@@ -481,7 +490,7 @@ export class ExternalPipelineMonitor implements vscode.Disposable {
     const awaitingApproval = this.readGate(logPath, lock, hasLog);
     // Запрос паузы и приостановка через MCP меняют файлы в state/, которых
     // watcher lock'а не видит, — узнаём о них только здесь.
-    const pauseRequested = readPauseRequest(this.root, lock.pid);
+    const pauseRequested = readPauseRequest(this.root, lock.pid, lock.started_at);
     const suspendedByMcp = readPausedState(this.root, lock.pid);
 
     if (state === run.state

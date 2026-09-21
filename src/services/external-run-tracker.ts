@@ -108,18 +108,23 @@ export class ExternalRunTracker {
       if (size === this.offset) { return changed; }
 
       const length = Math.min(size - this.offset, TRACKER_CHUNK_BYTES);
-      const buffer = Buffer.alloc(length);
+      let buffer = Buffer.alloc(length);
+      let bytesRead: number;
       try {
         const fd = fs.openSync(this.logPath, 'r');
         try {
-          fs.readSync(fd, buffer, 0, length, this.offset);
+          bytesRead = fs.readSync(fd, buffer, 0, length, this.offset);
         } finally {
           fs.closeSync(fd);
         }
       } catch {
         return changed;
       }
-      this.offset += length;
+      // Файл могли усечь между stat и чтением: берём только прочитанное, иначе
+      // в строку ушли бы нули, а смещение перескочило бы конец файла.
+      if (bytesRead === 0) { return changed; }
+      buffer = buffer.subarray(0, bytesRead);
+      this.offset += bytesRead;
 
       // Склейка в Buffer, а не в строке: многобайтовый символ на границе
       // чтения иначе распался бы на два U+FFFD.
