@@ -56,3 +56,39 @@ logs/
 CHANGELOG.md
 QWEN.md
 CLAUDE.md
+
+# Служебное: в пакет расширения не должно попадать ничего из этого.
+# Проверено `vsce ls`: до этой правки внутрь VSIX уходили дамп сессии
+# `1.txt`, конфиг MCP и каталог `.claude`.
+1.txt
+.mcp.json
+.claude/
+.kilocodemodes
+.workflow-state/
+.cache/
+
+# Сборка тестов и покрытие
+out/
+dist/unit-test/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+.c8rc.json
+tsconfig.unit-test.json
+analyze-coverage.js
+parse-coverage.js
+compile-new-tests.mjs
+run-coverage.sh
+run-unit-tests.cmd
+run-unit-tests.sh
+
+# Отчёты пайплайна и дев-документация
+reports/
+DEVELOPMENT.md
+CONTRIBUTING.md
+.husky/
+
+# Локальные песочницы инструментов: каталоги со своими node_modules,
+# 3461 файл в пакете до этой правки.
+.kilo/
+.qwen/

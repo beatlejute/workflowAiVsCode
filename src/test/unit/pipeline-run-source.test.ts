@@ -24,14 +24,17 @@ function fakePipelineService(state: PipelineState = PipelineState.Idle) {
     removeListener: (_event: string, cb: () => void) => {
       listeners = listeners.filter(l => l !== cb);
     },
-    setState(next: PipelineState) {
+    // Имя отличается от `setState` намеренно: в `PipelineService` этот метод
+    // приватный, и пересечение `PipelineService & { setState… }` схлопывалось
+    // в `never` — тип заглушки переставал иметь любые поля (TS2339).
+    forceState(next: PipelineState) {
       state = next;
       for (const cb of listeners) { cb(); }
     },
     listenerCount: () => listeners.length
   };
   return service as unknown as PipelineService & {
-    setState(next: PipelineState): void;
+    forceState(next: PipelineState): void;
     listenerCount(): number;
   };
 }
@@ -123,7 +126,7 @@ suite('PipelineRunSource', () => {
     monitor.emit(externalRun());
 
     assert.strictEqual(source.getActiveRun()?.source, 'extension');
-    service.setState(PipelineState.Idle);
+    service.forceState(PipelineState.Idle);
     assert.strictEqual(source.getActiveRun()?.source, 'cli');
     source.dispose();
   });

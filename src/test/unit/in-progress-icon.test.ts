@@ -49,7 +49,7 @@ suite('Pulse mechanics', () => {
 
   test('no timer is created when a ticket becomes active', async () => {
     // Импорт внутри теста: модуль держит общее состояние на уровне модуля.
-    const provider = await import('../../ui/kanban-tree-provider');
+    const provider = await import('../../ui/kanban-tree-provider.js');
 
     const realSetInterval = global.setInterval;
     let intervalsCreated = 0;
@@ -71,7 +71,7 @@ suite('Pulse mechanics', () => {
   });
 
   test('setting the same ticket twice is a no-op', async () => {
-    const provider = await import('../../ui/kanban-tree-provider');
+    const provider = await import('../../ui/kanban-tree-provider.js');
 
     provider.setPulseTicketId('IMPL-2');
     provider.setPulseTicketId('IMPL-2');

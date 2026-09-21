@@ -31,6 +31,11 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      # E2E запускаются из `dist/test/**`, а `npm run build` их не собирает:
+      # esbuild пишет единственный `dist/extension.js`.
+      - name: Compile E2E tests
+        run: npm run test:compile
+
       - name: Setup XVFB (Linux only)
         if: matrix.os == 'ubuntu-latest'
         uses: nick-fields/retry@v3

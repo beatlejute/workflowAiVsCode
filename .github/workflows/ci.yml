@@ -31,6 +31,13 @@ jobs:
       - name: Run linter
         run: npm run lint:l10n
 
+      # `npm run build` собирает только `dist/extension.js` (esbuild, один
+      # outfile). Юнит-тесты запускаются из `dist/unit-test/**`, а E2E — из
+      # `dist/test/**`; без этих двух шагов mocha отвечал `No test files found`,
+      # а E2E падал на отсутствующем `runTests.js`.
+      - name: Compile unit tests
+        run: npm run test:compile-tests
+
       - name: Run unit tests
         run: npm run test:unit
 
@@ -44,6 +51,10 @@ jobs:
       - name: Install xvfb
         if: runner.os == 'Linux'
         run: sudo apt-get install -y xvfb
+
+      - name: Compile E2E tests
+        if: runner.os == 'Linux'
+        run: npm run test:compile
 
       - name: Run E2E tests
         if: runner.os == 'Linux'
