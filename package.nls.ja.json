@@ -36,6 +36,8 @@
   "command.sortKanbanByTitle.title": "タイトル順に並べ替え",
   "command.runPipeline.title": "パイプラインを実行",
   "command.stopPipeline.title": "パイプラインを停止",
+  "command.pauseExternalPipeline.title": "外部パイプラインを一時停止",
+  "command.resumeExternalPipeline.title": "外部パイプラインを再開",
   "command.showPipelineOutput.title": "パイプライン出力を表示",
   "command.clearPipelineHistory.title": "パイプライン履歴をクリア",
   "command.newTicket.title": "新しいチケット",

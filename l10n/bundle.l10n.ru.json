@@ -269,5 +269,21 @@
   "starting": "запускается",
   "running": "выполняется",
   "paused": "на паузе",
-  "stale": "процесс не отвечает"
+  "stale": "процесс не отвечает",
+  "pausing after the current stage": "пауза после текущего этапа",
+  "Suspended via MCP pause_pipeline": "Приостановлен через MCP pause_pipeline",
+  "External pipeline control is not available": "Управление внешним пайплайном недоступно",
+  "Stop": "Остановить",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "Остановить внешний пайплайн ({0}, PID {1})? Текущий этап будет прерван.",
+  "External pipeline stopped": "Внешний пайплайн остановлен",
+  "No external pipeline is running": "Внешний пайплайн не запущен",
+  "Pause requested: the pipeline will hold before its next stage": "Пауза запрошена: пайплайн остановится перед следующим этапом",
+  "Pipeline resumed": "Пайплайн возобновлён",
+  "The pipeline has already finished or another run took its place": "Пайплайн уже завершился или его место занял другой запуск",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0} теперь занят другим процессом: lock пайплайна устарел. Ничего не остановлено.",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "Процесс пайплайна (PID {0}) всё ещё работает после попытки остановки",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "Этот раннер workflow-ai не умеет ставить паузу. Обновите workflow-ai.",
+  "The pipeline is not paused": "Пайплайн не на паузе",
+  "Failed to resume the pipeline: {0}": "Не удалось возобновить пайплайн: {0}",
+  "Failed to request a pause: {0}": "Не удалось запросить паузу: {0}"
 }

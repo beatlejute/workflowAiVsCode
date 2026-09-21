@@ -36,6 +36,8 @@
   "command.sortKanbanByTitle.title": "Ordenar por título",
   "command.runPipeline.title": "Ejecutar pipeline",
   "command.stopPipeline.title": "Detener pipeline",
+  "command.pauseExternalPipeline.title": "Pausar pipeline externo",
+  "command.resumeExternalPipeline.title": "Reanudar pipeline externo",
   "command.showPipelineOutput.title": "Mostrar salida del pipeline",
   "command.clearPipelineHistory.title": "Limpiar historial del pipeline",
   "command.newTicket.title": "Nuevo ticket",

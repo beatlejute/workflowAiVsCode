@@ -585,6 +585,30 @@ export function registerCommands(
   );
 
   registry.register(
+    'workflow.pauseExternalPipeline',
+    async () => {
+      try {
+        await pipelineProvider.pauseExternalPipeline();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(t('Failed to request a pause: {0}', message));
+      }
+    }
+  );
+
+  registry.register(
+    'workflow.resumeExternalPipeline',
+    async () => {
+      try {
+        await pipelineProvider.resumeExternalPipeline();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(t('Failed to resume the pipeline: {0}', message));
+      }
+    }
+  );
+
+  registry.register(
     'workflow.showPipelineOutput',
     async () => {
       try {

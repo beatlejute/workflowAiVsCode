@@ -269,5 +269,21 @@
   "starting": "開始中",
   "running": "実行中",
   "paused": "一時停止",
-  "stale": "[needs review] 応答なし"
+  "stale": "[needs review] 応答なし",
+  "pausing after the current stage": "現在のステージ後に一時停止",
+  "Suspended via MCP pause_pipeline": "MCP pause_pipeline で一時停止中",
+  "External pipeline control is not available": "外部パイプラインの制御は利用できません",
+  "Stop": "停止",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "外部パイプライン ({0}, PID {1}) を停止しますか？現在のステージは中断されます。",
+  "External pipeline stopped": "外部パイプラインを停止しました",
+  "No external pipeline is running": "実行中の外部パイプラインはありません",
+  "Pause requested: the pipeline will hold before its next stage": "一時停止を要求しました: パイプラインは次のステージの前で停止します",
+  "Pipeline resumed": "パイプラインを再開しました",
+  "The pipeline has already finished or another run took its place": "パイプラインは既に終了したか、別の実行に置き換えられました",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0} は現在別のプロセスのものです: パイプラインのロックは古くなっています。何も停止していません。",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "停止を試みた後もパイプラインのプロセス (PID {0}) が実行中です",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "この workflow-ai ランナーは一時停止に対応していません。workflow-ai を更新してください。",
+  "The pipeline is not paused": "パイプラインは一時停止していません",
+  "Failed to resume the pipeline: {0}": "パイプラインを再開できませんでした: {0}",
+  "Failed to request a pause: {0}": "一時停止を要求できませんでした: {0}"
 }

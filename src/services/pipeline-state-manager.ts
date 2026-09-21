@@ -43,9 +43,20 @@ export interface PipelineExecutionState {
 }
 
 /**
+ * When a log event happened, in epoch ms.
+ *
+ * Receives the line's own timestamp. The default ignores it and answers
+ * `Date.now()`: lines of our own run arrive from stdout as they are written, so
+ * the moment of arrival is the moment of the event.
+ */
+export type EventClock = (logTimestamp?: string) => number;
+
+/**
  * PipelineStateManager - manages execution state
  */
 export class PipelineStateManager {
+  constructor(private readonly clock: EventClock = () => Date.now()) {}
+
   private state: PipelineExecutionState = {
     currentStage: undefined,
     currentAgent: undefined,
@@ -115,7 +126,7 @@ export class PipelineStateManager {
         }
       }
       if (data.skill) this.state.currentSkill = data.skill;
-      this.state.stageStartTime = Date.now();
+      this.state.stageStartTime = this.clock(data.timestamp);
       this.state.logStageStartTime = parseTimestamp(data.timestamp) || Date.now();
       changed = true;
     }
@@ -201,7 +212,7 @@ export class PipelineStateManager {
       this.state.elapsed = data.elapsed;
     } else if (this.state.stageStartTime) {
       // Используем stageStartTime как надёжный fallback — он обновляется только при START
-      this.state.elapsed = formatMsToElapsed(Date.now() - this.state.stageStartTime);
+      this.state.elapsed = formatMsToElapsed(this.clock(data.timestamp) - this.state.stageStartTime);
     } else if (this.state.logStageStartTime) {
       this.state.elapsed = formatMsToElapsed(gotoLogTime - this.state.logStageStartTime);
     } else {

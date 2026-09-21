@@ -269,5 +269,21 @@
   "starting": "starting",
   "running": "running",
   "paused": "paused",
-  "stale": "stale"
+  "stale": "stale",
+  "pausing after the current stage": "pausing after the current stage",
+  "Suspended via MCP pause_pipeline": "Suspended via MCP pause_pipeline",
+  "External pipeline control is not available": "External pipeline control is not available",
+  "Stop": "Stop",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.",
+  "External pipeline stopped": "External pipeline stopped",
+  "No external pipeline is running": "No external pipeline is running",
+  "Pause requested: the pipeline will hold before its next stage": "Pause requested: the pipeline will hold before its next stage",
+  "Pipeline resumed": "Pipeline resumed",
+  "The pipeline has already finished or another run took its place": "The pipeline has already finished or another run took its place",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "The pipeline process (PID {0}) is still running after the stop attempt",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "This workflow-ai runner cannot pause. Update workflow-ai.",
+  "The pipeline is not paused": "The pipeline is not paused",
+  "Failed to resume the pipeline: {0}": "Failed to resume the pipeline: {0}",
+  "Failed to request a pause: {0}": "Failed to request a pause: {0}"
 }

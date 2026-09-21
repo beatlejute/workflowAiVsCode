@@ -36,6 +36,8 @@
   "command.sortKanbanByTitle.title": "按标题排序",
   "command.runPipeline.title": "运行流水线",
   "command.stopPipeline.title": "停止流水线",
+  "command.pauseExternalPipeline.title": "暂停外部流水线",
+  "command.resumeExternalPipeline.title": "恢复外部流水线",
   "command.showPipelineOutput.title": "显示流水线输出",
   "command.clearPipelineHistory.title": "清除流水线历史",
   "command.newTicket.title": "新建工单",

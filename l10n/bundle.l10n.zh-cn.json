@@ -269,5 +269,21 @@
   "starting": "启动中",
   "running": "运行中",
   "paused": "已暂停",
-  "stale": "[needs review] 无响应"
+  "stale": "[needs review] 无响应",
+  "pausing after the current stage": "当前阶段结束后暂停",
+  "Suspended via MCP pause_pipeline": "已通过 MCP pause_pipeline 暂停",
+  "External pipeline control is not available": "外部流水线控制不可用",
+  "Stop": "停止",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "停止外部流水线（{0}，PID {1}）？当前阶段将被中断。",
+  "External pipeline stopped": "外部流水线已停止",
+  "No external pipeline is running": "没有正在运行的外部流水线",
+  "Pause requested: the pipeline will hold before its next stage": "已请求暂停：流水线将在下一阶段前停下",
+  "Pipeline resumed": "流水线已恢复",
+  "The pipeline has already finished or another run took its place": "流水线已结束，或已被另一次运行取代",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0} 现在属于另一个进程：流水线锁已过期。未停止任何进程。",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "尝试停止后，流水线进程（PID {0}）仍在运行",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "此 workflow-ai 运行器不支持暂停。请更新 workflow-ai。",
+  "The pipeline is not paused": "流水线未暂停",
+  "Failed to resume the pipeline: {0}": "无法恢复流水线：{0}",
+  "Failed to request a pause: {0}": "无法请求暂停：{0}"
 }

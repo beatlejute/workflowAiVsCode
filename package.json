@@ -175,6 +175,18 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "workflow.pauseExternalPipeline",
+        "title": "%command.pauseExternalPipeline.title%",
+        "category": "%category.workflow%",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "workflow.resumeExternalPipeline",
+        "title": "%command.resumeExternalPipeline.title%",
+        "category": "%category.workflow%",
+        "icon": "$(debug-continue)"
+      },
+      {
         "command": "workflow.runPipelineForPlan",
         "title": "%command.runPipelineForPlan.title%",
         "category": "%category.workflow%",
@@ -552,12 +564,22 @@
         },
         {
           "command": "workflow.runPipeline",
-          "when": "view == workflow-sidebar.pipeline && !workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound",
+          "when": "view == workflow-sidebar.pipeline && !workflow.pipelineRunning && !workflow.externalPipelineActive && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },
         {
           "command": "workflow.stopPipeline",
-          "when": "view == workflow-sidebar.pipeline && workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound",
+          "when": "view == workflow-sidebar.pipeline && workflow.pipelineRunning && workflow.cliInstalled && workflow.workflowFound || view == workflow-sidebar.pipeline && workflow.externalPipelineActive && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.pauseExternalPipeline",
+          "when": "view == workflow-sidebar.pipeline && workflow.externalPipelineCanPause && workflow.cliInstalled && workflow.workflowFound",
+          "group": "navigation"
+        },
+        {
+          "command": "workflow.resumeExternalPipeline",
+          "when": "view == workflow-sidebar.pipeline && workflow.externalPipelineCanResume && workflow.cliInstalled && workflow.workflowFound",
           "group": "navigation"
         },
         {
@@ -608,6 +630,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "workflow.pauseExternalPipeline",
+          "when": "view == workflow-sidebar.pipeline && viewItem == pipeline-run-external && workflow.externalPipelineCanPause",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.resumeExternalPipeline",
+          "when": "view == workflow-sidebar.pipeline && viewItem == pipeline-run-external && workflow.externalPipelineCanResume",
+          "group": "inline"
+        },
+        {
+          "command": "workflow.stopPipeline",
+          "when": "view == workflow-sidebar.pipeline && viewItem == pipeline-run-external && workflow.externalPipelineActive",
+          "group": "inline"
+        },
         {
           "command": "workflow.openTicket",
           "when": "view == workflow-sidebar.tickets && viewItem == ticket && workflow.cliInstalled && workflow.workflowFound",
@@ -796,11 +833,19 @@
         },
         {
           "command": "workflow.runPipeline",
-          "when": "workflow.cliInstalled && workflow.workflowFound && !workflow.pipelineRunning"
+          "when": "workflow.cliInstalled && workflow.workflowFound && !workflow.pipelineRunning && !workflow.externalPipelineActive"
         },
         {
           "command": "workflow.stopPipeline",
-          "when": "workflow.cliInstalled && workflow.workflowFound && workflow.pipelineRunning"
+          "when": "workflow.cliInstalled && workflow.workflowFound && workflow.pipelineRunning || workflow.cliInstalled && workflow.workflowFound && workflow.externalPipelineActive"
+        },
+        {
+          "command": "workflow.pauseExternalPipeline",
+          "when": "workflow.cliInstalled && workflow.workflowFound && workflow.externalPipelineCanPause"
+        },
+        {
+          "command": "workflow.resumeExternalPipeline",
+          "when": "workflow.cliInstalled && workflow.workflowFound && workflow.externalPipelineCanResume"
         },
         {
           "command": "workflow.openHistoryLog",

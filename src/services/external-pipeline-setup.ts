@@ -18,6 +18,7 @@ import { PipelineService } from './pipeline-service';
 import { ExternalPipelineMonitor, ExternalRun } from './external-pipeline-monitor';
 import { PipelineRunSource, ActiveRun } from './pipeline-run-source';
 import { ExternalRunOutput, readRunResult } from './external-run-output';
+import { ExternalPipelineControl } from './external-pipeline-control';
 import { PipelineTreeProvider } from '../ui/pipeline-tree-provider';
 import { StatusBar } from '../ui/status-bar';
 
@@ -60,6 +61,7 @@ export function setupExternalPipelineDetection(
 
   const runSource = new PipelineRunSource(pipelineService, primaryRoot);
   const output = new ExternalRunOutput();
+  const control = new ExternalPipelineControl();
   const disposables: vscode.Disposable[] = [runSource, output];
 
   /** Runs already announced, so a re-read of the same lock does not re-notify. */
@@ -97,6 +99,7 @@ export function setupExternalPipelineDetection(
   };
 
   pipelineProvider.setBlockingRunProbe(() => runSource.getBlockingExternalRun());
+  pipelineProvider.setExternalRunControl(control, root => runSource.refresh(root));
 
   // Мониторы создаются ПОСЛЕ подписки ниже: `start()` читает существующий lock
   // и публикует run синхронно, так что подписка, зарегистрированная позже,
@@ -126,6 +129,7 @@ export function setupExternalPipelineDetection(
         }
         statusBar.setActiveProjectCount(0);
         pipelineProvider.setExternalRun(undefined);
+        void updateExternalContextKeys(undefined);
       }
     })
   );
@@ -177,6 +181,7 @@ export function setupExternalPipelineDetection(
 
       statusBar.setActiveProjectCount(runSource.getActiveProjectCount(), externalTooltip);
       pipelineProvider.setExternalRun(active);
+      void updateExternalContextKeys(active);
     })
   );
 
@@ -261,7 +266,11 @@ export function setupExternalPipelineDetection(
     output.detach(previous.runId);
     // Lock снимается в `finally`, поэтому его исчезновение ничего не говорит об
     // исходе: и успех, и падение выглядят одинаково. Исход — только в логе.
-    const result = previous.state === 'stale' ? 'error' : readRunResult(previous.logPath);
+    // Остановленный отсюда запуск финального блока в лог не пишет: на Windows
+    // taskkill /F не даёт раннеру ничего дописать, и лог читался бы как падение.
+    const result = control.wasStoppedByUser(previous)
+      ? 'stopped'
+      : previous.state === 'stale' ? 'error' : readRunResult(previous.logPath);
     pipelineProvider.addExternalRunToHistory(
       result,
       previous.source,
@@ -278,6 +287,25 @@ export function setupExternalPipelineDetection(
       }
     }
   };
+}
+
+/**
+ * Context keys for the view's Stop/Pause/Resume buttons on a run we did not
+ * start. Separate from `workflow.pipelineRunning`: that one follows our own
+ * PipelineService and is rewritten every five seconds by `updateContextKeys`.
+ */
+export async function updateExternalContextKeys(active: ActiveRun | undefined): Promise<void> {
+  const external = active && active.source !== 'extension' && active.state !== 'stale'
+    ? active
+    : undefined;
+  const canResume = Boolean(external && (external.pauseRequested || external.suspendedByMcp));
+  const canPause = Boolean(external
+    && external.supportsPause
+    && !canResume
+    && external.state !== 'paused');
+  await vscode.commands.executeCommand('setContext', 'workflow.externalPipelineActive', Boolean(external));
+  await vscode.commands.executeCommand('setContext', 'workflow.externalPipelineCanPause', canPause);
+  await vscode.commands.executeCommand('setContext', 'workflow.externalPipelineCanResume', canResume);
 }
 
 /**

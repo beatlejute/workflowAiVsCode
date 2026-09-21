@@ -44,6 +44,8 @@
   "command.sortTicketsByDate.title": "Ordenar tickets por data",
   "command.runPipeline.title": "Executar pipeline",
   "command.stopPipeline.title": "Parar pipeline",
+  "command.pauseExternalPipeline.title": "Pausar pipeline externo",
+  "command.resumeExternalPipeline.title": "Retomar pipeline externo",
   "command.showPipelineOutput.title": "Mostrar saída do pipeline",
   "command.clearPipelineHistory.title": "Limpar histórico do pipeline",
   "command.decomposePlan.title": "Decompor plano",

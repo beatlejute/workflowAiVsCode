@@ -269,5 +269,21 @@
   "starting": "wird gestartet",
   "running": "läuft",
   "paused": "pausiert",
-  "stale": "[needs review] veraltet"
+  "stale": "[needs review] veraltet",
+  "pausing after the current stage": "Pause nach der aktuellen Stufe",
+  "Suspended via MCP pause_pipeline": "Über MCP pause_pipeline angehalten",
+  "External pipeline control is not available": "Steuerung externer Pipelines ist nicht verfügbar",
+  "Stop": "Stoppen",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "Externe Pipeline ({0}, PID {1}) stoppen? Die aktuelle Stufe wird abgebrochen.",
+  "External pipeline stopped": "Externe Pipeline gestoppt",
+  "No external pipeline is running": "Keine externe Pipeline läuft",
+  "Pause requested: the pipeline will hold before its next stage": "Pause angefordert: Die Pipeline hält vor der nächsten Stufe an",
+  "Pipeline resumed": "Pipeline fortgesetzt",
+  "The pipeline has already finished or another run took its place": "Die Pipeline ist bereits beendet oder wurde durch einen anderen Lauf ersetzt",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0} gehört jetzt einem anderen Prozess: Die Pipeline-Sperre ist veraltet. Nichts wurde gestoppt.",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "Der Pipeline-Prozess (PID {0}) läuft nach dem Stoppversuch noch",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "Dieser workflow-ai-Runner unterstützt keine Pause. Aktualisieren Sie workflow-ai.",
+  "The pipeline is not paused": "Die Pipeline ist nicht pausiert",
+  "Failed to resume the pipeline: {0}": "Pipeline konnte nicht fortgesetzt werden: {0}",
+  "Failed to request a pause: {0}": "Pause konnte nicht angefordert werden: {0}"
 }

@@ -31,6 +31,12 @@ export interface ActiveRun {
   startedAt?: string;
   logPath?: string;
   awaitingApproval?: { stepId: string; since: string };
+  /** See ExternalRun: runner honours pause requests. */
+  supportsPause?: boolean;
+  /** See ExternalRun: a pause request for this run exists. */
+  pauseRequested?: boolean;
+  /** See ExternalRun: suspended by the MCP tool `pause_pipeline`. */
+  suspendedByMcp?: boolean;
 }
 
 export class PipelineRunSource implements vscode.Disposable {
@@ -77,6 +83,11 @@ export class PipelineRunSource implements vscode.Disposable {
   /** Folders currently being watched. */
   getMonitoredRoots(): string[] {
     return [...this.monitors.keys()];
+  }
+
+  /** Re-reads a folder's run now, e.g. right after a control action on it. */
+  refresh(root: string): void {
+    this.monitors.get(root)?.refresh();
   }
 
   /** Stops and forgets the monitor for a folder that left the workspace. */
@@ -176,6 +187,9 @@ function toActiveRun(root: string, run: ExternalRun): ActiveRun {
     pid: run.pid,
     startedAt: run.startedAt,
     logPath: run.logPath,
-    awaitingApproval: run.awaitingApproval
+    awaitingApproval: run.awaitingApproval,
+    supportsPause: run.supportsPause,
+    pauseRequested: run.pauseRequested,
+    suspendedByMcp: run.suspendedByMcp
   };
 }

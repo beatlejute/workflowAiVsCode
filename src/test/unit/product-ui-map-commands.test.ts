@@ -129,6 +129,9 @@ suite('product-ui-map: раздел 4 (Command Palette)', () => {
       if (when.includes('&& workflow.pipelineRunning')) {
         return false; // pipeline idle
       }
+      if (when.includes('&& workflow.externalPipeline')) {
+        return false; // внешнего пайплайна нет
+      }
       return true;
     });
 

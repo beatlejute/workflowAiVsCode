@@ -130,6 +130,37 @@ export function readGateState(logPath: string | undefined): { waiting: boolean; 
 }
 
 /**
+ * A pause marker written by the runner itself (`waitWhilePauseRequested` in
+ * `workflowAi/src/runner.mjs`): `PAUSED before stage="…"` when it holds the
+ * next stage on a pause request, `RESUMED stage="…"` when the request is gone.
+ * Anchored like RUNNER_VERDICT: agent output in the same log quotes anything.
+ */
+const RUNNER_PAUSE_MARKER = /^\[[^\]]+\] \[(?:DEBUG|INFO|WARN|ERROR)\] \[PipelineRunner\] (?:PAUSED before stage="([^"]*)"|RESUMED stage=)/;
+
+/**
+ * Whether the runner is holding its next stage on a pause request, judged
+ * from the log. The request file alone cannot say it: the runner only honours
+ * it between stages, so the file exists for the whole remainder of the
+ * current stage while the pipeline is still working.
+ */
+export function readRunnerPauseState(logPath: string | undefined): { paused: boolean; stage?: string } {
+  if (!logPath) { return { paused: false }; }
+  try {
+    // Пока раннер стоит на паузе, он ничего не пишет, так что отметка
+    // остаётся последней строкой раннера и в окно хвоста попадает всегда.
+    const { lines } = readLogTail(logPath, 64 * 1024, 400);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const marker = lines[i].match(RUNNER_PAUSE_MARKER);
+      if (!marker) { continue; }
+      return marker[1] !== undefined ? { paused: true, stage: marker[1] } : { paused: false };
+    }
+  } catch {
+    // Лог недоступен — про паузу ничего не знаем.
+  }
+  return { paused: false };
+}
+
+/**
  * Works out how a finished run ended, from the tail of its log.
  *
  * The lock disappearing only says the runner exited — it is removed in a

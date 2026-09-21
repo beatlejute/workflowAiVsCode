@@ -31,6 +31,8 @@ import { PipelineHistoryManager, RunHistoryEntry, PersistedHistoryItem } from '.
 import { PipelineExecutionListener } from '../services/pipeline-execution-listener';
 import { CollapseStateStore } from './tree-collapse-state';
 import { ActiveRun } from '../services/pipeline-run-source';
+import { ExternalRunTracker } from '../services/external-run-tracker';
+import { ExternalPipelineControl, ControlOutcome } from '../services/external-pipeline-control';
 import { t } from '../i18n';
 
 export { RunHistoryEntry, PersistedHistoryItem };
@@ -90,6 +92,23 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     this.blockingRunProbe = probe;
   }
 
+  /** Stages of the external run, read from its log file. */
+  private externalTracker: ExternalRunTracker | undefined;
+  /** Which run the tracker follows: pid, start time and log path. */
+  private externalTrackerKey: string | undefined;
+  private externalTrackerTimer: ReturnType<typeof setInterval> | undefined;
+
+  /** Stop/pause/resume for runs we did not start; set by external pipeline detection. */
+  private externalControl: ExternalPipelineControl | undefined;
+  /** Re-reads a folder's run right after a control action. */
+  private refreshExternalRun: ((root: string) => void) | undefined;
+
+  /** Wire in control of external runs. */
+  setExternalRunControl(control: ExternalPipelineControl, refreshRun: (root: string) => void): void {
+    this.externalControl = control;
+    this.refreshExternalRun = refreshRun;
+  }
+
   // Minimal state tracking
   private currentState: PipelineState = PipelineState.Idle;
   private runStartTime: number = 0;
@@ -141,11 +160,55 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
     const changed = externalRun?.runId !== this.externalRun?.runId
       || externalRun?.state !== this.externalRun?.state
       || externalRun?.logPath !== this.externalRun?.logPath
-      || externalRun?.awaitingApproval?.stepId !== this.externalRun?.awaitingApproval?.stepId;
+      || externalRun?.awaitingApproval?.stepId !== this.externalRun?.awaitingApproval?.stepId
+      || externalRun?.pauseRequested !== this.externalRun?.pauseRequested
+      || externalRun?.suspendedByMcp !== this.externalRun?.suspendedByMcp;
     this.externalRun = externalRun;
+    this.syncExternalTracker(externalRun);
     if (changed) {
       this.refresh();
     }
+  }
+
+  /**
+   * Follows the external run's log while there is one.
+   *
+   * A new tracker per run: a run is identified by pid, start time and log, and
+   * the stages of one must never leak into the next.
+   */
+  private syncExternalTracker(run: ActiveRun | undefined): void {
+    const key = run?.logPath ? `${run.pid}|${run.startedAt}|${run.logPath}` : undefined;
+    if (key === this.externalTrackerKey) { return; }
+
+    this.stopExternalTracker();
+    if (!run?.logPath || !key) { return; }
+
+    const tracker = new ExternalRunTracker(run.logPath, run.startedAt);
+    this.externalTracker = tracker;
+    this.externalTrackerKey = key;
+
+    const tick = () => {
+      void tracker.poll().then(changed => {
+        if (this.externalTracker !== tracker) { return; }
+        // Пока запуск идёт, дерево обновляем каждую секунду — как у нашего
+        // собственного: у текущей стадии тикает время.
+        if (changed || this.externalRun?.state === 'running') {
+          this.refresh();
+        }
+      });
+    };
+    tick();
+    this.externalTrackerTimer = setInterval(tick, 1000);
+  }
+
+  private stopExternalTracker(): void {
+    if (this.externalTrackerTimer) {
+      clearInterval(this.externalTrackerTimer);
+      this.externalTrackerTimer = undefined;
+    }
+    this.externalTracker?.dispose();
+    this.externalTracker = undefined;
+    this.externalTrackerKey = undefined;
   }
 
   /** The external run currently shown, if any. */
@@ -243,35 +306,44 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
   getChildren(element?: PipelineTreeItem): Thenable<PipelineTreeItem[]> {
     if (!this.workflowRoot) return Promise.resolve([]);
 
+    const external = this.externalRun && this.externalRun.source !== 'extension'
+      ? this.externalRun
+      : undefined;
+    // Стадии чужого запуска берутся из его лога. Наши прошлые стадии под ним
+    // были бы враньём, поэтому без лога у внешнего запуска стадий нет вовсе.
+    const stages = external ? this.externalTracker?.state : this.stateManager;
+
     const state = {
       currentState: this.currentState,
-      currentStage: this.stateManager.getCurrentStage(),
-      currentAgent: this.stateManager.getCurrentAgent(),
-      currentFallbackAgent: this.stateManager.getCurrentFallbackAgent(),
-      currentSkill: this.stateManager.getCurrentSkill(),
-      currentTicket: this.stateManager.getCurrentTicket(),
-      currentAttempt: this.stateManager.getCurrentAttempt(),
-      currentMaxAttempts: this.stateManager.getCurrentMaxAttempts(),
-      elapsed: this.stateManager.getRunElapsed(),
-      stageElapsed: this.stateManager.getStageElapsed(),
-      completedStages: this.stateManager.getCompletedStages(),
-      stagesStarted: this.stateManager.getStagesStarted(),
-      retries: this.stateManager.getRetries(),
-      gotos: this.stateManager.getGotos(),
-      timeouts: this.stateManager.getTimeouts(),
-      totalElapsedMs: this.stateManager.getTotalElapsedMs(),
-      averageElapsedMs: this.stateManager.getAverageElapsedMs(),
+      currentStage: stages?.getCurrentStage(),
+      currentAgent: stages?.getCurrentAgent(),
+      currentFallbackAgent: stages?.getCurrentFallbackAgent(),
+      currentSkill: stages?.getCurrentSkill(),
+      currentTicket: stages?.getCurrentTicket(),
+      currentAttempt: stages?.getCurrentAttempt(),
+      currentMaxAttempts: stages?.getCurrentMaxAttempts(),
+      elapsed: stages?.getRunElapsed(),
+      stageElapsed: stages?.getStageElapsed(),
+      completedStages: stages?.getCompletedStages() ?? [],
+      stagesStarted: stages?.getStagesStarted() ?? 0,
+      retries: stages?.getRetries() ?? 0,
+      gotos: stages?.getGotos() ?? 0,
+      timeouts: stages?.getTimeouts() ?? 0,
+      totalElapsedMs: stages?.getTotalElapsedMs() ?? 0,
+      averageElapsedMs: stages?.getAverageElapsedMs() ?? 0,
       runHistory: this.historyManager.getHistory(),
       currentRunLogFile: this.currentRunLogFile,
       currentManualGateTicket: this.pipelineService?.getCurrentManualGateTicket(),
-      externalRun: this.externalRun && this.externalRun.source !== 'extension'
+      externalRun: external
         ? {
-            source: this.externalRun.source,
-            state: this.externalRun.state as 'starting' | 'running' | 'paused' | 'stale',
-            runId: this.externalRun.runId,
-            pid: this.externalRun.pid,
-            startedAt: this.externalRun.startedAt,
-            logPath: this.externalRun.logPath
+            source: external.source as 'cli' | 'mcp',
+            state: external.state as 'starting' | 'running' | 'paused' | 'stale',
+            runId: external.runId,
+            pid: external.pid,
+            startedAt: external.startedAt,
+            logPath: external.logPath,
+            pauseRequested: external.pauseRequested,
+            suspendedByMcp: external.suspendedByMcp
           }
         : undefined
     };
@@ -321,8 +393,75 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       vscode.window.showErrorMessage(t('Pipeline service not available'));
       return;
     }
+    // Слот проекта один: если наш запуск не идёт, кнопка относится к чужому.
+    const ownState = this.pipelineService.getState();
+    const ownActive = ownState === PipelineState.Running || ownState === PipelineState.Paused;
+    const external = this.getExternalRun();
+    if (!ownActive && external) {
+      await this.stopExternalPipeline(external);
+      return;
+    }
     await this.pipelineService.stop();
     vscode.window.showInformationMessage(t('Pipeline stopped'));
+  }
+
+  /**
+   * Stops a run someone else started. Asks first: unlike our own run, the user
+   * may not know what this pipeline is doing, and the stop cuts its stage short.
+   */
+  private async stopExternalPipeline(run: ActiveRun): Promise<void> {
+    if (!this.externalControl) {
+      vscode.window.showErrorMessage(t('External pipeline control is not available'));
+      return;
+    }
+    const stopLabel = t('Stop');
+    const choice = await vscode.window.showWarningMessage(
+      t('Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.',
+        run.source, String(run.pid ?? '?')),
+      { modal: true },
+      stopLabel
+    );
+    if (choice !== stopLabel) { return; }
+
+    const outcome = await this.externalControl.stop(run.root, run);
+    this.refreshExternalRun?.(run.root);
+    if (outcome.ok) {
+      vscode.window.showInformationMessage(t('External pipeline stopped'));
+    } else {
+      vscode.window.showErrorMessage(describeControlRefusal(outcome));
+    }
+  }
+
+  /** Asks an external run to hold before its next stage. */
+  async pauseExternalPipeline(): Promise<void> {
+    const run = this.getExternalRun();
+    if (!run || !this.externalControl) {
+      vscode.window.showInformationMessage(t('No external pipeline is running'));
+      return;
+    }
+    const outcome = this.externalControl.pause(run.root, run);
+    this.refreshExternalRun?.(run.root);
+    if (outcome.ok) {
+      vscode.window.showInformationMessage(t('Pause requested: the pipeline will hold before its next stage'));
+    } else {
+      vscode.window.showErrorMessage(describeControlRefusal(outcome));
+    }
+  }
+
+  /** Withdraws a pause request, or undoes an MCP suspension. */
+  async resumeExternalPipeline(): Promise<void> {
+    const run = this.getExternalRun();
+    if (!run || !this.externalControl) {
+      vscode.window.showInformationMessage(t('No external pipeline is running'));
+      return;
+    }
+    const outcome = await this.externalControl.resume(run.root, run);
+    this.refreshExternalRun?.(run.root);
+    if (outcome.ok) {
+      vscode.window.showInformationMessage(t('Pipeline resumed'));
+    } else {
+      vscode.window.showErrorMessage(describeControlRefusal(outcome));
+    }
   }
 
   showOutput(): void {
@@ -359,9 +498,32 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<PipelineTre
       clearInterval(this.stageElapsedTimer);
       this.stageElapsedTimer = undefined;
     }
+    this.stopExternalTracker();
     this.collapseState.clear();
     this._onDidChangeTreeData.dispose();
     if (this.pipelineService) this.pipelineService.dispose();
     if (this.outputChannel) this.outputChannel.dispose();
+  }
+}
+
+/** User-facing text for a refused control action on an external run. */
+export function describeControlRefusal(outcome: ControlOutcome): string {
+  if (outcome.ok) { return ''; }
+  const pid = String(outcome.pid ?? '?');
+  switch (outcome.reason) {
+    case 'run-changed':
+      return t('The pipeline has already finished or another run took its place');
+    case 'pid-reused':
+      return t('PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.', pid);
+    case 'still-alive':
+      return t('The pipeline process (PID {0}) is still running after the stop attempt', pid);
+    case 'pause-unsupported':
+      return t('This workflow-ai runner cannot pause. Update workflow-ai.');
+    case 'not-paused':
+      return t('The pipeline is not paused');
+    case 'resume-failed':
+      return t('Failed to resume the pipeline: {0}', outcome.hint ?? '');
+    case 'write-failed':
+      return t('Failed to request a pause: {0}', outcome.hint ?? '');
   }
 }

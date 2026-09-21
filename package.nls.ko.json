@@ -36,6 +36,8 @@
   "command.sortKanbanByTitle.title": "제목별 정렬",
   "command.runPipeline.title": "파이프라인 실행",
   "command.stopPipeline.title": "파이프라인 중지",
+  "command.pauseExternalPipeline.title": "외부 파이프라인 일시 중지",
+  "command.resumeExternalPipeline.title": "외부 파이프라인 재개",
   "command.showPipelineOutput.title": "파이프라인 출력 표시",
   "command.clearPipelineHistory.title": "파이프라인 기록 지우기",
   "command.newTicket.title": "새 티켓",

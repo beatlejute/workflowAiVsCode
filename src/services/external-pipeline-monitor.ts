@@ -18,7 +18,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { readGateState } from './external-run-output';
+import { readGateState, readRunnerPauseState } from './external-run-output';
 
 /** How a pipeline was started. Comes from the lock, never inferred. */
 export type PipelineSource = 'cli' | 'mcp' | 'extension';
@@ -40,6 +40,11 @@ export interface PipelineLock {
   pipeline_log?: string | null;
   project_root?: string;
   pipeline_version?: string;
+  /**
+   * What the runner supports beyond the base protocol, e.g. `pause-request`.
+   * Absent in locks of runners that predate the field.
+   */
+  capabilities?: string[];
 }
 
 /** An external pipeline run as the UI sees it. */
@@ -54,10 +59,25 @@ export interface ExternalRun {
   /** Ticket waiting for a manual-gate approval, when there is one. */
   awaitingApproval?: { stepId: string; since: string };
   pipelineVersion?: string;
+  /** The runner honours `.workflow/state/pause-request.json` (lock `capabilities`). */
+  supportsPause?: boolean;
+  /** A pause request addressed to this run exists; the runner may still be finishing a stage. */
+  pauseRequested?: boolean;
+  /** The process was suspended by the MCP tool `pause_pipeline`. */
+  suspendedByMcp?: boolean;
 }
 
 /** Lock file path relative to a workspace folder. */
 const LOCK_RELATIVE = '.workflow/logs/.pipeline.lock';
+
+/**
+ * Pause request read by the runner between stages. Same path as
+ * `PAUSE_REQUEST_FILE` in `workflowAi/src/lib/pause-request.mjs`.
+ */
+export const PAUSE_REQUEST_RELATIVE = '.workflow/state/pause-request.json';
+
+/** State written by the MCP tools `pause_pipeline`/`resume_pipeline`. */
+export const MCP_PAUSE_STATE_RELATIVE = '.workflow/state/pipeline-pause.json';
 
 /** How long to wait for the log file after the lock appears. */
 const LOG_WAIT_MS = 10_000;
@@ -201,12 +221,31 @@ export function readAwaitingApproval(
  */
 export function readPausedState(root: string, pid: number): boolean {
   try {
-    const file = path.join(root, '.workflow', 'state', 'pipeline-pause.json');
+    const file = path.join(root, MCP_PAUSE_STATE_RELATIVE);
     const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
     return data.pid === pid;
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether a pause request addressed to this runner exists.
+ * A request left behind by an earlier run carries another pid and is ignored,
+ * exactly as the runner itself ignores it.
+ */
+export function readPauseRequest(root: string, pid: number): boolean {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, PAUSE_REQUEST_RELATIVE), 'utf-8'));
+    return data?.pid === pid;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the runner that wrote this lock honours pause requests. */
+export function lockSupportsPause(lock: PipelineLock): boolean {
+  return Array.isArray(lock.capabilities) && lock.capabilities.includes('pause-request');
 }
 
 /**
@@ -243,7 +282,10 @@ export function determineRunState(
   // Если лог молчит о gate — падаем на каталог approvals с фильтром по дате
   // запуска. Он менее надёжен (раннер переиспользует файлы), но лучше, чем
   // ничего, когда лог ещё не дописан или обрезан.
+  // Пауза по запросу — тоже только по логу: файл запроса лежит и всё то время,
+  // пока раннер доделывает текущую стадию, а стоит он лишь после отметки PAUSED.
   if (readPausedState(root, lock.pid)
+    || readRunnerPauseState(logPath).paused
     || readGateState(logPath).waiting
     || readAwaitingApproval(root, lock.started_at)) {
     return 'paused';
@@ -290,6 +332,19 @@ export class ExternalPipelineMonitor implements vscode.Disposable {
   /** The external run currently seen in this folder, if any. */
   getActiveRun(): ExternalRun | undefined {
     return this.current;
+  }
+
+  /**
+   * Re-reads the run right away instead of at the next liveness tick — after
+   * a pause request or a stop sent from the UI, the user should not wait
+   * five seconds to see the result.
+   */
+  refresh(): void {
+    if (this.current) {
+      this.recheck();
+    } else {
+      this.evaluate();
+    }
   }
 
   /**
@@ -348,7 +403,10 @@ export class ExternalPipelineMonitor implements vscode.Disposable {
       state: determineRunState(this.root, lock, hasLog, logPath),
       logPath: hasLog ? logPath : undefined,
       awaitingApproval: this.readGate(logPath, lock, hasLog),
-      pipelineVersion: lock.pipeline_version
+      pipelineVersion: lock.pipeline_version,
+      supportsPause: lockSupportsPause(lock),
+      pauseRequested: readPauseRequest(this.root, lock.pid),
+      suspendedByMcp: readPausedState(this.root, lock.pid)
     };
 
     this.current = run;
@@ -421,14 +479,27 @@ export class ExternalPipelineMonitor implements vscode.Disposable {
     const hasLog = Boolean(logPath && fs.existsSync(logPath));
     const state = determineRunState(this.root, lock, hasLog, logPath);
     const awaitingApproval = this.readGate(logPath, lock, hasLog);
+    // Запрос паузы и приостановка через MCP меняют файлы в state/, которых
+    // watcher lock'а не видит, — узнаём о них только здесь.
+    const pauseRequested = readPauseRequest(this.root, lock.pid);
+    const suspendedByMcp = readPausedState(this.root, lock.pid);
 
     if (state === run.state
       && awaitingApproval?.stepId === run.awaitingApproval?.stepId
-      && (hasLog ? logPath : undefined) === run.logPath) {
+      && (hasLog ? logPath : undefined) === run.logPath
+      && pauseRequested === run.pauseRequested
+      && suspendedByMcp === run.suspendedByMcp) {
       return;
     }
 
-    this.current = { ...run, state, awaitingApproval, logPath: hasLog ? logPath : undefined };
+    this.current = {
+      ...run,
+      state,
+      awaitingApproval,
+      logPath: hasLog ? logPath : undefined,
+      pauseRequested,
+      suspendedByMcp
+    };
     this._onDidChangeRun.fire(this.current);
 
     if (state === 'stale') {

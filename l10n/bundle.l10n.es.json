@@ -269,5 +269,21 @@
   "starting": "iniciando",
   "running": "en ejecución",
   "paused": "en pausa",
-  "stale": "[needs review] obsoleto"
+  "stale": "[needs review] obsoleto",
+  "pausing after the current stage": "pausa tras la etapa actual",
+  "Suspended via MCP pause_pipeline": "Suspendida mediante MCP pause_pipeline",
+  "External pipeline control is not available": "El control de canalizaciones externas no está disponible",
+  "Stop": "Detener",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "¿Detener la canalización externa ({0}, PID {1})? Se interrumpirá la etapa actual.",
+  "External pipeline stopped": "Canalización externa detenida",
+  "No external pipeline is running": "No hay ninguna canalización externa en ejecución",
+  "Pause requested: the pipeline will hold before its next stage": "Pausa solicitada: la canalización se detendrá antes de la siguiente etapa",
+  "Pipeline resumed": "Canalización reanudada",
+  "The pipeline has already finished or another run took its place": "La canalización ya terminó u otra ejecución ocupó su lugar",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "El PID {0} ahora pertenece a otro proceso: el bloqueo de la canalización está obsoleto. No se detuvo nada.",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "El proceso de la canalización (PID {0}) sigue en ejecución tras el intento de detenerlo",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "Este ejecutor de workflow-ai no admite pausa. Actualice workflow-ai.",
+  "The pipeline is not paused": "La canalización no está en pausa",
+  "Failed to resume the pipeline: {0}": "No se pudo reanudar la canalización: {0}",
+  "Failed to request a pause: {0}": "No se pudo solicitar la pausa: {0}"
 }

@@ -269,5 +269,21 @@
   "starting": "시작 중",
   "running": "실행 중",
   "paused": "일시 중지",
-  "stale": "[needs review] 응답 없음"
+  "stale": "[needs review] 응답 없음",
+  "pausing after the current stage": "현재 단계 후 일시 중지",
+  "Suspended via MCP pause_pipeline": "MCP pause_pipeline으로 일시 중지됨",
+  "External pipeline control is not available": "외부 파이프라인 제어를 사용할 수 없습니다",
+  "Stop": "중지",
+  "Stop the external pipeline ({0}, PID {1})? Its current stage will be interrupted.": "외부 파이프라인({0}, PID {1})을 중지할까요? 현재 단계가 중단됩니다.",
+  "External pipeline stopped": "외부 파이프라인이 중지되었습니다",
+  "No external pipeline is running": "실행 중인 외부 파이프라인이 없습니다",
+  "Pause requested: the pipeline will hold before its next stage": "일시 중지 요청됨: 파이프라인이 다음 단계 전에 멈춥니다",
+  "Pipeline resumed": "파이프라인이 재개되었습니다",
+  "The pipeline has already finished or another run took its place": "파이프라인이 이미 끝났거나 다른 실행으로 대체되었습니다",
+  "PID {0} now belongs to another process: the pipeline lock is stale. Nothing was stopped.": "PID {0}은(는) 이제 다른 프로세스의 것입니다: 파이프라인 잠금이 오래되었습니다. 아무것도 중지하지 않았습니다.",
+  "The pipeline process (PID {0}) is still running after the stop attempt": "중지 시도 후에도 파이프라인 프로세스(PID {0})가 실행 중입니다",
+  "This workflow-ai runner cannot pause. Update workflow-ai.": "이 workflow-ai 러너는 일시 중지를 지원하지 않습니다. workflow-ai를 업데이트하세요.",
+  "The pipeline is not paused": "파이프라인이 일시 중지 상태가 아닙니다",
+  "Failed to resume the pipeline: {0}": "파이프라인을 재개하지 못했습니다: {0}",
+  "Failed to request a pause: {0}": "일시 중지를 요청하지 못했습니다: {0}"
 }

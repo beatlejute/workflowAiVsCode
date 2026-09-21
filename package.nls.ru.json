@@ -44,6 +44,8 @@
   "command.sortTicketsByDate.title": "Сортировать тикеты по дате",
   "command.runPipeline.title": "Запустить конвейер",
   "command.stopPipeline.title": "Остановить конвейер",
+  "command.pauseExternalPipeline.title": "Приостановить внешний конвейер",
+  "command.resumeExternalPipeline.title": "Возобновить внешний конвейер",
   "command.showPipelineOutput.title": "Показать вывод конвейера",
   "command.clearPipelineHistory.title": "Очистить историю конвейера",
   "command.decomposePlan.title": "Декомпозировать план",

@@ -97,6 +97,10 @@ export interface ExternalRunSummary {
   pid?: number;
   startedAt?: string;
   logPath?: string;
+  /** A pause request is waiting for the current stage to finish. */
+  pauseRequested?: boolean;
+  /** Suspended by the MCP tool `pause_pipeline`. */
+  suspendedByMcp?: boolean;
 }
 
 /** Localised name of an external run's state; the raw values are internal. */
@@ -125,8 +129,13 @@ const EXTERNAL_STATE_ICON: Record<ExternalRunSummary['state'], string> = {
  * choice when a run changes hands.
  */
 export function buildExternalRunItem(run: ExternalRunSummary): PipelineTreeItem {
+  // Запрос паузы исполняется между стадиями: пока текущая стадия идёт,
+  // пайплайн ещё работает, но пользователь должен видеть, что пауза принята.
+  const stateLabel = run.pauseRequested && run.state === 'running'
+    ? t('pausing after the current stage')
+    : externalStateLabel(run.state);
   const item = new PipelineTreeItem(
-    t('Pipeline: {0}', externalStateLabel(run.state)),
+    t('Pipeline: {0}', stateLabel),
     // Детей нет — как и у узла собственного запуска, см. PipelineRunTreeItem.
     vscode.TreeItemCollapsibleState.None,
     'pipeline-run',
@@ -144,10 +153,11 @@ export function buildExternalRunItem(run: ExternalRunSummary): PipelineTreeItem 
     `**${t('External pipeline')}**`,
     '',
     `- ${t('Started by')}: ${run.source}`,
-    `- ${t('State')}: ${externalStateLabel(run.state)}`
+    `- ${t('State')}: ${stateLabel}`
   ];
   if (run.pid) { lines.push(`- PID: ${run.pid}`); }
   if (run.startedAt) { lines.push(`- ${t('Started')}: ${run.startedAt}`); }
+  if (run.suspendedByMcp) { lines.push(`- ${t('Suspended via MCP pause_pipeline')}`); }
   if (run.state === 'stale') {
     lines.push('', t('The process is gone but its lock file remains; the next run will clear it.'));
   }
@@ -317,28 +327,23 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
 
     // 1. Pipeline run status. An external run takes the same single slot — the
     //    runner does not allow a second pipeline in one project — so it is
-    //    rendered as the same node with its origin spelled out.
+    //    rendered as the same node with its origin spelled out. Its stages come
+    //    from its own log (ExternalRunTracker), never from our past run.
+    let stageActive: boolean;
+    let logFile: string | undefined;
     if (state.externalRun) {
       items.push(buildExternalRunItem(state.externalRun));
-      // Стейджи из stateManager принадлежат нашему прошлому запуску — под
-      // чужим run'ом они были бы враньём. Статистику и историю показываем:
-      // они не про текущий запуск.
-      items.push(new StatisticsTreeItem(
-        state.stagesStarted,
-        state.retries,
-        state.gotos,
-        state.timeouts,
-        state.totalElapsedMs,
-        state.averageElapsedMs
-      ));
-      items.push(new HistoryTreeItem(state.runHistory));
-      return Promise.resolve(items);
+      // У протухшего запуска процесса нет — «текущая» стадия не выполняется.
+      stageActive = state.externalRun.state !== 'stale';
+      logFile = state.externalRun.logPath;
+    } else {
+      items.push(new PipelineRunTreeItem(state.currentState, state.elapsed, state.currentManualGateTicket, this.workflowRoot || undefined));
+      stageActive = state.currentState === PipelineState.Running || state.currentState === PipelineState.Paused;
+      logFile = currentRunLogFile || this.scanForLogFile();
     }
 
-    items.push(new PipelineRunTreeItem(state.currentState, state.elapsed, state.currentManualGateTicket, this.workflowRoot || undefined));
-
     // 2. Current stage (if running or paused)
-    if ((state.currentState === PipelineState.Running || state.currentState === PipelineState.Paused) && state.currentStage) {
+    if (stageActive && state.currentStage) {
       items.push(new CurrentStageTreeItem(
         state.currentStage,
         state.currentAgent,
@@ -352,7 +357,6 @@ export class PipelineTreeDataProvider implements vscode.TreeDataProvider<Pipelin
     }
 
     // 3. Completed stages (newest on top)
-    const logFile = currentRunLogFile || this.scanForLogFile();
     for (let i = state.completedStages.length - 1; i >= 0; i--) {
       const info = state.completedStages[i];
       items.push(new CompletedStageTreeItem(
