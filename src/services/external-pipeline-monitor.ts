@@ -233,8 +233,9 @@ export function readPausedState(root: string, pid: number): boolean {
  * Whether a pause request addressed to this runner exists.
  *
  * Same rule as the runner's own `readPauseRequest`: the request must name this
- * pid and, when the run's start is given, be younger than it. A file left by a
- * run killed without cleaning up would otherwise pause the next runner that
+ * pid and, when the run's start is given, be younger than it. Nothing but the
+ * extension removes the file — not the runner, not a CLI or MCP stop — so a
+ * request left from an earlier run would otherwise pause the next runner that
  * happens to get the same pid.
  */
 export function readPauseRequest(root: string, pid: number, runStartedAt?: string): boolean {
