@@ -21,6 +21,8 @@ import * as fs from 'fs';
 export interface PipelineExecutionState {
   currentStage?: string;
   currentAgent?: string;
+  /** Agent with its actual model (`kilo-free(dots-3-note-preview)`), see ParsedLogData.agentLabel. */
+  currentAgentLabel?: string;
   currentFallbackAgent?: string;
   currentSkill?: string;
   currentTicket?: string;
@@ -118,6 +120,8 @@ export class PipelineStateManager {
           this.state.currentFallbackAgent = data.agent;
         } else {
           this.state.currentAgent = data.agent;
+          // Модель прежнего агента к новому не относится.
+          this.state.currentAgentLabel = undefined;
           // Не сбрасываем fallback если START пришёл с тем же агентом
           // (Agent rotation → START идут подряд, START не должен затирать fallback)
           if (this.state.currentFallbackAgent !== data.agent) {
@@ -128,6 +132,12 @@ export class PipelineStateManager {
       if (data.skill) this.state.currentSkill = data.skill;
       this.state.stageStartTime = this.clock(data.timestamp);
       this.state.logStageStartTime = parseTimestamp(data.timestamp) || Date.now();
+      changed = true;
+    }
+
+    // Handle AGENT_MODELS - the actual model of the running agent
+    if (data.agentLabel) {
+      this.state.currentAgentLabel = data.agentLabel;
       changed = true;
     }
 
@@ -240,7 +250,7 @@ export class PipelineStateManager {
         success: stageResult === StageResult.Success,
         result: stageResult,
         ticket: this.state.currentTicket,
-        agent: this.state.currentAgent,
+        agent: this.state.currentAgentLabel ?? this.state.currentAgent,
         fallbackAgent: this.state.currentFallbackAgent,
         skill: this.state.currentSkill,
         statusChange,
@@ -256,6 +266,7 @@ export class PipelineStateManager {
     this.state.ticketStatusHistory = [];
     this.state.currentOutputLines = [];
     this.state.currentFallbackAgent = undefined;
+    this.state.currentAgentLabel = undefined;
 
     // Fallback report detection: if no reportInfo but stage is a report stage, try to find report
     if (!this.state.currentStageReport && prevStage) {
@@ -288,10 +299,10 @@ if (isReportStage && this.state.currentTicket) {
   }
 
   /**
-   * Get current agent
+   * Get current agent — with its actual model once the runner reported it
    */
   getCurrentAgent(): string | undefined {
-    return this.state.currentAgent;
+    return this.state.currentAgentLabel ?? this.state.currentAgent;
   }
 
   /**
@@ -432,6 +443,7 @@ if (isReportStage && this.state.currentTicket) {
     this.state = {
       currentStage: undefined,
       currentAgent: undefined,
+      currentAgentLabel: undefined,
       currentFallbackAgent: undefined,
       currentSkill: undefined,
       currentTicket: undefined,

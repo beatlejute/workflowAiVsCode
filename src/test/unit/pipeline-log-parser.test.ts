@@ -108,6 +108,15 @@ suite('PipelineLogParser', () => {
       assert.strictEqual(result.stage, undefined);
     });
 
+    test('AGENT_MODELS: agent label with the actual kilo model', () => {
+      const line = '[2026-09-25 10:37:10] [INFO] [execute-task] AGENT_MODELS agent="openrouter-free(nemotron, ling)" requested="kilo/openrouter/free" models="nvidia/nemotron-3-ultra-550b-a55b:free ×2, inclusionai/ling-3.0-flash-fin:free ×1"';
+      const result = parser.parse(line);
+      assert.strictEqual(result.agentLabel, 'openrouter-free(nemotron, ling)');
+      assert.strictEqual(result.isStart, false);
+      assert.strictEqual(result.agent, undefined, 'the agent id from START is not replaced');
+      assert.strictEqual(result.outputLine, undefined, 'not an output line');
+    });
+
     test('should not mark isStart=true for bare START without params', () => {
       const line = '[2026-03-11T10:00:00] [INFO] [execute-task] START';
       const result = parser.parse(line);

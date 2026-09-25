@@ -17,6 +17,12 @@ import { ReportInfo } from './pipeline-types';
 export interface ParsedLogData {
   stage?: string;
   agent?: string;
+  /**
+   * Agent label with the model that actually answered, from the runner's
+   * `AGENT_MODELS agent="…"` line: `kilo-free(dots-3-note-preview)`,
+   * `openrouter-free(nemotron, ling)`. kilo routers pick the model themselves.
+   */
+  agentLabel?: string;
   skill?: string;
   ticket?: string;
   attempt?: number;
@@ -142,6 +148,16 @@ export class PipelineLogParser {
       if (startMatch[1]) result.stage = startMatch[1];
       if (startMatch[2]) result.agent = startMatch[2];
       if (startMatch[3]) result.skill = startMatch[3];
+      return result;
+    }
+
+    // AGENT_MODELS agent="kilo-free(dots-3-note-preview)" requested="…" models="…"
+    // The runner (workflow-ai, src/lib/kilo-models.mjs) writes it while a kilo
+    // agent runs, whenever the label changes, and once more after it exits.
+    // Older runners never write it — the agent id from START stays as is.
+    const agentModelsMatch = message.match(/^AGENT_MODELS\s+agent="([^"]+)"/);
+    if (agentModelsMatch) {
+      result.agentLabel = agentModelsMatch[1];
       return result;
     }
 

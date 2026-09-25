@@ -157,6 +157,29 @@ suite('PipelineStateManager', () => {
       assert.ok(startTime! >= before && startTime! <= after);
     });
 
+    test('AGENT_MODELS: current and completed agent show the actual model; next START clears it', () => {
+      manager.process({ isStart: true, stage: 'execute-task', agent: 'kilo-free', skill: 'execute-task', timestamp: '2026-09-25T10:00:00' });
+      assert.strictEqual(manager.getCurrentAgent(), 'kilo-free');
+
+      const changed = manager.process({ agentLabel: 'kilo-free(dots-3-note-preview)', timestamp: '2026-09-25T10:00:15' });
+      assert.strictEqual(changed, true);
+      assert.strictEqual(manager.getCurrentAgent(), 'kilo-free(dots-3-note-preview)');
+
+      // in-stage fallback: the next agent starts without a model yet
+      manager.process({ isStart: true, stage: 'execute-task', agent: 'gpt-luna', skill: 'execute-task', timestamp: '2026-09-25T10:05:00' });
+      assert.strictEqual(manager.getCurrentAgent(), 'gpt-luna');
+
+      manager.process({ agentLabel: 'gpt-luna', timestamp: '2026-09-25T10:09:00' });
+      manager.process({ isGoto: true, gotoStage: 'move-to-review', timestamp: '2026-09-25T10:09:05' });
+      assert.strictEqual(manager.getCompletedStages()[0].agent, 'gpt-luna');
+
+      manager.process({ isStart: true, stage: 'review-result', agent: 'openrouter-free', timestamp: '2026-09-25T10:10:00' });
+      manager.process({ agentLabel: 'openrouter-free(nemotron, ling)', timestamp: '2026-09-25T10:12:00' });
+      manager.process({ isGoto: true, gotoStage: 'move-ticket', timestamp: '2026-09-25T10:13:00' });
+      assert.strictEqual(manager.getCompletedStages()[1].agent, 'openrouter-free(nemotron, ling)');
+      assert.strictEqual(manager.getCurrentAgent(), 'openrouter-free', 'label does not leak past GOTO');
+    });
+
     test('should save fallback agent separately on START with isFallback', () => {
       const data: ParsedLogData = {
         isStart: true,
